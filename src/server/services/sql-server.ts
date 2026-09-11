@@ -12,7 +12,7 @@ export interface SqlServerConnectionOptions {
 function getAcademicConfig(options: SqlServerConnectionOptions = {}): sql.config {
   return {
     user: options.user || process.env.DB_USER || 'sa',
-    password: options.password || process.env.DB_PASSWORD || '1Ltseosb.',
+    password: options.password || process.env.DB_PASSWORD || '',
     server: options.server || process.env.DB_SERVER || 'localhost',
     database: options.academicDb || process.env.DB_NAME || 'BDACADEMICO5',
     port: options.port || Number(process.env.DB_PORT) || 1433,
@@ -33,7 +33,7 @@ function getAcademicConfig(options: SqlServerConnectionOptions = {}): sql.config
 function getAuthConfig(options: SqlServerConnectionOptions = {}): sql.config {
   return {
     user: options.user || process.env.UP_DB_USER || process.env.DB_USER || 'sa',
-    password: options.password || process.env.UP_DB_PASSWORD || process.env.DB_PASSWORD || '1Ltseosb.',
+    password: options.password || process.env.UP_DB_PASSWORD || process.env.DB_PASSWORD || '',
     server: options.server || process.env.DB_SERVER || 'localhost',
     database: options.authDb || process.env.UP_DB_NAME || 'BDAUTENTICACION5',
     port: options.port || Number(process.env.DB_PORT) || 1433,

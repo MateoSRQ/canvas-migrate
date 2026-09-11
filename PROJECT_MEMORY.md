@@ -69,6 +69,11 @@
     - [x] Cache en memoria acotado tipo LRU (`LruCache` max 3 casos, TTL 30 min) y centralización de helpers de SQLite en `src/server/services/db-helpers.ts`.
     - [x] Integración de spinning loaders (`Loader2 animate-spin`) en todos los tiempos de espera y operaciones asíncronas: carga de jerarquía, carga de casos, detalle de caso, despliegue inline de alumnos en árbol y tabla, modal de inspección y exportación a Canvas LMS.
     - [x] Modularización de componentes: Extracción de modales a `src/components/hierarchy/modals/` y componente de desglose inline `TreeSectionRoster`.
+  - [x] **Auditoría y Sanitización de Credenciales y Secretos (Completado)**
+    - [x] Auditoría completa de secretos, tokens y contraseñas en código fuente, historial git y documentación.
+    - [x] Eliminación de fallback de contraseña quemada en `src/server/services/sql-server.ts`.
+    - [x] Sanitización de tokens Canvas y credenciales de base de datos en `docs/CANVAS_REFERENCE.md` y `PROJECT_MEMORY.md`.
+    - [x] Verificación de aislamiento en bundles Vite/cliente (`dist/client/` libre de variables privadas) y verificación de exclusión en `.gitignore`.
   - [ ] Implement differential engine comparing Case A against Case B (`_added`, `_updated`, `_deleted`, `_concluded`).
 - [ ] **Phase 5: Canvas LMS API Synchronization & Monitoring**
   - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
@@ -185,8 +190,8 @@ canvas-migrate/
 
 ### Canvas LMS Integration & Migration Reference Architecture
 Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mateo/projects/canvas-migrate/docs/CANVAS_REFERENCE.md):
-- **Source MSSQL Databases**: `BDACADEMICO5` (academic loads, courses, sections, enrollments) & `BDAUTENTICACION5` (`Personal.Utb_Persona` for teacher DNI/emails) hosted on `localhost:1433` (`sa` / `1Ltseosb.`).
-- **Canvas LMS API**: Production instance `https://politecnica.instructure.com/` (`CANVAS_API_KEY=29445~KWnHVkUQTMY43Jw3WFWmnwcTL4CYYMDx4wR34DMP3LEkXcfthUWDZzmT9BHCyXBr`).
+- **Source MSSQL Databases**: `BDACADEMICO5` (academic loads, courses, sections, enrollments) & `BDAUTENTICACION5` (`Personal.Utb_Persona` for teacher DNI/emails) hosted on `localhost:1433` (`sa` / credenciales cargadas vía `process.env.DB_PASSWORD` en `.env.local`).
+- **Canvas LMS API**: Production instance `https://politecnica.instructure.com/` (Token de autenticación cargado vía `process.env.CANVAS_API_KEY` en `.env.local`).
 - **Data Pipelines (`canvas/new/`)**:
   - `hierarchy.ts`: Multi-level academic tree builder.
   - `sis_exporter.ts`: Canvas Standard SIS CSV formatter (`accounts`, `terms`, `users`, `courses`, `sections`, `enrollments`).
@@ -225,6 +230,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-11T13:25:00` | `e2bcdc0` | Antigravity | Fix/UX | Corrección integral del sistema de plegado/desplegado: toggleBranchKeys basado en estado de raíz, botón Plegar Matriculados, autosincronización y poda de claves válidas y startTransition de React 19 | `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx` |
 | `2026-09-11T13:28:00` | `ae10003` | Antigravity | Perf/DB | Configuración de pragmas de SQLite en better-sqlite3: WAL mode, foreign_keys ON, synchronous NORMAL y 64MB caché | `src/db/index.ts` |
 | `2026-09-11T13:42:00` | `e2cbb25` | Antigravity | Refactor/Perf | Optimización de payload (lazy loading de alumnos de 5.5MB a 350KB), cache LRU en memoria, modularización de modales y spinning loaders (Loader2) en todas las operaciones asíncronas | `src/server/services/db-helpers.ts`, `src/server/services/hierarchy-service.ts`, `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/*`, `src/components/hierarchy/tree-section-roster.tsx`, `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/cases/case-manager.tsx` |
+| `2026-09-11T16:55:00` | `b2dcfb6` | Antigravity | Sec/Audit | Auditoría de seguridad y credenciales: eliminación de contraseñas fallback quemadas en `sql-server.ts`, ofuscación y sanitización de tokens Canvas y passwords de base de datos en documentación y memoria del proyecto | `src/server/services/sql-server.ts`, `docs/CANVAS_REFERENCE.md`, `PROJECT_MEMORY.md` |
 
 ---
 
