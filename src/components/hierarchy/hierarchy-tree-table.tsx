@@ -29,6 +29,8 @@ import {
   TableHeader,
   TableRow,
 } from '#/components/ui/table'
+import { getSectionStudentsFn } from '#/server/functions/hierarchy'
+import { TreeSectionRoster } from './tree-section-roster'
 import type {
   HierarchyItem,
   EnrolledTeacher,
@@ -40,6 +42,7 @@ interface HierarchyTreeTableProps {
   selectedRowIds: Record<string, boolean>
   onToggleSelect: (sectionIds: number[], forceValue?: boolean) => void
   onInspectStudents: (item: HierarchyItem) => void
+  caseId?: string
 }
 
 interface TreeSectionNode {
@@ -120,9 +123,41 @@ export function HierarchyTreeTable({
   selectedRowIds,
   onToggleSelect,
   onInspectStudents,
+  caseId,
 }: HierarchyTreeTableProps) {
   // Expansion state: Set of open node keys
   const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(new Set())
+
+  // Cache de estudiantes cargados bajo demanda y control de estado de carga con spinners
+  const [loadedStudentsMap, setLoadedStudentsMap] = React.useState<Record<number, EnrolledStudent[]>>({})
+  const [loadingSectionIds, setLoadingSectionIds] = React.useState<Set<number>>(new Set())
+
+  React.useEffect(() => {
+    setLoadedStudentsMap({})
+    setLoadingSectionIds(new Set())
+  }, [caseId])
+
+  const fetchSectionStudents = React.useCallback(
+    async (sectionId: number) => {
+      if (!caseId || loadedStudentsMap[sectionId] || loadingSectionIds.has(sectionId)) return
+      setLoadingSectionIds((prev) => new Set(prev).add(sectionId))
+      try {
+        const list = await getSectionStudentsFn({
+          data: { caseId, cargaCursoId: sectionId },
+        })
+        setLoadedStudentsMap((prev) => ({ ...prev, [sectionId]: list }))
+      } catch (err) {
+        console.error('Error al cargar estudiantes para sección:', sectionId, err)
+      } finally {
+        setLoadingSectionIds((prev) => {
+          const next = new Set(prev)
+          next.delete(sectionId)
+          return next
+        })
+      }
+    },
+    [caseId, loadedStudentsMap, loadingSectionIds]
+  )
 
   // 1. Build nested hierarchy tree from items
   const tree = React.useMemo<TreePeriodoNode[]>(() => {
@@ -1491,161 +1526,58 @@ export function HierarchyTreeTable({
                                                                                                   </Badge>
                                                                                                 </TableCell>
                                                                                                 <TableCell className="text-right py-2">
-                                                                                                  <div className="flex items-center justify-end gap-1">
-                                                                                                    <Button
-                                                                                                      variant={isSecExpanded ? 'secondary' : 'ghost'}
-                                                                                                      size="xs"
-                                                                                                      onClick={() => toggleNode(secKey)}
-                                                                                                      className="h-6 text-[11px] gap-1 px-1.5"
-                                                                                                      title="Desplegar docentes y alumnos matriculados en este árbol"
-                                                                                                    >
-                                                                                                      <Users className="size-3" />
-                                                                                                      <span>{isSecExpanded ? 'Plegar' : 'Ver'}</span>
-                                                                                                    </Button>
-                                                                                                    <Button
-                                                                                                      variant="ghost"
-                                                                                                      size="icon"
-                                                                                                      onClick={() =>
-                                                                                                        onInspectStudents(
-                                                                                                          sec.item
-                                                                                                        )
-                                                                                                      }
-                                                                                                      className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                                                                                                      title="Abrir modal detallado de estudiantes"
-                                                                                                    >
-                                                                                                      <UserCheck className="size-3" />
-                                                                                                    </Button>
-                                                                                                  </div>
-                                                                                                </TableCell>
-                                                                                              </TableRow>
-
-                                                                                              {/* Rama Nivel 8: Matriculados [(D) Docentes / (E) Estudiantes] */}
-                                                                                              {isSecExpanded && (
-                                                                                                <TableRow className="bg-muted/10 border-b border-border/40 hover:bg-muted/15">
-                                                                                                  <TableCell colSpan={6} className="py-2.5 px-4 pl-10">
-                                                                                                    <div className="space-y-2.5">
-                                                                                                      {/* Encabezado del Desglose de Matriculados */}
-                                                                                                      <div className="flex items-center justify-between gap-2 pb-1 border-b border-border/40 text-[11px]">
-                                                                                                        <div className="flex items-center gap-2 font-medium text-foreground">
-                                                                                                          <Users className="size-3.5 text-primary" />
-                                                                                                          <span>Matriculados en Sección:</span>
-                                                                                                          <span className="font-mono text-primary font-bold">{sec.seccionNombre}</span>
-                                                                                                        </div>
-                                                                                                        <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
-                                                                                                          <Badge variant="outline" className="px-1.5 py-0 h-4">
-                                                                                                            (D) {sec.docentes.length} {sec.docentes.length === 1 ? 'Docente' : 'Docentes'}
-                                                                                                          </Badge>
-                                                                                                          <Badge variant="outline" className="px-1.5 py-0 h-4">
-                                                                                                            (E) {sec.estudiantes.length} {sec.estudiantes.length === 1 ? 'Estudiante' : 'Estudiantes'}
-                                                                                                          </Badge>
-                                                                                                        </div>
-                                                                                                      </div>
-
-                                                                                                      {/* 1. Docentes asignados (D) */}
-                                                                                                      <div className="space-y-1">
-                                                                                                        <div className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider">
-                                                                                                          Docentes Asignados:
-                                                                                                        </div>
-                                                                                                        {sec.docentes.length > 0 ? (
-                                                                                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                                                                                                            {sec.docentes.map((doc, dIdx) => (
-                                                                                                              <div
-                                                                                                                key={`doc-${sec.id}-${doc.dni || dIdx}`}
-                                                                                                                className="flex items-center gap-2 py-1 px-2.5 rounded bg-background border border-border/60 text-xs shadow-2xs"
-                                                                                                              >
-                                                                                                                <Badge variant="default" className="text-[9px] px-1.5 py-0 h-4 font-mono font-bold tracking-tight">
-                                                                                                                  (D) [DOCENTE]
-                                                                                                                </Badge>
-                                                                                                                <span className="font-mono font-bold text-primary text-[11px]">
-                                                                                                                  {doc.dni || 'S/DNI'}
-                                                                                                                </span>
-                                                                                                                <span className="text-muted-foreground">-</span>
-                                                                                                                <span className="font-sans font-medium text-foreground truncate flex-1">
-                                                                                                                  {doc.fullName}
-                                                                                                                </span>
-                                                                                                                {doc.email && (
-                                                                                                                  <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[170px]">
-                                                                                                                    &lt;{doc.email}&gt;
-                                                                                                                  </span>
-                                                                                                                )}
-                                                                                                              </div>
-                                                                                                            ))}
-                                                                                                          </div>
+                                                                                                    <div className="flex items-center justify-end gap-1">
+                                                                                                      <Button
+                                                                                                        variant={isSecExpanded ? 'secondary' : 'ghost'}
+                                                                                                        size="xs"
+                                                                                                        onClick={() => toggleNode(secKey)}
+                                                                                                        className="h-6 text-[11px] gap-1 px-1.5"
+                                                                                                        title="Desplegar docentes y alumnos matriculados en este árbol"
+                                                                                                      >
+                                                                                                        {loadingSectionIds.has(sec.id) ? (
+                                                                                                          <Loader2 className="size-3 animate-spin text-primary" />
                                                                                                         ) : (
-                                                                                                          <div className="text-[11px] italic text-muted-foreground pl-2 py-0.5">
-                                                                                                            (Sin docente asignado)
-                                                                                                          </div>
+                                                                                                          <Users className="size-3" />
                                                                                                         )}
-                                                                                                      </div>
-
-                                                                                                      {/* 2. Estudiantes Matriculados (E) */}
-                                                                                                      <div className="space-y-1 pt-1">
-                                                                                                        <div className="text-[10px] uppercase font-semibold text-muted-foreground flex items-center justify-between tracking-wider">
-                                                                                                          <span>Alumnos Matriculados ({sec.estudiantes.length}):</span>
-                                                                                                          {sec.estudiantes.length > 0 && (
-                                                                                                            <span className="text-[10px] text-muted-foreground font-normal font-sans">
-                                                                                                              Rol SIS: Student • Estado: Active
-                                                                                                            </span>
-                                                                                                          )}
-                                                                                                        </div>
-
-                                                                                                        {sec.estudiantes.length > 0 ? (
-                                                                                                           <div className="max-h-60 overflow-y-auto divide-y divide-border/20 border border-border/50 rounded bg-background/80 p-1">
-                                                                                                              {sec.estudiantes.slice(0, 30).map((est, eIdx) => (
-                                                                                                                <div
-                                                                                                                  key={`est-${sec.id}-${est.id}-${eIdx}`}
-                                                                                                                  className="flex items-center gap-2 py-1 px-2 hover:bg-muted/50 rounded text-xs transition-colors"
-                                                                                                                >
-                                                                                                                  <span className="text-[10px] text-muted-foreground w-6 text-right font-mono">
-                                                                                                                    {eIdx + 1}.
-                                                                                                                  </span>
-                                                                                                                  <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 font-mono text-muted-foreground">
-                                                                                                                    (E) [ESTUDIANTE]
-                                                                                                                  </Badge>
-                                                                                                                  <span className="font-semibold text-primary font-mono text-[11px]">
-                                                                                                                    {est.codigo}
-                                                                                                                  </span>
-                                                                                                                  <span className="text-muted-foreground">-</span>
-                                                                                                                  <span className="text-foreground flex-1 truncate font-sans">
-                                                                                                                    {est.fullName}
-                                                                                                                  </span>
-                                                                                                                  {est.email && (
-                                                                                                                    <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline truncate max-w-[200px]">
-                                                                                                                      &lt;{est.email}&gt;
-                                                                                                                    </span>
-                                                                                                                  )}
-                                                                                                                </div>
-                                                                                                              ))}
-                                                                                                              {sec.estudiantes.length > 30 && (
-                                                                                                                <div className="p-1.5 text-center bg-muted/20 border-t border-border/30">
-                                                                                                                  <Button
-                                                                                                                    variant="ghost"
-                                                                                                                    size="xs"
-                                                                                                                    onClick={() => onInspectStudents(sec.item)}
-                                                                                                                    className="text-[11px] h-6 text-primary gap-1"
-                                                                                                                  >
-                                                                                                                    <span>Ver los {sec.estudiantes.length - 30} alumnos restantes en el modal</span>
-                                                                                                                    <ExternalLink className="size-3" />
-                                                                                                                  </Button>
-                                                                                                                </div>
-                                                                                                              )}
-                                                                                                            </div>
-                                                                                                        ) : (
-                                                                                                          <div className="text-[11px] italic text-muted-foreground pl-2 py-0.5 font-sans">
-                                                                                                            (Sin alumnos matriculados en esta sección)
-                                                                                                          </div>
-                                                                                                        )}
-                                                                                                      </div>
-
-                                                                                                      {sec.docentes.length === 0 && sec.estudiantes.length === 0 && (
-                                                                                                        <div className="text-[11px] italic text-muted-foreground pl-2 py-1 font-mono">
-                                                                                                          (Sin alumnos ni docentes matriculados)
-                                                                                                        </div>
-                                                                                                      )}
+                                                                                                        <span>
+                                                                                                          {loadingSectionIds.has(sec.id)
+                                                                                                            ? 'Cargando...'
+                                                                                                            : isSecExpanded
+                                                                                                              ? 'Plegar'
+                                                                                                              : 'Ver'}
+                                                                                                        </span>
+                                                                                                      </Button>
+                                                                                                      <Button
+                                                                                                        variant="ghost"
+                                                                                                        size="icon"
+                                                                                                        onClick={() =>
+                                                                                                          onInspectStudents(
+                                                                                                            sec.item
+                                                                                                          )
+                                                                                                        }
+                                                                                                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                                                                                        title="Abrir modal detallado de estudiantes"
+                                                                                                      >
+                                                                                                        <UserCheck className="size-3" />
+                                                                                                      </Button>
                                                                                                     </div>
                                                                                                   </TableCell>
                                                                                                 </TableRow>
-                                                                                              )}
+
+                                                                                                {/* Rama Nivel 8: Matriculados [(D) Docentes / (E) Estudiantes] */}
+                                                                                                {isSecExpanded && (
+                                                                                                  <TableRow className="bg-muted/10 border-b border-border/40 hover:bg-muted/15">
+                                                                                                    <TableCell colSpan={6} className="py-2.5 px-4 pl-10">
+                                                                                                      <TreeSectionRoster
+                                                                                                        sec={sec}
+                                                                                                        loadedStudents={loadedStudentsMap[sec.id]}
+                                                                                                        isLoading={loadingSectionIds.has(sec.id)}
+                                                                                                        onLoadStudents={fetchSectionStudents}
+                                                                                                        onInspectStudents={onInspectStudents}
+                                                                                                      />
+                                                                                                    </TableCell>
+                                                                                                  </TableRow>
+                                                                                                )}
                                                                                             </React.Fragment>
                                                                                           )
                                                                                         }

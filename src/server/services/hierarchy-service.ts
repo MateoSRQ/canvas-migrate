@@ -1,6 +1,4 @@
-import { db } from '#/db'
-import { caseRawTables } from '#/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { getTableFromDb, LruCache } from './db-helpers'
 
 export interface EnrolledTeacher {
   dni: string
@@ -54,23 +52,15 @@ export interface HierarchyFilterOptions {
   planes: { id: number; nombre: string; carreraId: number }[]
 }
 
-// In-memory cache for loaded cases to guarantee sub-millisecond response times
-const hierarchyCache = new Map<string, { items: HierarchyItem[]; filters: HierarchyFilterOptions }>()
-
-function getTableFromDb(caseId: string, tableName: string): any[] {
-  const row = db
-    .select({ dataJson: caseRawTables.dataJson })
-    .from(caseRawTables)
-    .where(and(eq(caseRawTables.caseId, caseId), eq(caseRawTables.tableName, tableName)))
-    .get()
-
-  if (!row?.dataJson) return []
-  try {
-    return JSON.parse(row.dataJson)
-  } catch {
-    return []
-  }
+interface CachedHierarchyCase {
+  items: HierarchyItem[]
+  fullItems: HierarchyItem[]
+  filters: HierarchyFilterOptions
+  studentsByCargaCurso: Map<number, EnrolledStudent[]>
 }
+
+// Almacén en memoria LRU acotado a un máximo de 3 casos y 30 minutos de TTL
+const hierarchyCache = new LruCache<string, CachedHierarchyCase>(3, 30)
 
 export function clearHierarchyCache(caseId?: string) {
   if (caseId) {
@@ -80,12 +70,20 @@ export function clearHierarchyCache(caseId?: string) {
   }
 }
 
-export function getCaseHierarchyData(caseId: string): {
+export function getCaseHierarchyData(
+  caseId: string,
+  includeStudents = false
+): {
   items: HierarchyItem[]
   filters: HierarchyFilterOptions
 } {
   const cached = hierarchyCache.get(caseId)
-  if (cached) return cached
+  if (cached) {
+    return {
+      items: includeStudents ? cached.fullItems : cached.items,
+      filters: cached.filters,
+    }
+  }
 
   // Load raw tables
   const periodos = getTableFromDb(caseId, 'General.Periodo')
@@ -203,6 +201,8 @@ export function getCaseHierarchyData(caseId: string): {
   }
 
   const items: HierarchyItem[] = []
+  const fullItems: HierarchyItem[] = []
+  const studentsByCargaCurso = new Map<number, EnrolledStudent[]>()
   const usedPeriodoIds = new Set<number>()
   const usedSedesMap = new Map<number, { id: number; nombre: string; periodoIds: Set<number> }>()
   const usedModalidadesMap = new Map<number, string>()
@@ -280,7 +280,10 @@ export function getCaseHierarchyData(caseId: string): {
     if (carreraId) usedCarrerasMap.set(carreraId, { id: carreraId, nombre: carreraNombre, facultadId })
     if (planId) usedPlanesMap.set(planId, { id: planId, nombre: planNombre, carreraId })
 
-    items.push({
+    // Registrar en mapa en memoria O(1) de alumnos para carga bajo demanda inmediata
+    studentsByCargaCurso.set(cc.id, sectionStudents)
+
+    const baseItem: HierarchyItem = {
       id: cc.id,
       periodoId: periodo.id,
       periodoNombre: periodo.nombre,
@@ -307,6 +310,12 @@ export function getCaseHierarchyData(caseId: string): {
       docenteDni: primaryTeacher ? primaryTeacher.dni : '',
       docenteEmail: primaryTeacher ? primaryTeacher.email : '',
       docentes: sectionTeachers,
+      estudiantes: [], // Payload optimizado: estudiantes se cargan bajo demanda (lazy loading)
+    }
+
+    items.push(baseItem)
+    fullItems.push({
+      ...baseItem,
       estudiantes: sectionStudents,
     })
   }
@@ -348,60 +357,30 @@ export function getCaseHierarchyData(caseId: string): {
     planes: filterPlanes,
   }
 
-  const result = { items, filters }
+  const result: CachedHierarchyCase = {
+    items,
+    fullItems,
+    filters,
+    studentsByCargaCurso,
+  }
   hierarchyCache.set(caseId, result)
-  return result
+
+  return {
+    items: includeStudents ? fullItems : items,
+    filters,
+  }
 }
 
 export function getSectionEnrolledStudents(caseId: string, cargaCursoId: number): EnrolledStudent[] {
-  const cached = hierarchyCache.get(caseId)
-  if (cached) {
-    const it = cached.items.find((i) => i.id === cargaCursoId)
-    if (it && it.estudiantes) {
-      return it.estudiantes
-    }
+  let cached = hierarchyCache.get(caseId)
+  if (!cached) {
+    getCaseHierarchyData(caseId, false)
+    cached = hierarchyCache.get(caseId)
   }
 
-  const matriculas = getTableFromDb(caseId, 'Matricula.Matricula_Alumno_Curso')
-  const alumnos = getTableFromDb(caseId, 'Academico.Alumno')
-  const personas = getTableFromDb(caseId, 'General.Persona')
-  const horarios = getTableFromDb(caseId, 'Carga_Academica.Carga_Academica_Sede_Curso_Horario')
-
-  const alumnoMap = new Map(alumnos.map((a) => [a.id, a]))
-  const personaMap = new Map(personas.map((p) => [p.id, p]))
-
-  const targetHorarios = horarios
-    .filter((h) => h.carga_academica_sede_curso_id === cargaCursoId)
-    .map((h) => h.id)
-  const hSet = new Set(targetHorarios)
-
-  const enrolled = matriculas.filter((m) => hSet.has(m.carga_academica_sede_curso_horario_id))
-  const seenStudentIds = new Set<number>()
-  const result: EnrolledStudent[] = []
-
-  for (const m of enrolled) {
-    const al = alumnoMap.get(m.matricula_alumno_id)
-    if (!al || seenStudentIds.has(al.id)) continue
-    seenStudentIds.add(al.id)
-
-    const p = al.persona_id ? personaMap.get(al.persona_id) : null
-    const first = (p?.nombre || '').trim()
-    const pat = (p?.apellido_paterno || '').trim()
-    const mat = (p?.apellido_materno || '').trim()
-    const fullName = [first, pat, mat].filter(Boolean).join(' ') || `Estudiante ${al.codigo_alumno}`
-    const codigo = String(al.codigo_alumno || '').trim()
-    const email =
-      al.email_principal && String(al.email_principal).includes('@')
-        ? String(al.email_principal).trim()
-        : `${codigo}@politecnica.edu.pe`
-
-    result.push({
-      id: al.id,
-      codigo,
-      fullName,
-      email,
-    })
+  if (cached?.studentsByCargaCurso) {
+    return cached.studentsByCargaCurso.get(cargaCursoId) || []
   }
 
-  return result.sort((a, b) => a.fullName.localeCompare(b.fullName))
+  return []
 }

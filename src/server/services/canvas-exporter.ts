@@ -2,9 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { db } from '#/db'
-import { caseRawTables } from '#/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { getTableFromDb } from './db-helpers'
 import {
   getCaseHierarchyData,
   type HierarchyItem,
@@ -35,21 +33,6 @@ export interface ExportCanvasResult {
     teachersCount: number
     studentsCount: number
     enrollmentsCount: number
-  }
-}
-
-function getTableFromDb(caseId: string, tableName: string): any[] {
-  const row = db
-    .select({ dataJson: caseRawTables.dataJson })
-    .from(caseRawTables)
-    .where(and(eq(caseRawTables.caseId, caseId), eq(caseRawTables.tableName, tableName)))
-    .get()
-
-  if (!row?.dataJson) return []
-  try {
-    return JSON.parse(row.dataJson)
-  } catch {
-    return []
   }
 }
 
@@ -92,8 +75,8 @@ export async function exportSelectedToCanvasCsv(
 
   const selectedSet = new Set(selectedSectionIds)
 
-  // 1. Obtener la jerarquía completa del caso
-  const hierarchy = getCaseHierarchyData(caseId)
+  // 1. Obtener la jerarquía completa del caso con estudiantes incluidos
+  const hierarchy = getCaseHierarchyData(caseId, true)
   const selectedItems = hierarchy.items.filter((it) => selectedSet.has(it.id))
 
   if (selectedItems.length === 0) {

@@ -60,13 +60,9 @@ import {
   TableHeader,
   TableRow,
 } from '#/components/ui/table'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '#/components/ui/dialog'
+import { StudentInspectorDialog } from '#/components/hierarchy/modals/student-inspector-dialog'
+import { SelectionSummaryDialog } from '#/components/hierarchy/modals/selection-summary-dialog'
+import { CanvasExportDialog } from '#/components/hierarchy/modals/canvas-export-dialog'
 import { getCasesFn } from '#/server/functions/cases'
 import {
   getCaseHierarchyFn,
@@ -132,14 +128,50 @@ export function HierarchySelector({
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({})
   const [tableExpandedRows, setTableExpandedRows] = React.useState<Set<number>>(new Set())
-  const toggleTableRow = React.useCallback((id: number) => {
-    setTableExpandedRows((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }, [])
+
+  // Cache de estudiantes matriculados cargados bajo demanda para la vista de tabla
+  const [tableLoadedStudents, setTableLoadedStudents] = React.useState<Record<number, EnrolledStudent[]>>({})
+  const [tableLoadingSections, setTableLoadingSections] = React.useState<Set<number>>(new Set())
+
+  const fetchTableSectionStudents = React.useCallback(
+    async (sectionId: number) => {
+      if (!selectedCaseId || tableLoadedStudents[sectionId] || tableLoadingSections.has(sectionId)) return
+      setTableLoadingSections((prev) => new Set(prev).add(sectionId))
+      try {
+        const list = await getSectionStudentsFn({
+          data: { caseId: selectedCaseId, cargaCursoId: sectionId },
+        })
+        setTableLoadedStudents((prev) => ({ ...prev, [sectionId]: list }))
+      } catch (err) {
+        console.error('Error al cargar estudiantes para tabla:', sectionId, err)
+      } finally {
+        setTableLoadingSections((prev) => {
+          const next = new Set(prev)
+          next.delete(sectionId)
+          return next
+        })
+      }
+    },
+    [selectedCaseId, tableLoadedStudents, tableLoadingSections]
+  )
+
+  const toggleTableRow = React.useCallback(
+    (id: number, item?: HierarchyItem) => {
+      setTableExpandedRows((prev) => {
+        const next = new Set(prev)
+        if (next.has(id)) {
+          next.delete(id)
+        } else {
+          next.add(id)
+          if (item && item.estudiantesCount > 0 && !tableLoadedStudents[id]) {
+            fetchTableSectionStudents(id)
+          }
+        }
+        return next
+      })
+    },
+    [fetchTableSectionStudents, tableLoadedStudents]
+  )
 
   // Diálogo de estudiantes matriculados
   const [inspectingItem, setInspectingItem] = React.useState<HierarchyItem | null>(null)
@@ -188,6 +220,8 @@ export function HierarchySelector({
     setIsLoadingHierarchy(true)
     setRowSelection({})
     setTableExpandedRows(new Set())
+    setTableLoadedStudents({})
+    setTableLoadingSections(new Set())
 
     getCaseHierarchyFn({ data: selectedCaseId })
       .then((res) => {
@@ -209,12 +243,24 @@ export function HierarchySelector({
   // 3. Inspeccionar estudiantes de una sección
   const handleInspectStudents = async (item: HierarchyItem) => {
     setInspectingItem(item)
+    const preloaded =
+      tableLoadedStudents[item.id] ||
+      (item.estudiantes && item.estudiantes.length > 0 ? item.estudiantes : null)
+
+    if (preloaded) {
+      setStudents(preloaded)
+      setIsLoadingStudents(false)
+      return
+    }
+
     setIsLoadingStudents(true)
+    setStudents([])
     try {
       const list = await getSectionStudentsFn({
         data: { caseId: selectedCaseId, cargaCursoId: item.id },
       })
       setStudents(list)
+      setTableLoadedStudents((prev) => ({ ...prev, [item.id]: list }))
     } catch (err) {
       console.error('Error al obtener estudiantes matriculados:', err)
       setStudents([])
@@ -555,17 +601,22 @@ export function HierarchySelector({
         header: 'Matriculados',
         cell: ({ row }) => {
           const isExpanded = tableExpandedRows.has(row.original.id)
+          const isLoadingThisRow = tableLoadingSections.has(row.original.id)
           return (
             <div className="flex items-center justify-end gap-1">
               <Button
                 variant={isExpanded ? 'secondary' : 'outline'}
                 size="xs"
                 className="text-xs h-7 gap-1 px-2"
-                onClick={() => toggleTableRow(row.original.id)}
+                onClick={() => toggleTableRow(row.original.id, row.original)}
                 title="Desplegar docentes y alumnos matriculados en esta fila"
               >
-                <Users className="size-3" />
-                <span>{isExpanded ? 'Plegar' : 'Detalle'}</span>
+                {isLoadingThisRow ? (
+                  <Loader2 className="size-3 animate-spin text-primary" />
+                ) : (
+                  <Users className="size-3" />
+                )}
+                <span>{isLoadingThisRow ? 'Cargando...' : isExpanded ? 'Plegar' : 'Detalle'}</span>
               </Button>
               <Button
                 variant="ghost"
@@ -583,7 +634,7 @@ export function HierarchySelector({
         size: 110,
       },
     ],
-    [tableExpandedRows, toggleTableRow]
+    [tableExpandedRows, tableLoadingSections, toggleTableRow, handleInspectStudents]
   )
 
   // 6. Instancia de TanStack Table
@@ -1087,8 +1138,11 @@ export function HierarchySelector({
 
       {/* 4. Contenido Principal: Árbol Jerárquico Anidado O Tabla TanStack */}
       {isLoadingHierarchy ? (
-        <div className="p-12 text-center space-y-3 rounded-xl border border-border bg-card">
-          <RefreshCw className="size-6 text-muted-foreground animate-spin mx-auto" />
+        <div className="p-16 text-center space-y-3 rounded-xl border border-border bg-card shadow-xs">
+          <Loader2 className="size-8 text-primary animate-spin mx-auto" />
+          <p className="text-sm font-semibold text-foreground">
+            Cargando jerarquía académica...
+          </p>
           <p className="text-xs text-muted-foreground">
             Construyendo jerarquía académica y resolviendo cuentas, subcuentas, cursos y secciones...
           </p>
@@ -1110,6 +1164,7 @@ export function HierarchySelector({
         /* VISTA 1: Árbol Jerárquico Anidado (Cuentas > Subcuentas > Cursos > Secciones) */
         <HierarchyTreeTable
           key={selectedCaseId}
+          caseId={selectedCaseId}
           items={filteredItems}
           selectedRowIds={rowSelection}
           onToggleSelect={handleToggleBatchSelection}
@@ -1140,6 +1195,9 @@ export function HierarchySelector({
                   const next = new Set(tableExpandedRows)
                   for (const row of table.getRowModel().rows) {
                     next.add(row.original.id)
+                    if (row.original.estudiantesCount > 0 && !tableLoadedStudents[row.original.id]) {
+                      fetchTableSectionStudents(row.original.id)
+                    }
                   }
                   setTableExpandedRows(next)
                 }}
@@ -1222,7 +1280,19 @@ export function HierarchySelector({
                                     (D) {item.docentes?.length || 0} {item.docentes?.length === 1 ? 'Docente' : 'Docentes'}
                                   </Badge>
                                   <Badge variant="outline" className="px-1.5 py-0 h-4">
-                                    (E) {item.estudiantes?.length || 0} {item.estudiantes?.length === 1 ? 'Estudiante' : 'Estudiantes'}
+                                    {tableLoadingSections.has(item.id) ? (
+                                      <span className="flex items-center gap-1">
+                                        <Loader2 className="size-2.5 animate-spin text-primary" />
+                                        <span>(E) Cargando...</span>
+                                      </span>
+                                    ) : (
+                                      <span>
+                                        (E) {(tableLoadedStudents[item.id] || item.estudiantes || []).length}{' '}
+                                        {(tableLoadedStudents[item.id] || item.estudiantes || []).length === 1
+                                          ? 'Estudiante'
+                                          : 'Estudiantes'}
+                                      </span>
+                                    )}
                                   </Badge>
                                 </div>
                               </div>
@@ -1270,17 +1340,31 @@ export function HierarchySelector({
                               {/* 2. Estudiantes Matriculados (E) */}
                               <div className="space-y-1 pt-1">
                                 <div className="text-[10px] uppercase font-semibold text-muted-foreground flex items-center justify-between tracking-wider">
-                                  <span>Alumnos Matriculados ({item.estudiantes?.length || 0}):</span>
-                                  {item.estudiantes && item.estudiantes.length > 0 && (
-                                    <span className="text-[10px] text-muted-foreground font-normal font-sans">
-                                      Rol SIS: Student • Estado: Active
-                                    </span>
-                                  )}
+                                  <span>
+                                    Alumnos Matriculados (
+                                    {tableLoadingSections.has(item.id)
+                                      ? item.estudiantesCount
+                                      : (tableLoadedStudents[item.id] || item.estudiantes || []).length}
+                                    ):
+                                  </span>
+                                  {!tableLoadingSections.has(item.id) &&
+                                    (tableLoadedStudents[item.id] || item.estudiantes || []).length > 0 && (
+                                      <span className="text-[10px] text-muted-foreground font-normal font-sans">
+                                        Rol SIS: Student • Estado: Active
+                                      </span>
+                                    )}
                                 </div>
 
-                                {item.estudiantes && item.estudiantes.length > 0 ? (
+                                {tableLoadingSections.has(item.id) ? (
+                                  <div className="flex items-center justify-center gap-2 py-6 px-4 bg-background/50 border border-border/40 rounded text-xs text-muted-foreground">
+                                    <Loader2 className="size-4 animate-spin text-primary shrink-0" />
+                                    <span>
+                                      Cargando lista de alumnos matriculados ({item.estudiantesCount})...
+                                    </span>
+                                  </div>
+                                ) : (tableLoadedStudents[item.id] || item.estudiantes || []).length > 0 ? (
                                   <div className="max-h-60 overflow-y-auto divide-y divide-border/20 border border-border/50 rounded bg-background/80 p-1">
-                                    {item.estudiantes.map((est, eIdx) => (
+                                    {(tableLoadedStudents[item.id] || item.estudiantes || []).map((est, eIdx) => (
                                       <div
                                         key={`table-est-${item.id}-${est.id}-${eIdx}`}
                                         className="flex items-center gap-2 py-1 px-2 hover:bg-muted/50 rounded text-xs transition-colors"
@@ -1401,404 +1485,41 @@ export function HierarchySelector({
       )}
 
       {/* 5. Modal de Inspección de Estudiantes Matriculados */}
-      <Dialog open={!!inspectingItem} onOpenChange={(open) => !open && setInspectingItem(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold flex items-center gap-2">
-              <Users className="size-4 text-primary" />
-              <span>Estudiantes Matriculados</span>
-            </DialogTitle>
-            {inspectingItem && (
-              <DialogDescription className="text-xs text-muted-foreground space-y-1 pt-1">
-                <div className="text-foreground font-medium">
-                  {inspectingItem.cursoCodigo} - {inspectingItem.cursoNombre} ({inspectingItem.seccionNombre})
-                </div>
-                <div className="flex items-center gap-2 text-[11px] flex-wrap">
-                  <span>Docente: {inspectingItem.docenteNombre}</span>
-                  {inspectingItem.docenteDni && <span>(DNI: {inspectingItem.docenteDni})</span>}
-                  <span>•</span>
-                  <span>Total: {students.length} matriculados</span>
-                </div>
-              </DialogDescription>
-            )}
-          </DialogHeader>
-
-          <div className="max-h-[60vh] overflow-y-auto border border-border rounded-lg">
-            {isLoadingStudents ? (
-              <div className="p-8 text-center space-y-2">
-                <RefreshCw className="size-5 animate-spin mx-auto text-muted-foreground" />
-                <p className="text-xs text-muted-foreground">Cargando lista de estudiantes...</p>
-              </div>
-            ) : students.length === 0 ? (
-              <div className="p-8 text-center text-xs text-muted-foreground">
-                No hay estudiantes registrados en esta sección.
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="text-xs py-2 w-12">#</TableHead>
-                    <TableHead className="text-xs py-2">Código Alumno</TableHead>
-                    <TableHead className="text-xs py-2">Nombre Completo</TableHead>
-                    <TableHead className="text-xs py-2">Correo Institucional</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {students.map((st, idx) => (
-                    <TableRow key={st.id || idx} className="hover:bg-muted/20">
-                      <TableCell className="text-xs py-2 font-mono text-muted-foreground">
-                        {idx + 1}
-                      </TableCell>
-                      <TableCell className="text-xs py-2 font-mono font-medium text-foreground">
-                        {st.codigo}
-                      </TableCell>
-                      <TableCell className="text-xs py-2 text-foreground font-medium">
-                        {st.fullName}
-                      </TableCell>
-                      <TableCell className="text-xs py-2 font-mono text-muted-foreground">
-                        {st.email}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <StudentInspectorDialog
+        isOpen={!!inspectingItem}
+        onClose={() => setInspectingItem(null)}
+        item={inspectingItem}
+        students={students}
+        isLoading={isLoadingStudents}
+      />
 
       {/* 6. Modal de Resumen de Selección Activa */}
-      <Dialog open={isSummaryOpen} onOpenChange={setIsSummaryOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold flex items-center gap-2">
-              <CheckSquare className="size-4 text-primary" />
-              <span>Resumen de Selección Activa</span>
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Detalle cuantitativo de las {selectedCount} secciones marcadas para sincronización o exportación a Canvas LMS.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="p-3 rounded-lg border border-border bg-muted/20 text-center">
-                <div className="text-2xl font-bold font-mono text-foreground">
-                  {selectionStats.sectionsCount}
-                </div>
-                <div className="text-[11px] text-muted-foreground">Secciones Seleccionadas</div>
-              </div>
-              <div className="p-3 rounded-lg border border-border bg-muted/20 text-center">
-                <div className="text-2xl font-bold font-mono text-foreground">
-                  {selectionStats.coursesCount}
-                </div>
-                <div className="text-[11px] text-muted-foreground">Cursos Únicos</div>
-              </div>
-              <div className="p-3 rounded-lg border border-border bg-muted/20 text-center">
-                <div className="text-2xl font-bold font-mono text-primary">
-                  {selectionStats.studentsTotal.toLocaleString()}
-                </div>
-                <div className="text-[11px] text-muted-foreground">Matrículas Totales</div>
-              </div>
-            </div>
-
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Estas secciones seleccionadas conservan su jerarquía completa (Cuenta Sede &gt; Subcuentas &gt; Curso &gt; Sección) y están listas para ser exportadas a formato estándar SIS CSV o sincronizadas vía API a Canvas LMS.
-            </p>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" size="sm" onClick={() => setIsSummaryOpen(false)}>
-                Cerrar
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => {
-                  setIsSummaryOpen(false)
-                  handleOpenExportModal()
-                }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
-              >
-                <FileSpreadsheet className="size-4" />
-                <span>Exportar para Canvas ({selectedCount})</span>
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SelectionSummaryDialog
+        isOpen={isSummaryOpen}
+        onClose={() => setIsSummaryOpen(false)}
+        selectedCount={selectedCount}
+        selectionStats={selectionStats}
+        onOpenExport={handleOpenExportModal}
+      />
 
       {/* 7. Modal de Exportación a Archivos CSV para Canvas LMS */}
-      <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold flex items-center gap-2">
-              <FileSpreadsheet className="size-5 text-emerald-600" />
-              <span>Exportar a Archivos CSV para Canvas LMS</span>
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Generación automática del paquete de migración SIS Canvas (6 archivos CSV estándar, árbol jerárquico y paquete ZIP) en el directorio de migraciones.
-            </DialogDescription>
-          </DialogHeader>
-
-          {isExporting ? (
-            <div className="py-12 text-center space-y-4">
-              <Loader2 className="size-10 text-emerald-600 animate-spin mx-auto" />
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-foreground">
-                  Generando archivos CSV para Canvas LMS...
-                </h3>
-                <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                  Estructurando jerarquía de cuentas, términos, cursos, secciones, docentes (DNI oficial), estudiantes y matrículas. Empaquetando archivo ZIP para Canvas SIS Import.
-                </p>
-              </div>
-            </div>
-          ) : exportResult ? (
-            <div className="space-y-5">
-              {/* Banner de éxito */}
-              <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 flex items-start gap-3">
-                <CheckCircle2 className="size-5 text-emerald-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <h3 className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
-                    ¡Exportación completada exitosamente!
-                  </h3>
-                  <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed">
-                    Se han generado los 6 archivos CSV estándar de Canvas LMS, el árbol jerárquico visual en texto y el archivo comprimido <code className="font-semibold">canvas_migration.zip</code> listo para importar en Canvas.
-                  </p>
-                </div>
-              </div>
-
-              {/* Directorio de destino */}
-              <div className="p-3.5 rounded-xl border border-border bg-card space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                    <FolderCheck className="size-4 text-emerald-600" />
-                    <span>Directorio de Destino Creado</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => handleCopyPath(exportResult.destinationDir)}
-                    className="text-xs h-7 px-2.5 gap-1.5 hover:bg-muted"
-                  >
-                    {copiedPath ? (
-                      <>
-                        <Check className="size-3 text-emerald-600" />
-                        <span className="text-emerald-600 font-medium">¡Ruta Copiada!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="size-3" />
-                        <span>Copiar Ruta Absoluta</span>
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                <div className="p-2.5 rounded-lg bg-muted/40 border border-border font-mono text-xs select-all break-all text-foreground">
-                  {exportResult.destinationDir}
-                </div>
-
-                <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span>Carpeta: <strong className="text-foreground">{exportResult.folderName}</strong></span>
-                  <span>•</span>
-                  <span>Periodo: <strong className="text-foreground">{exportResult.periodName}</strong></span>
-                  <span>•</span>
-                  <span>Timestamp: <strong className="text-foreground">{exportResult.timestamp}</strong></span>
-                </div>
-              </div>
-
-              {/* Métricas de la migración */}
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                <div className="p-2 rounded-lg border border-border bg-card text-center">
-                  <div className="text-base font-bold font-mono text-foreground">{exportResult.stats.accountsCount}</div>
-                  <div className="text-[10px] text-muted-foreground">Cuentas</div>
-                </div>
-                <div className="p-2 rounded-lg border border-border bg-card text-center">
-                  <div className="text-base font-bold font-mono text-foreground">{exportResult.stats.termsCount}</div>
-                  <div className="text-[10px] text-muted-foreground">Periodos</div>
-                </div>
-                <div className="p-2 rounded-lg border border-border bg-card text-center">
-                  <div className="text-base font-bold font-mono text-foreground">{exportResult.stats.coursesCount}</div>
-                  <div className="text-[10px] text-muted-foreground">Cursos</div>
-                </div>
-                <div className="p-2 rounded-lg border border-border bg-card text-center">
-                  <div className="text-base font-bold font-mono text-foreground">{exportResult.stats.sectionsCount}</div>
-                  <div className="text-[10px] text-muted-foreground">Secciones</div>
-                </div>
-                <div className="p-2 rounded-lg border border-border bg-card text-center">
-                  <div className="text-base font-bold font-mono text-foreground">{exportResult.stats.usersCount}</div>
-                  <div className="text-[10px] text-muted-foreground">Usuarios ({exportResult.stats.teachersCount} D / {exportResult.stats.studentsCount} E)</div>
-                </div>
-                <div className="p-2 rounded-lg border border-border bg-card text-center">
-                  <div className="text-base font-bold font-mono text-emerald-600">{exportResult.stats.enrollmentsCount}</div>
-                  <div className="text-[10px] text-muted-foreground">Matrículas</div>
-                </div>
-              </div>
-
-              {/* Archivos generados */}
-              <div className="rounded-lg border border-border overflow-hidden">
-                <div className="px-3 py-2 bg-muted/40 border-b border-border text-xs font-semibold text-foreground flex items-center justify-between">
-                  <span>Archivos Generados en este Directorio</span>
-                  <Badge variant="outline" className="text-[10px]">
-                    {exportResult.files.length} archivos
-                  </Badge>
-                </div>
-                <div className="divide-y divide-border text-xs">
-                  {exportResult.files.map((file) => {
-                    const isZip = file.name.endsWith('.zip')
-                    const isDoc = file.name.endsWith('.txt') || file.name.endsWith('.md')
-                    return (
-                      <div key={file.name} className="px-3 py-2 flex items-center justify-between hover:bg-muted/20">
-                        <div className="flex items-center gap-2">
-                          {isZip ? (
-                            <FolderArchive className="size-4 text-emerald-600" />
-                          ) : isDoc ? (
-                            <FileText className="size-4 text-muted-foreground" />
-                          ) : (
-                            <FileSpreadsheet className="size-4 text-primary" />
-                          )}
-                          <span className="font-mono font-medium text-foreground">{file.name}</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-muted-foreground font-mono text-[11px]">
-                          {file.rowsCount > 0 && (
-                            <span>{file.rowsCount.toLocaleString()} filas</span>
-                          )}
-                          <span>{(file.sizeBytes / 1024).toFixed(1)} KB</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Instrucciones de uso */}
-              <div className="p-3 rounded-lg border border-border bg-muted/10 text-xs text-muted-foreground space-y-1.5 leading-relaxed">
-                <p className="font-medium text-foreground">Instrucciones para Canvas LMS:</p>
-                <ol className="list-decimal pl-4 space-y-0.5 text-[11px]">
-                  <li>Vaya a Canvas LMS &gt; <strong>Configuración de la Cuenta</strong> &gt; <strong>Importación de SIS</strong>.</li>
-                  <li>Seleccione y cargue el archivo <strong className="text-foreground font-mono">canvas_migration.zip</strong> generado en esta carpeta.</li>
-                  <li>Seleccione formato <strong>CSV estándar de Instructure</strong> y procese los datos.</li>
-                </ol>
-              </div>
-
-              <div className="flex justify-between items-center pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setExportResult(null)
-                    setExportError(null)
-                  }}
-                  className="text-xs"
-                >
-                  Generar Otra Vez
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => setIsExportModalOpen(false)}
-                  className="text-xs"
-                >
-                  Cerrar
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {exportError && (
-                <div className="p-3 rounded-lg border border-destructive/20 bg-destructive/10 text-destructive text-xs flex items-center gap-2">
-                  <AlertCircle className="size-4 shrink-0" />
-                  <span>{exportError}</span>
-                </div>
-              )}
-
-              <div className="p-3.5 rounded-xl border border-border bg-card space-y-3">
-                <div className="text-xs font-semibold text-foreground flex items-center gap-2">
-                  <Layers className="size-4 text-primary" />
-                  <span>Alcance de la Migración a Exportar</span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-                  <div className="p-2 rounded-lg bg-muted/20 border border-border">
-                    <div className="text-base font-bold font-mono text-foreground">{selectedCount}</div>
-                    <div className="text-[10px] text-muted-foreground">Secciones Seleccionadas</div>
-                  </div>
-                  <div className="p-2 rounded-lg bg-muted/20 border border-border">
-                    <div className="text-base font-bold font-mono text-foreground">{selectionStats.coursesCount}</div>
-                    <div className="text-[10px] text-muted-foreground">Cursos Únicos</div>
-                  </div>
-                  <div className="p-2 rounded-lg bg-muted/20 border border-border">
-                    <div className="text-base font-bold font-mono text-primary">
-                      {selectionStats.studentsTotal.toLocaleString()}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground">Matrículas Totales</div>
-                  </div>
-                  <div className="p-2 rounded-lg bg-muted/20 border border-border">
-                    <div className="text-xs font-semibold font-mono text-foreground truncate" title={selectedPeriodName}>
-                      {selectedPeriodName}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground">Periodo Académico</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-3.5 rounded-xl border border-border bg-muted/20 space-y-2 text-xs">
-                <div className="font-semibold text-foreground flex items-center gap-1.5">
-                  <FolderArchive className="size-4 text-primary" />
-                  <span>Destino y Archivos Requeridos</span>
-                </div>
-                <p className="text-muted-foreground text-[11px] leading-relaxed">
-                  Se creará automáticamente la carpeta en el proyecto con el periodo y marca temporal YYYYMMDDHHMMSS:
-                </p>
-                <div className="p-2 rounded bg-background border border-border font-mono text-[11px] text-foreground select-all">
-                  migraciones/{selectedPeriodName.replace(/[/\\?%*:|"<>]/g, '-').trim()} - [YYYYMMDDHHMMSS]/
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px] text-muted-foreground">
-                  <div>
-                    <span className="font-medium text-foreground">Archivos SIS CSV Estándar:</span>
-                    <ul className="list-disc pl-4 space-y-0.5 mt-1">
-                      <li><code>accounts.csv</code> (Cuentas y subcuentas)</li>
-                      <li><code>terms.csv</code> (Periodo académico)</li>
-                      <li><code>courses.csv</code> (Cursos oficiales)</li>
-                      <li><code>sections.csv</code> (Secciones de clases)</li>
-                      <li><code>users.csv</code> (Docentes DNI y alumnos)</li>
-                      <li><code>enrollments.csv</code> (Matrículas activas)</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <span className="font-medium text-foreground">Documentación y Paquete:</span>
-                    <ul className="list-disc pl-4 space-y-0.5 mt-1">
-                      <li><code>hierarchy.txt</code> (Árbol visual formateado)</li>
-                      <li><code>RESUMEN.md</code> (Ficha técnica y métricas)</li>
-                      <li><code>canvas_migration.zip</code> (Archivo ZIP para SIS)</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsExportModalOpen(false)}
-                  className="text-xs"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={handleExecuteExport}
-                  className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-medium shadow-sm"
-                >
-                  <FileSpreadsheet className="size-4" />
-                  <span>Iniciar Exportación para Canvas ({selectedCount})</span>
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <CanvasExportDialog
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        isExporting={isExporting}
+        exportResult={exportResult}
+        exportError={exportError}
+        copiedPath={copiedPath}
+        selectedCount={selectedCount}
+        selectionStats={selectionStats}
+        selectedPeriodName={selectedPeriodName}
+        onCopyPath={handleCopyPath}
+        onResetExport={() => {
+          setExportResult(null)
+          setExportError(null)
+        }}
+        onExecuteExport={handleExecuteExport}
+      />
     </div>
   )
 }

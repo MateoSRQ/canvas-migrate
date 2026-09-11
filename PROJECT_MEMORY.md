@@ -63,6 +63,12 @@
   - [x] Teacher identification normalized to official National ID / DNI and student codes.
   - [x] Automatic generation of visual tree `hierarchy.txt`, technical report `RESUMEN.md`, and ZIP archive `canvas_migration.zip`.
   - [x] Export action button and full-featured confirmation & inspection modal in `HierarchySelector`.
+  - [x] **Arquitectura y Optimización de Deuda Técnica (Completado)**
+    - [x] Optimización de base de datos SQLite: Pragmas WAL mode, foreign_keys ON, synchronous NORMAL y 64MB cache en `better-sqlite3`.
+    - [x] Eliminación de sobrecarga de red (Overfetching): Lazy loading de alumnos matriculados (`estudiantes: []` y `estudiantesCount: N` en payload inicial, reduciendo transferencia JSON de 5.5MB a ~350KB).
+    - [x] Cache en memoria acotado tipo LRU (`LruCache` max 3 casos, TTL 30 min) y centralización de helpers de SQLite en `src/server/services/db-helpers.ts`.
+    - [x] Integración de spinning loaders (`Loader2 animate-spin`) en todos los tiempos de espera y operaciones asíncronas: carga de jerarquía, carga de casos, detalle de caso, despliegue inline de alumnos en árbol y tabla, modal de inspección y exportación a Canvas LMS.
+    - [x] Modularización de componentes: Extracción de modales a `src/components/hierarchy/modals/` y componente de desglose inline `TreeSectionRoster`.
   - [ ] Implement differential engine comparing Case A against Case B (`_added`, `_updated`, `_deleted`, `_concluded`).
 - [ ] **Phase 5: Canvas LMS API Synchronization & Monitoring**
   - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
@@ -120,19 +126,25 @@ canvas-migrate/
     │   └── utils.ts          # Utility functions (cn helper)
     ├── server/
     │   ├── services/
+    │   │   ├── db-helpers.ts # Helper centralizado SQLite getTableFromDb y cache LRU acotado
     │   │   ├── sql-server.ts # MSSQL connection pool manager & table extractor
     │   │   ├── importer.ts   # Case extraction, batch ingestion & normalization engine
-    │   │   ├── hierarchy-service.ts # Academic tree assembler, teacher resolver & memory cache
+    │   │   ├── hierarchy-service.ts # Academic tree assembler, teacher resolver, LRU & lazy student map
     │   │   └── canvas-exporter.ts # Canvas SIS CSV exporter, hierarchy writer & zip packager
     │   └── functions/
     │       ├── cases.ts      # TanStack Start server functions for cases (RPC)
     │       └── hierarchy.ts  # TanStack Start server functions for hierarchy & students (RPC)
     ├── components/
     │   ├── cases/
-    │   │   └── case-manager.tsx # Full-width Case Manager UI & table sample inspector
+    │   │   └── case-manager.tsx # Full-width Case Manager UI & table sample inspector con spinning loaders
     │   ├── hierarchy/
-    │   │   ├── hierarchy-selector.tsx # Full-width TanStack Table & cascading filter UI
-    │   │   └── hierarchy-tree-table.tsx # Nested account/subaccount tree with collapsible tables
+    │   │   ├── modals/
+    │   │   │   ├── student-inspector-dialog.tsx # Modal de inspección de alumnos matriculados con Loader2
+    │   │   │   ├── selection-summary-dialog.tsx # Modal de resumen cuantitativo de selección activa
+    │   │   │   └── canvas-export-dialog.tsx     # Modal de exportación a CSV para Canvas LMS con Loader2
+    │   │   ├── tree-section-roster.tsx # Desglose modular de docentes y alumnos con carga bajo demanda
+    │   │   ├── hierarchy-selector.tsx # Full-width TanStack Table & cascading filter UI modularizado
+    │   │   └── hierarchy-tree-table.tsx # Nested account/subaccount tree con carga bajo demanda y Loader2
     │   ├── layout/
     │   │   └── app-layout.tsx# Global layout: Top header, left drawer menu, full-width panel
     │   └── ui/
@@ -212,6 +224,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-11T12:55:00` | `e5cb780` | Antigravity | Feature/Export | Exportación a archivos CSV para migración Canvas en /migraciones/[periodo - YYYYMMDDHHMMSS] con hierarchy.txt y zip | `src/server/services/canvas-exporter.ts`, `src/server/functions/hierarchy.ts`, `src/components/hierarchy/hierarchy-selector.tsx`, `.gitignore` |
 | `2026-09-11T13:25:00` | `e2bcdc0` | Antigravity | Fix/UX | Corrección integral del sistema de plegado/desplegado: toggleBranchKeys basado en estado de raíz, botón Plegar Matriculados, autosincronización y poda de claves válidas y startTransition de React 19 | `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx` |
 | `2026-09-11T13:28:00` | `ae10003` | Antigravity | Perf/DB | Configuración de pragmas de SQLite en better-sqlite3: WAL mode, foreign_keys ON, synchronous NORMAL y 64MB caché | `src/db/index.ts` |
+| `2026-09-11T13:42:00` | `e2cbb25` | Antigravity | Refactor/Perf | Optimización de payload (lazy loading de alumnos de 5.5MB a 350KB), cache LRU en memoria, modularización de modales y spinning loaders (Loader2) en todas las operaciones asíncronas | `src/server/services/db-helpers.ts`, `src/server/services/hierarchy-service.ts`, `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/*`, `src/components/hierarchy/tree-section-roster.tsx`, `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/cases/case-manager.tsx` |
 
 ---
 
@@ -293,3 +306,10 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
       - Cuadrícula de 6 métricas clave: Cuentas, Periodos, Cursos, Secciones, Usuarios (Docentes D / Estudiantes E), Matrículas Totales.
       - Tabla de archivos generados con nombres, tipos, conteo de filas y tamaño en KB (`accounts.csv`, `terms.csv`, `courses.csv`, `sections.csv`, `users.csv`, `enrollments.csv`, `hierarchy.txt`, `RESUMEN.md`, `canvas_migration.zip`).
       - Guía rápida paso a paso para carga de SIS Import en la consola de administración de Canvas LMS.
+- **Spinning Loaders y Retroalimentación Visual Reactiva (`Loader2 animate-spin`)**:
+  - **Carga de Jerarquía Académica**: Contenedor central con indicador giratorio `Loader2` en tono `primary` y texto descriptivo del proceso asíncrono ("Cargando jerarquía académica... Construyendo jerarquía académica y resolviendo cuentas, subcuentas, cursos y secciones").
+  - **Desglose Inline de Alumnos Matriculados**: Tanto en la vista de árbol (`HierarchyTreeTable` / `TreeSectionRoster`) como en la vista de tabla (`HierarchySelector`), las secciones que no tienen alumnos pre-cargados muestran un spinner activo en el botón de alternancia ("Cargando...") y un bloque de carga elegante en el cuerpo de la sección ("Cargando lista de alumnos matriculados..."). Una vez cargados, se retienen en un mapa en memoria para reaperturas instantáneas sin peticiones redundantes.
+  - **Inspección de Alumnos en Modal (`StudentInspectorDialog`)**: Spinner animado `Loader2` centrado con mensaje de progreso durante la resolución de registros.
+  - **Gestor de Casos (`CaseManager`)**: Retroalimentación giratoria en vivo durante la lectura inicial de casos (`isLoadingCases`), la carga del detalle del caso (`isLoadingDetail`), la extracción asíncrona de 20 tablas desde Microsoft SQL Server (`isImporting`) y la obtención de la muestra de 50 registros (`isLoadingSample`).
+  - **Exportación para Canvas LMS (`CanvasExportDialog`)**: Spinner de gran tamaño `size-10 text-emerald-600 animate-spin` con detalles del empaquetado ZIP y generación de CSVs.
+

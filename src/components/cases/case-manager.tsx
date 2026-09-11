@@ -52,22 +52,27 @@ export function CaseManager({ onExploreHierarchy }: CaseManagerProps) {
     caseItem: ImportCase
     tables: { id: number; tableName: string; schemaName: string; rowCount: number; extractedAt: Date }[]
   } | null>(null)
+  const [isLoadingDetail, setIsLoadingDetail] = React.useState(false)
 
   const [selectedTable, setSelectedTable] = React.useState<string | null>(null)
   const [tableSample, setTableSample] = React.useState<any[] | null>(null)
   const [isLoadingSample, setIsLoadingSample] = React.useState(false)
 
+  const [isLoadingCases, setIsLoadingCases] = React.useState(true)
   const [isImporting, setIsImporting] = React.useState(false)
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [importName, setImportName] = React.useState("")
   const [importDesc, setImportDesc] = React.useState("")
 
   const loadCases = React.useCallback(async () => {
+    setIsLoadingCases(true)
     try {
       const data = await getCasesFn()
       setCases(data)
     } catch (err) {
       console.error("Error al cargar casos:", err)
+    } finally {
+      setIsLoadingCases(false)
     }
   }, [])
 
@@ -79,11 +84,14 @@ export function CaseManager({ onExploreHierarchy }: CaseManagerProps) {
     setSelectedCaseId(id)
     setSelectedTable(null)
     setTableSample(null)
+    setIsLoadingDetail(true)
     try {
       const detail = await getCaseDetailFn({ data: id })
       setCaseDetail(detail)
     } catch (err) {
       console.error("Error al cargar detalle del caso:", err)
+    } finally {
+      setIsLoadingDetail(false)
     }
   }
 
@@ -137,6 +145,17 @@ export function CaseManager({ onExploreHierarchy }: CaseManagerProps) {
     } catch (err) {
       console.error("Error al eliminar caso:", err)
     }
+  }
+
+  // Vista: Cargando Detalle del Caso
+  if (selectedCaseId && isLoadingDetail) {
+    return (
+      <div className="w-full flex-1 flex flex-col items-center justify-center p-20 space-y-3 rounded-xl border border-border bg-card shadow-xs">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm font-medium text-foreground">Cargando detalles del caso...</p>
+        <p className="text-xs text-muted-foreground font-mono">{selectedCaseId}</p>
+      </div>
+    )
   }
 
   // Vista: Detalle del Caso e Inspector de Tablas
@@ -433,7 +452,13 @@ export function CaseManager({ onExploreHierarchy }: CaseManagerProps) {
       )}
 
       {/* Tabla de Casos */}
-      {cases.length === 0 ? (
+      {isLoadingCases ? (
+        <div className="p-16 border border-border rounded-lg text-center flex flex-col items-center justify-center space-y-3 bg-card shadow-xs">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm font-semibold text-foreground">Cargando registro de casos...</p>
+          <p className="text-xs text-muted-foreground">Consultando base de datos local SQLite</p>
+        </div>
+      ) : cases.length === 0 ? (
         <div className="p-12 border border-dashed border-border rounded-lg text-center flex flex-col items-center justify-center space-y-3">
           <Database className="h-10 w-10 text-muted-foreground/50" />
           <div className="space-y-1">
