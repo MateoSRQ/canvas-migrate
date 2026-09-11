@@ -12,6 +12,8 @@ import {
   Square,
   Maximize2,
   Minimize2,
+  FoldVertical,
+  ChevronsUpDown,
   UserCheck,
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
@@ -252,9 +254,12 @@ export function HierarchyTreeTable({
     return Array.from(periodosMap.values())
   }, [items])
 
-  // Auto-expand first period and its branches on initial load
+  // Auto-expand first period and its branches only on initial load (does not re-trigger on user collapse)
+  const isInitialLoadRef = React.useRef(true)
+
   React.useEffect(() => {
-    if (tree.length > 0 && expandedNodes.size === 0) {
+    if (tree.length > 0 && isInitialLoadRef.current) {
+      isInitialLoadRef.current = false
       const initialSet = new Set<string>()
       const firstPeriodo = tree[0]
       initialSet.add(`periodo-${firstPeriodo.periodoId}`)
@@ -271,9 +276,9 @@ export function HierarchyTreeTable({
       }
       setExpandedNodes(initialSet)
     }
-  }, [tree, expandedNodes.size])
+  }, [tree])
 
-  // Helper to toggle a single node
+  // Helper to toggle a single node manually
   const toggleNode = (nodeKey: string) => {
     setExpandedNodes((prev) => {
       const next = new Set(prev)
@@ -286,13 +291,175 @@ export function HierarchyTreeTable({
     })
   }
 
-  // Expand / Collapse all
-  const handleExpandAll = (includeMatriculados = false) => {
+  // Branch-level key collectors
+  const getPeriodoBranchKeys = React.useCallback(
+    (p: TreePeriodoNode, includeMatriculados = false): string[] => {
+      const keys: string[] = [`periodo-${p.periodoId}`]
+      for (const s of p.sedes.values()) {
+        keys.push(`sede-${p.periodoId}-${s.sedeId}`)
+        for (const m of s.modalidades.values()) {
+          keys.push(`mod-${p.periodoId}-${s.sedeId}-${m.modalidadId}`)
+          for (const f of m.facultades.values()) {
+            keys.push(`fac-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}`)
+            for (const c of f.carreras.values()) {
+              keys.push(`carr-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}`)
+              for (const pl of c.planes.values()) {
+                keys.push(
+                  `plan-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}`
+                )
+                for (const cur of pl.cursos.values()) {
+                  keys.push(
+                    `curso-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}`
+                  )
+                  if (includeMatriculados) {
+                    for (const sec of cur.secciones) {
+                      keys.push(
+                        `sec-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}-${sec.id}`
+                      )
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      return keys
+    },
+    []
+  )
+
+  const getSedeBranchKeys = React.useCallback(
+    (pId: number, s: TreeSedeNode, includeMatriculados = false): string[] => {
+      const keys: string[] = [`sede-${pId}-${s.sedeId}`]
+      for (const m of s.modalidades.values()) {
+        keys.push(`mod-${pId}-${s.sedeId}-${m.modalidadId}`)
+        for (const f of m.facultades.values()) {
+          keys.push(`fac-${pId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}`)
+          for (const c of f.carreras.values()) {
+            keys.push(`carr-${pId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}`)
+            for (const pl of c.planes.values()) {
+              keys.push(
+                `plan-${pId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}`
+              )
+              for (const cur of pl.cursos.values()) {
+                keys.push(
+                  `curso-${pId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}`
+                )
+                if (includeMatriculados) {
+                  for (const sec of cur.secciones) {
+                    keys.push(
+                      `sec-${pId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}-${sec.id}`
+                    )
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      return keys
+    },
+    []
+  )
+
+  const getCarreraBranchKeys = React.useCallback(
+    (
+      pId: number,
+      sId: number,
+      mId: number,
+      fId: number,
+      c: TreeCarreraNode,
+      includeMatriculados = false
+    ): string[] => {
+      const keys: string[] = [`carr-${pId}-${sId}-${mId}-${fId}-${c.carreraId}`]
+      for (const pl of c.planes.values()) {
+        keys.push(`plan-${pId}-${sId}-${mId}-${fId}-${c.carreraId}-${pl.planId}`)
+        for (const cur of pl.cursos.values()) {
+          keys.push(
+            `curso-${pId}-${sId}-${mId}-${fId}-${c.carreraId}-${pl.planId}-${cur.cursoId}`
+          )
+          if (includeMatriculados) {
+            for (const sec of cur.secciones) {
+              keys.push(
+                `sec-${pId}-${sId}-${mId}-${fId}-${c.carreraId}-${pl.planId}-${cur.cursoId}-${sec.id}`
+              )
+            }
+          }
+        }
+      }
+      return keys
+    },
+    []
+  )
+
+  const getPlanBranchKeys = React.useCallback(
+    (
+      pId: number,
+      sId: number,
+      mId: number,
+      fId: number,
+      cId: number,
+      pl: TreePlanNode,
+      includeMatriculados = false
+    ): string[] => {
+      const keys: string[] = [`plan-${pId}-${sId}-${mId}-${fId}-${cId}-${pl.planId}`]
+      for (const cur of pl.cursos.values()) {
+        keys.push(`curso-${pId}-${sId}-${mId}-${fId}-${cId}-${pl.planId}-${cur.cursoId}`)
+        if (includeMatriculados) {
+          for (const sec of cur.secciones) {
+            keys.push(
+              `sec-${pId}-${sId}-${mId}-${fId}-${cId}-${pl.planId}-${cur.cursoId}-${sec.id}`
+            )
+          }
+        }
+      }
+      return keys
+    },
+    []
+  )
+
+  const getCursoSecKeys = React.useCallback(
+    (
+      pId: number,
+      sId: number,
+      mId: number,
+      fId: number,
+      cId: number,
+      plId: number,
+      cur: TreeCursoNode
+    ): string[] => {
+      return cur.secciones.map(
+        (sec) => `sec-${pId}-${sId}-${mId}-${fId}-${cId}-${plId}-${cur.cursoId}-${sec.id}`
+      )
+    },
+    []
+  )
+
+  // Toggle all keys in a branch (Alt+Click or Rama button)
+  const toggleBranchKeys = (keys: string[], forceExpand?: boolean) => {
+    setExpandedNodes((prev) => {
+      const next = new Set(prev)
+      const shouldExpand =
+        forceExpand !== undefined ? forceExpand : !keys.every((k) => prev.has(k))
+      if (shouldExpand) {
+        for (const k of keys) next.add(k)
+      } else {
+        for (const k of keys) next.delete(k)
+      }
+      return next
+    })
+  }
+
+  // Batch expand to specific level
+  const handleExpandToLevel = (level: 'sedes' | 'carreras' | 'cursos' | 'all') => {
     const allKeys = new Set<string>()
     for (const p of tree) {
       allKeys.add(`periodo-${p.periodoId}`)
       for (const s of p.sedes.values()) {
         allKeys.add(`sede-${p.periodoId}-${s.sedeId}`)
+        if (level === 'sedes') continue
+
         for (const m of s.modalidades.values()) {
           allKeys.add(`mod-${p.periodoId}-${s.sedeId}-${m.modalidadId}`)
           for (const f of m.facultades.values()) {
@@ -301,6 +468,8 @@ export function HierarchyTreeTable({
               allKeys.add(
                 `carr-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}`
               )
+              if (level === 'carreras') continue
+
               for (const pl of c.planes.values()) {
                 allKeys.add(
                   `plan-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}`
@@ -309,7 +478,7 @@ export function HierarchyTreeTable({
                   allKeys.add(
                     `curso-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}`
                   )
-                  if (includeMatriculados) {
+                  if (level === 'all') {
                     for (const sec of cur.secciones) {
                       allKeys.add(
                         `sec-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}-${sec.id}`
@@ -326,6 +495,7 @@ export function HierarchyTreeTable({
     setExpandedNodes(allKeys)
   }
 
+  // Batch collapse everything to 0 open nodes cleanly
   const handleCollapseAll = () => {
     setExpandedNodes(new Set())
   }
@@ -363,38 +533,70 @@ export function HierarchyTreeTable({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border-b border-border pb-2.5">
         <div className="flex items-center gap-2 text-muted-foreground flex-wrap">
           <span className="font-semibold text-foreground">Jerarquía Académica Canvas LMS:</span>
-          <span className="hidden md:inline">Periodo &gt; Cuenta (Sede) &gt; Subcuentas &gt; Curso &gt; Sección &gt; Matriculados [(D) Docentes / (E) Estudiantes]</span>
+          <span className="hidden md:inline">
+            Periodo &gt; Cuenta (Sede) &gt; Subcuentas &gt; Curso &gt; Sección &gt; Matriculados [(D) Docentes / (E) Estudiantes]
+          </span>
+          <Badge variant="outline" className="text-[10px] font-mono ml-1 bg-background">
+            {expandedNodes.size === 0
+              ? 'Todo plegado'
+              : `${expandedNodes.size} ramas desplegadas`}
+          </Badge>
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
           <Button
             variant="outline"
             size="xs"
-            onClick={() => handleExpandAll(false)}
+            onClick={handleCollapseAll}
             className="text-xs h-7 gap-1"
-            title="Desplegar todas las cuentas, subcuentas, cursos y secciones"
+            title="Plegar todos los niveles del árbol jerárquico"
           >
-            <Maximize2 className="size-3" />
-            <span>Desplegar Cursos</span>
+            <FoldVertical className="size-3 text-muted-foreground" />
+            <span>Plegar Todo</span>
           </Button>
+
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => handleExpandToLevel('sedes')}
+            className="text-xs h-7 gap-1"
+            title="Desplegar hasta Cuentas Principales (Sedes)"
+          >
+            <Building2 className="size-3 text-muted-foreground" />
+            <span>Nivel Sedes</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => handleExpandToLevel('carreras')}
+            className="text-xs h-7 gap-1"
+            title="Desplegar hasta Subcuentas de Carreras"
+          >
+            <BookOpen className="size-3 text-muted-foreground" />
+            <span>Nivel Carreras</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => handleExpandToLevel('cursos')}
+            className="text-xs h-7 gap-1"
+            title="Desplegar todas las cuentas, subcuentas y tablas de cursos con sus secciones"
+          >
+            <Maximize2 className="size-3 text-muted-foreground" />
+            <span>Nivel Cursos</span>
+          </Button>
+
           <Button
             variant="default"
             size="xs"
-            onClick={() => handleExpandAll(true)}
+            onClick={() => handleExpandToLevel('all')}
             className="text-xs h-7 gap-1"
             title="Desplegar todo el árbol incluyendo docentes y alumnos matriculados"
           >
             <Users className="size-3" />
-            <span>Desplegar con Matriculados</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={handleCollapseAll}
-            className="text-xs h-7 gap-1"
-          >
-            <Minimize2 className="size-3" />
-            <span>Plegar Todo</span>
+            <span>Todo (+ Matriculados)</span>
           </Button>
         </div>
       </div>
@@ -415,8 +617,15 @@ export function HierarchyTreeTable({
               <div className="flex items-center justify-between gap-3 px-4 py-3 bg-muted/30 border-b border-border">
                 <div className="flex items-center gap-2.5 flex-1 min-w-0">
                   <button
-                    onClick={() => toggleNode(pKey)}
+                    onClick={(e) => {
+                      if (e.altKey) {
+                        toggleBranchKeys(getPeriodoBranchKeys(periodo))
+                      } else {
+                        toggleNode(pKey)
+                      }
+                    }}
                     className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    title="Clic para alternar periodo. Alt+Clic para desplegar/plegar toda la rama del periodo"
                   >
                     {isPExpanded ? (
                       <ChevronDown className="size-4" />
@@ -442,7 +651,7 @@ export function HierarchyTreeTable({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
+                <div className="flex items-center gap-2.5 text-xs text-muted-foreground shrink-0">
                   <span>{periodo.sedes.size} Sedes</span>
                   <span>•</span>
                   <span>{periodo.sectionIds.length} Secciones</span>
@@ -450,6 +659,16 @@ export function HierarchyTreeTable({
                   <Badge variant="secondary" className="text-xs font-mono font-normal">
                     {periodo.totalStudents.toLocaleString()} Matriculados
                   </Badge>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => toggleBranchKeys(getPeriodoBranchKeys(periodo))}
+                    className="h-6 text-[11px] gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+                    title="Desplegar o plegar toda la rama de este periodo"
+                  >
+                    <ChevronsUpDown className="size-3" />
+                    <span className="hidden sm:inline">Rama Periodo</span>
+                  </Button>
                 </div>
               </div>
 
@@ -470,8 +689,15 @@ export function HierarchyTreeTable({
                         <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-muted/20 border-b border-border/60">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
                             <button
-                              onClick={() => toggleNode(sKey)}
+                              onClick={(e) => {
+                                if (e.altKey) {
+                                  toggleBranchKeys(getSedeBranchKeys(periodo.periodoId, sede))
+                                } else {
+                                  toggleNode(sKey)
+                                }
+                              }}
                               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                              title="Clic para alternar sede. Alt+Clic para desplegar/plegar toda la rama de la sede"
                             >
                               {isSExpanded ? (
                                 <ChevronDown className="size-3.5" />
@@ -504,6 +730,18 @@ export function HierarchyTreeTable({
                             <span className="font-mono text-foreground font-medium">
                               {sede.totalStudents} matriculados
                             </span>
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              onClick={() =>
+                                toggleBranchKeys(getSedeBranchKeys(periodo.periodoId, sede))
+                              }
+                              className="h-6 text-[11px] gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+                              title="Desplegar o plegar toda la rama de esta sede"
+                            >
+                              <ChevronsUpDown className="size-3" />
+                              <span className="hidden sm:inline">Rama Sede</span>
+                            </Button>
                           </div>
                         </div>
 
@@ -635,8 +873,23 @@ export function HierarchyTreeTable({
                                                           <div className="flex items-center justify-between gap-3 px-3 py-1.5 bg-muted/10 border-b border-border/30">
                                                             <div className="flex items-center gap-2 flex-1 min-w-0">
                                                               <button
-                                                                onClick={() => toggleNode(cKey)}
+                                                                onClick={(e) => {
+                                                                  if (e.altKey) {
+                                                                    toggleBranchKeys(
+                                                                      getCarreraBranchKeys(
+                                                                        periodo.periodoId,
+                                                                        sede.sedeId,
+                                                                        modalidad.modalidadId,
+                                                                        facultad.facultadId,
+                                                                        carrera
+                                                                      )
+                                                                    )
+                                                                  } else {
+                                                                    toggleNode(cKey)
+                                                                  }
+                                                                }}
                                                                 className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                                                title="Clic para alternar carrera. Alt+Clic para desplegar/plegar todos los cursos de la carrera"
                                                               >
                                                                 {isCExpanded ? (
                                                                   <ChevronDown className="size-3" />
@@ -670,8 +923,28 @@ export function HierarchyTreeTable({
                                                               </div>
                                                             </div>
 
-                                                            <div className="text-[11px] text-muted-foreground shrink-0">
+                                                            <div className="text-[11px] text-muted-foreground shrink-0 flex items-center gap-1.5">
                                                               <span>{carrera.sectionIds.length} secciones</span>
+                                                              <Button
+                                                                variant="ghost"
+                                                                size="xs"
+                                                                onClick={() =>
+                                                                  toggleBranchKeys(
+                                                                    getCarreraBranchKeys(
+                                                                      periodo.periodoId,
+                                                                      sede.sedeId,
+                                                                      modalidad.modalidadId,
+                                                                      facultad.facultadId,
+                                                                      carrera
+                                                                    )
+                                                                  )
+                                                                }
+                                                                className="h-5 text-[10px] gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+                                                                title="Desplegar o plegar todos los planes y cursos de esta carrera"
+                                                              >
+                                                                <ChevronsUpDown className="size-2.5" />
+                                                                <span className="hidden sm:inline">Rama Carrera</span>
+                                                              </Button>
                                                             </div>
                                                           </div>
 
@@ -696,10 +969,24 @@ export function HierarchyTreeTable({
                                                                     <div className="flex items-center justify-between gap-3 px-3 py-1.5 bg-muted/20 border-b border-border/30">
                                                                       <div className="flex items-center gap-2 flex-1 min-w-0">
                                                                         <button
-                                                                          onClick={() =>
-                                                                            toggleNode(plKey)
-                                                                          }
+                                                                          onClick={(e) => {
+                                                                            if (e.altKey) {
+                                                                              toggleBranchKeys(
+                                                                                getPlanBranchKeys(
+                                                                                  periodo.periodoId,
+                                                                                  sede.sedeId,
+                                                                                  modalidad.modalidadId,
+                                                                                  facultad.facultadId,
+                                                                                  carrera.carreraId,
+                                                                                  plan
+                                                                                )
+                                                                              )
+                                                                            } else {
+                                                                              toggleNode(plKey)
+                                                                            }
+                                                                          }}
                                                                           className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                                                          title="Clic para alternar plan. Alt+Clic para desplegar/plegar todos los cursos del plan"
                                                                         >
                                                                           {isPlExpanded ? (
                                                                             <ChevronDown className="size-3" />
@@ -733,7 +1020,7 @@ export function HierarchyTreeTable({
                                                                         </div>
                                                                       </div>
 
-                                                                      <div className="text-[11px] text-muted-foreground shrink-0">
+                                                                      <div className="text-[11px] text-muted-foreground shrink-0 flex items-center gap-1.5">
                                                                         <span>
                                                                           {plan.cursos.size} Cursos
                                                                         </span>
@@ -742,6 +1029,27 @@ export function HierarchyTreeTable({
                                                                           {plan.sectionIds.length}{' '}
                                                                           Secciones
                                                                         </span>
+                                                                        <Button
+                                                                          variant="ghost"
+                                                                          size="xs"
+                                                                          onClick={() =>
+                                                                            toggleBranchKeys(
+                                                                              getPlanBranchKeys(
+                                                                                periodo.periodoId,
+                                                                                sede.sedeId,
+                                                                                modalidad.modalidadId,
+                                                                                facultad.facultadId,
+                                                                                carrera.carreraId,
+                                                                                plan
+                                                                              )
+                                                                            )
+                                                                          }
+                                                                          className="h-5 text-[10px] gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+                                                                          title="Desplegar o plegar todos los cursos de este plan"
+                                                                        >
+                                                                          <ChevronsUpDown className="size-2.5" />
+                                                                          <span className="hidden sm:inline">Rama Plan</span>
+                                                                        </Button>
                                                                       </div>
                                                                     </div>
 
@@ -768,12 +1076,24 @@ export function HierarchyTreeTable({
                                                                               <div className="flex items-center justify-between gap-3 px-3 py-1.5 bg-muted/15 border-b border-border/30">
                                                                                 <div className="flex items-center gap-2 flex-1 min-w-0">
                                                                                   <button
-                                                                                    onClick={() =>
-                                                                                      toggleNode(
-                                                                                        curKey
-                                                                                      )
-                                                                                    }
+                                                                                    onClick={(e) => {
+                                                                                      if (e.altKey) {
+                                                                                        const secKeys = getCursoSecKeys(
+                                                                                          periodo.periodoId,
+                                                                                          sede.sedeId,
+                                                                                          modalidad.modalidadId,
+                                                                                          facultad.facultadId,
+                                                                                          carrera.carreraId,
+                                                                                          plan.planId,
+                                                                                          curso
+                                                                                        )
+                                                                                        toggleBranchKeys([curKey, ...secKeys])
+                                                                                      } else {
+                                                                                        toggleNode(curKey)
+                                                                                      }
+                                                                                    }}
                                                                                     className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                                                                    title="Clic para ver secciones. Alt+Clic para desplegar curso con todos sus matriculados"
                                                                                   >
                                                                                     {isCurExpanded ? (
                                                                                       <ChevronDown className="size-3" />
@@ -833,6 +1153,51 @@ export function HierarchyTreeTable({
                                                                                     }{' '}
                                                                                     alumnos
                                                                                   </Badge>
+                                                                                  {curso.secciones.length > 0 && (
+                                                                                    <Button
+                                                                                      variant="ghost"
+                                                                                      size="xs"
+                                                                                      onClick={() => {
+                                                                                        const secKeys = getCursoSecKeys(
+                                                                                          periodo.periodoId,
+                                                                                          sede.sedeId,
+                                                                                          modalidad.modalidadId,
+                                                                                          facultad.facultadId,
+                                                                                          carrera.carreraId,
+                                                                                          plan.planId,
+                                                                                          curso
+                                                                                        )
+                                                                                        const allSecExpanded = secKeys.every((k) =>
+                                                                                          expandedNodes.has(k)
+                                                                                        )
+                                                                                        setExpandedNodes((prev) => {
+                                                                                          const next = new Set(prev)
+                                                                                          next.add(curKey)
+                                                                                          for (const k of secKeys) {
+                                                                                            if (allSecExpanded) {
+                                                                                              next.delete(k)
+                                                                                            } else {
+                                                                                              next.add(k)
+                                                                                            }
+                                                                                          }
+                                                                                          return next
+                                                                                        })
+                                                                                      }}
+                                                                                      className="h-5 text-[10px] gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+                                                                                      title="Desplegar o plegar docentes y alumnos de todas las secciones de este curso"
+                                                                                    >
+                                                                                      <Users className="size-2.5" />
+                                                                                      <span>
+                                                                                        {curso.secciones.every((s) =>
+                                                                                          expandedNodes.has(
+                                                                                            `sec-${periodo.periodoId}-${sede.sedeId}-${modalidad.modalidadId}-${facultad.facultadId}-${carrera.carreraId}-${plan.planId}-${curso.cursoId}-${s.id}`
+                                                                                          )
+                                                                                        )
+                                                                                          ? 'Plegar Alumnos'
+                                                                                          : 'Ver Alumnos'}
+                                                                                      </span>
+                                                                                    </Button>
+                                                                                  )}
                                                                                 </div>
                                                                               </div>
 

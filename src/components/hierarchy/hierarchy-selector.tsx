@@ -37,6 +37,7 @@ import {
   Table as TableIcon,
   Eye,
   UserCheck,
+  FoldVertical,
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
@@ -1034,7 +1035,53 @@ export function HierarchySelector({
         />
       ) : (
         /* VISTA 2: Tabla Plana Detallada (TanStack Table) */
-        <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs">
+        <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs space-y-0">
+          {/* Sub-barra de herramientas de plegado/desplegado por lote en tabla */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-4 py-2.5 bg-muted/20 border-b border-border text-xs">
+            <div className="flex items-center gap-2 text-muted-foreground flex-wrap">
+              <span className="font-semibold text-foreground">Detalle de Secciones en Tabla:</span>
+              <span>
+                Mostrando {table.getRowModel().rows.length} secciones en página
+              </span>
+              <Badge variant="outline" className="text-[10px] font-mono bg-background">
+                {tableExpandedRows.size === 0
+                  ? 'Matriculados plegados'
+                  : `${tableExpandedRows.size} secciones con detalle`}
+              </Badge>
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => {
+                  const next = new Set(tableExpandedRows)
+                  for (const row of table.getRowModel().rows) {
+                    next.add(row.original.id)
+                  }
+                  setTableExpandedRows(next)
+                }}
+                className="text-xs h-7 gap-1"
+                title="Desplegar docentes y alumnos de todas las secciones en la página actual"
+              >
+                <Users className="size-3 text-muted-foreground" />
+                <span>Desplegar Página ({table.getRowModel().rows.length})</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => setTableExpandedRows(new Set())}
+                disabled={tableExpandedRows.size === 0}
+                className="text-xs h-7 gap-1"
+                title="Plegar el detalle de todas las secciones desplegadas"
+              >
+                <FoldVertical className="size-3 text-muted-foreground" />
+                <span>Plegar Todo</span>
+              </Button>
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
