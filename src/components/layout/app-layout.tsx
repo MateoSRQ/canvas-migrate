@@ -27,7 +27,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label="Toggle drawer menu"
+                aria-label="Abrir menú lateral"
                 className="text-muted-foreground hover:text-foreground"
               >
                 <Menu className="h-5 w-5" />
@@ -37,10 +37,10 @@ export function AppLayout({ children }: AppLayoutProps) {
               <SheetHeader className="p-4 border-b border-sidebar-border text-left">
                 <SheetTitle className="text-base font-semibold tracking-tight text-sidebar-foreground flex items-center gap-2">
                   <Layers className="h-4 w-4" />
-                  Menu
+                  Menú Principal
                 </SheetTitle>
                 <SheetDescription className="text-xs text-muted-foreground">
-                  Navigation and quick actions
+                  Navegación y módulos del sistema
                 </SheetDescription>
               </SheetHeader>
 
@@ -52,7 +52,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   onClick={() => setIsDrawerOpen(false)}
                 >
                   <Layers className="h-4 w-4" />
-                  <span>Hierarchy & Selection</span>
+                  <span>Jerarquía y Selección</span>
                 </a>
                 <a
                   href="/#cases"
@@ -60,7 +60,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   onClick={() => setIsDrawerOpen(false)}
                 >
                   <FileText className="h-4 w-4" />
-                  <span>Import Cases Registry</span>
+                  <span>Registro de Casos de Importación</span>
                 </a>
               </nav>
 

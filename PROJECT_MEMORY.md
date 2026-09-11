@@ -42,15 +42,18 @@
 - [x] **Phase 3: Hierarchical Data Selection & TanStack Table Engine**
   - [x] Implemented hierarchy aggregation service (`src/server/services/hierarchy-service.ts`) linking 2,925 course-sections, 2,199 teachers with official DNI, and student enrollments with sub-millisecond caching.
   - [x] TanStack Start server functions (`getCaseHierarchyFn`, `getSectionStudentsFn`, `clearHierarchyCacheFn`).
-  - [x] Installed `@tanstack/react-table` (v8) and created shadcn `Checkbox` and `Input` components.
+  - [x] Installed `@tanstack/react-table` (v8) and created shadcn `Checkbox` (with indeterminate minus support) and `Input` components.
   - [x] Full-width Hierarchical Data Selection workspace (`src/components/hierarchy/hierarchy-selector.tsx`):
     - Case selector switching seamlessly between import cases.
     - 6-level cascading hierarchical filters (Periodo, Sede, Modalidad, Facultad, Carrera, Plan).
     - "Exclude 'NO HABILITADO'" sections toggle and global text search filter.
+    - Dual-view switcher: **Vista Jerárquica Anidada (Árbol)** vs **Vista Tabla Detallada (TanStack Table)**.
+    - **Nested Tree Table (`src/components/hierarchy/hierarchy-tree-table.tsx`)**: Account (Sede) > Subaccount (Modalidad > Facultad > Carrera > Plan) > Curso > Nested Table of Secciones, with multi-level cascading checkboxes, collapse/expand all, and student rosters.
     - Multi-row selection with "Select All Filtered", "Clear", and selection metrics (sections, courses, students).
     - Sorting and pagination across course-sections.
     - Modal dialog displaying enrolled students for any selected section.
     - Selection summary breakdown modal.
+    - **100% Spanish translation** across all UI texts, labels, buttons, dialogs, and messages.
 - [ ] **Phase 4: Transformation, Normalization & Diff Engine**
   - [ ] Transform selected case data into standard SIS Canvas format (`accounts.csv`, `terms.csv`, `users.csv`, `courses.csv`, `sections.csv`, `enrollments.csv`).
   - [ ] Implement differential engine comparing Case A against Case B (`_added`, `_updated`, `_deleted`, `_concluded`).
@@ -121,7 +124,8 @@ canvas-migrate/
     │   ├── cases/
     │   │   └── case-manager.tsx # Full-width Case Manager UI & table sample inspector
     │   ├── hierarchy/
-    │   │   └── hierarchy-selector.tsx # Full-width TanStack Table & cascading filter UI
+    │   │   ├── hierarchy-selector.tsx # Full-width TanStack Table & cascading filter UI
+    │   │   └── hierarchy-tree-table.tsx # Nested account/subaccount tree with collapsible tables
     │   ├── layout/
     │   │   └── app-layout.tsx# Global layout: Top header, left drawer menu, full-width panel
     │   └── ui/
@@ -194,6 +198,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-11T11:25:00` | `9d2eea2` | Antigravity | Feature | MSSQL multi-db extraction engine and relational independent case schema in SQLite | `src/server/services/sql-server.ts`, `src/server/services/importer.ts`, `src/db/schema.ts`, `src/db/index.ts` |
 | `2026-09-11T11:28:00` | `9d2eea2` | Antigravity | UI/RPC | TanStack Start server functions and full-width Case Manager UI with sample inspector | `src/components/cases/case-manager.tsx`, `src/components/ui/badge.tsx`, `src/components/ui/dialog.tsx`, `src/components/ui/table.tsx`, `src/server/functions/cases.ts`, `src/routes/index.tsx` |
 | `2026-09-11T12:00:00` | `b0e5e29` | Antigravity | Feature/UI | Hierarchical data selection, 6-level cascading filters, TanStack Table v8, and student inspector | `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/ui/checkbox.tsx`, `src/components/ui/input.tsx`, `src/server/services/hierarchy-service.ts`, `src/server/functions/hierarchy.ts`, `src/routes/index.tsx`, `src/components/layout/app-layout.tsx` |
+| `2026-09-11T12:10:00` | - | Antigravity | Feature/UI | Nested account/subaccount tree table view, dual-view mode switcher, and complete Spanish UI translation | `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/cases/case-manager.tsx`, `src/routes/index.tsx`, `src/components/layout/app-layout.tsx` |
 
 ---
 
@@ -207,10 +212,11 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - `--border` & `--input`: Subtle gray borders `oklch(0.922 0 0)` / `oklch(0.269 0 0)`.
   - `--sidebar`: Dedicated sidebar tokens matching the gray theme.
 
-### Typography
+### Typography & Language
 - **Primary Font**: **Geist Sans** (`'Geist Sans', system-ui, -apple-system, sans-serif`).
 - Imported via `@fontsource/geist-sans` in `src/styles.css`.
 - Font weights: Regular (400), Medium (500), SemiBold (600), Bold (700).
+- **Language**: **100% Spanish (Español)** across all components, badges, forms, headers, tooltips, dialogs, empty states, and action buttons.
 
 ### Layout & Surface Design
 - **Top Header**:
@@ -220,7 +226,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 - **Left Drawer Menu**:
   - Built with shadcn `Sheet` (`SheetContent side="left"`).
   - Dimensions: `w-72 sm:w-80`, anchored to the left.
-  - Contains clean navigation items with icons (`Layers` Hierarchy & Selection, `FileText` Import Cases Registry).
+  - Contains clean navigation items in Spanish (`Jerarquía y Selección`, `Registro de Casos de Importación`).
   - Drawer closes upon navigation link click or backdrop/close click.
 - **Central Panel**:
   - Full width (`w-full flex-1`), expanding across the entire viewport.
@@ -230,18 +236,21 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 ### Component Design
 - **Case Manager (`src/components/cases/case-manager.tsx`)**:
   - Clean two-column split on desktop (Case directory list on the left, selected case detail & inspector on the right).
-  - Status Indicators: Minimalist `Badge` components (e.g. `completed` = subtle emerald/gray badge, `in_progress` = blue/gray badge, `failed` = destructive badge).
-  - Table Catalog: Lists all 20 extracted tables with row counts and duration, offering a "View Data" button.
+  - Status Indicators: Minimalist `Badge` components in Spanish (`Completado`, `En Progreso`, `Fallido`).
+  - Table Catalog: Lists all 20 extracted tables with row counts and duration, offering a "Ver Registros" button.
   - Raw Record Inspector: Modal `Dialog` displaying top 50 rows in a scrollable, monospace `Table` with auto-derived column headers from JSON keys.
-  - Action Controls: "New Import Case" trigger opening a clean configuration dialog for custom case names and descriptions; "Delete Case" button with cascade purge.
+  - Action Controls: "Nuevo Caso de Importación" modal trigger; "Eliminar Caso" button with cascade purge.
 - **Hierarchical Selector Workspace (`src/components/hierarchy/hierarchy-selector.tsx`)**:
+  - **Dual-View Switcher**: Toggle smoothly between **Vista Jerárquica Anidada (Árbol)** and **Vista Tabla Detallada (TanStack Table)**.
   - **Case Switcher Bar**: Clean top selector showing case name, total database rows, and status with immediate re-evaluation.
   - **Cascading Filter Grid**: 6-level hierarchical selectors (`Periodo` -> `Sede` -> `Modalidad` -> `Facultad` -> `Carrera` -> `Plan`), with dynamic parent-child option binding.
-  - **Business Filters**: Toggle for "Exclude 'NO HABILITADO' sections" and free-text search across codes, names, sections, careers, and teachers/DNI.
-  - **TanStack Table (v8)**:
-    - Custom checkboxes for row selection and header "select all visible".
-    - Interactive sorting on all key columns (Periodo/Sede, Carrera, Curso, Sección, Docente, Alumnos count).
-    - Client-side pagination (10, 25, 50, 100 rows per page) with navigation controls.
-  - **Selection Control Bar**: Sticky/inline bar displaying selected count, filtered count, total students represented, "Select All Filtered", and "Clear".
-  - **Student Inspector Modal**: Dialog rendering full roster of enrolled students (`#`, `Código`, `Nombre Completo`, `Correo Institucional`) for any selected section.
+  - **Business Filters**: Toggle for "Excluir secciones «NO HABILITADO»" and free-text search across codes, names, sections, careers, and teachers/DNI.
+  - **Selection Control Bar**: Sticky/inline bar displaying selected count, filtered count, total students represented, "Seleccionar Filtrados", and "Limpiar".
+  - **Student Inspector Modal**: Dialog rendering full roster of enrolled students (`#`, `Código Alumno`, `Nombre Completo`, `Correo Institucional`) for any selected section.
   - **Selection Summary Modal**: Overview of selected sections, unique courses, and total enrollments ready for SIS packaging.
+- **Nested Hierarchical Tree Table (`src/components/hierarchy/hierarchy-tree-table.tsx`)**:
+  - Exact mirroring of Canvas LMS SIS accounts and subaccounts:
+    `[PERIODO] T-id` > `[CUENTA] Sede S-id` > `[SUBCUENTA] Modalidad M-id` > `[SUBCUENTA] Facultad F-id` > `[SUBCUENTA] Carrera C-id` > `[SUBCUENTA] Plan P-codigo` > `[CURSO] CUR-codigo` > `Tabla Anidada de [SECCIONES]`.
+  - Cascading multi-level selection with indeterminate minus state (`Checkbox`).
+  - Expand all and collapse all action controls.
+  - Direct student roster inspection modal per section.

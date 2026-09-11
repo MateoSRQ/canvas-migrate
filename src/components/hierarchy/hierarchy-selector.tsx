@@ -32,6 +32,8 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  ListTree,
+  Table as TableIcon,
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
@@ -54,6 +56,7 @@ import {
 } from '#/components/ui/dialog'
 import { getCasesFn } from '#/server/functions/cases'
 import { getCaseHierarchyFn, getSectionStudentsFn } from '#/server/functions/hierarchy'
+import { HierarchyTreeTable } from '#/components/hierarchy/hierarchy-tree-table'
 import type {
   HierarchyItem,
   HierarchyFilterOptions,
@@ -66,19 +69,22 @@ interface HierarchySelectorProps {
 }
 
 export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps) {
-  // Case selection state
+  // Modo de vista: Jerárquica Anidada (Árbol) vs Tabla Detallada (TanStack Table)
+  const [viewMode, setViewMode] = React.useState<'tree' | 'table'>('tree')
+
+  // Estado de casos
   const [cases, setCases] = React.useState<ImportCase[]>([])
   const [selectedCaseId, setSelectedCaseId] = React.useState<string>('')
   const [isLoadingCases, setIsLoadingCases] = React.useState(true)
 
-  // Hierarchy data state
+  // Estado de datos jerárquicos
   const [hierarchyData, setHierarchyData] = React.useState<{
     items: HierarchyItem[]
     filters: HierarchyFilterOptions
   } | null>(null)
   const [isLoadingHierarchy, setIsLoadingHierarchy] = React.useState(false)
 
-  // Filter states
+  // Estados de filtros jerárquicos en cascada
   const [periodoFilter, setPeriodoFilter] = React.useState<string>('all')
   const [sedeFilter, setSedeFilter] = React.useState<string>('all')
   const [modalidadFilter, setModalidadFilter] = React.useState<string>('all')
@@ -88,31 +94,30 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
   const [excludeNoHabilitado, setExcludeNoHabilitado] = React.useState<boolean>(true)
   const [searchQuery, setSearchQuery] = React.useState<string>('')
 
-  // Table state
+  // Estado de la tabla TanStack
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({})
 
-  // Student dialog state
+  // Diálogo de estudiantes matriculados
   const [inspectingItem, setInspectingItem] = React.useState<HierarchyItem | null>(null)
   const [students, setStudents] = React.useState<EnrolledStudent[]>([])
   const [isLoadingStudents, setIsLoadingStudents] = React.useState(false)
 
-  // Summary dialog state
+  // Diálogo de resumen de selección
   const [isSummaryOpen, setIsSummaryOpen] = React.useState(false)
 
-  // 1. Fetch available cases
+  // 1. Cargar lista de casos disponibles
   const loadCases = React.useCallback(async () => {
     setIsLoadingCases(true)
     try {
       const data = await getCasesFn()
       setCases(data)
-      // Pick first completed case by default if no case is selected
       if (!selectedCaseId && data.length > 0) {
         const firstCompleted = data.find((c) => c.status === 'completed') || data[0]
         setSelectedCaseId(firstCompleted.id)
       }
     } catch (err) {
-      console.error('Failed to load cases:', err)
+      console.error('Error al cargar casos:', err)
     } finally {
       setIsLoadingCases(false)
     }
@@ -122,7 +127,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
     loadCases()
   }, [loadCases])
 
-  // 2. Load hierarchy data when selected case changes
+  // 2. Cargar datos jerárquicos al cambiar el caso seleccionado
   React.useEffect(() => {
     if (!selectedCaseId) {
       setHierarchyData(null)
@@ -131,7 +136,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
 
     let isMounted = true
     setIsLoadingHierarchy(true)
-    setRowSelection({}) // Reset selection on case switch
+    setRowSelection({})
 
     getCaseHierarchyFn({ data: selectedCaseId })
       .then((res) => {
@@ -141,7 +146,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
         }
       })
       .catch((err) => {
-        console.error('Failed to load hierarchy data:', err)
+        console.error('Error al cargar datos jerárquicos:', err)
         if (isMounted) setIsLoadingHierarchy(false)
       })
 
@@ -150,7 +155,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
     }
   }, [selectedCaseId])
 
-  // 3. Inspect students handler
+  // 3. Inspeccionar estudiantes de una sección
   const handleInspectStudents = async (item: HierarchyItem) => {
     setInspectingItem(item)
     setIsLoadingStudents(true)
@@ -160,54 +165,39 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
       })
       setStudents(list)
     } catch (err) {
-      console.error('Failed to fetch section students:', err)
+      console.error('Error al obtener estudiantes matriculados:', err)
       setStudents([])
     } finally {
       setIsLoadingStudents(false)
     }
   }
 
-  // 4. Cascading filter logic
+  // 4. Lógica de filtrado en cascada
   const filteredItems = React.useMemo(() => {
     if (!hierarchyData?.items) return []
 
     return hierarchyData.items.filter((item) => {
-      // Exclude No Habilitado filter
       if (excludeNoHabilitado && item.isNoHabilitado) {
         return false
       }
-
-      // Periodo filter
       if (periodoFilter !== 'all' && String(item.periodoId) !== periodoFilter) {
         return false
       }
-
-      // Sede filter
       if (sedeFilter !== 'all' && String(item.sedeId) !== sedeFilter) {
         return false
       }
-
-      // Modalidad filter
       if (modalidadFilter !== 'all' && String(item.modalidadId) !== modalidadFilter) {
         return false
       }
-
-      // Facultad filter
       if (facultadFilter !== 'all' && String(item.facultadId) !== facultadFilter) {
         return false
       }
-
-      // Carrera filter
       if (carreraFilter !== 'all' && String(item.carreraId) !== carreraFilter) {
         return false
       }
-
-      // Plan filter
       if (planFilter !== 'all' && String(item.planId) !== planFilter) {
         return false
       }
-
-      // Text search filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim()
         const matchCourseCode = item.cursoCodigo.toLowerCase().includes(query)
@@ -228,7 +218,6 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
           return false
         }
       }
-
       return true
     })
   }, [
@@ -243,7 +232,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
     searchQuery,
   ])
 
-  // Reset filters
+  // Restablecer filtros
   const handleResetFilters = () => {
     setPeriodoFilter('all')
     setSedeFilter('all')
@@ -255,7 +244,23 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
     setSearchQuery('')
   }
 
-  // 5. Columns definition for TanStack Table
+  // 5. Manejo de selección en lote (utilizado tanto por la tabla como por el árbol)
+  const handleToggleBatchSelection = (sectionIds: number[], forceValue?: boolean) => {
+    setRowSelection((prev) => {
+      const next = { ...prev }
+      const targetState = forceValue !== undefined ? forceValue : true
+      for (const id of sectionIds) {
+        if (targetState) {
+          next[String(id)] = true
+        } else {
+          delete next[String(id)]
+        }
+      }
+      return next
+    })
+  }
+
+  // Columnas para TanStack Table
   const columns = React.useMemo<ColumnDef<HierarchyItem>[]>(
     () => [
       {
@@ -268,7 +273,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
                 (table.getIsSomePageRowsSelected() && 'indeterminate')
               }
               onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-              aria-label="Select all on page"
+              aria-label="Seleccionar todos en la página"
             />
           </div>
         ),
@@ -277,7 +282,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
             <Checkbox
               checked={row.getIsSelected()}
               onCheckedChange={(value) => row.toggleSelected(!!value)}
-              aria-label="Select row"
+              aria-label="Seleccionar fila"
             />
           </div>
         ),
@@ -291,7 +296,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
             className="flex items-center gap-1 font-medium hover:text-foreground text-left"
             onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
           >
-            <span>Periodo & Sede</span>
+            <span>Periodo y Sede</span>
             {column.getIsSorted() === 'asc' ? (
               <ArrowUp className="size-3.5" />
             ) : column.getIsSorted() === 'desc' ? (
@@ -326,7 +331,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
             className="flex items-center gap-1 font-medium hover:text-foreground text-left"
             onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
           >
-            <span>Carrera & Facultad</span>
+            <span>Carrera y Facultad</span>
             {column.getIsSorted() === 'asc' ? (
               <ArrowUp className="size-3.5" />
             ) : column.getIsSorted() === 'desc' ? (
@@ -353,12 +358,14 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
       },
       {
         id: 'plan',
-        header: 'Plan',
+        header: 'Plan Curricular',
         accessorKey: 'planNombre',
         cell: ({ row }) => (
           <div className="text-xs text-muted-foreground">
-            <span className="font-mono text-[11px]">{row.original.planCodigo || 'N/A'}</span>
-            <div className="truncate max-w-[120px] text-[11px]">{row.original.planNombre}</div>
+            <span className="font-mono text-[11px] font-medium text-foreground">
+              {row.original.planCodigo || 'S/P'}
+            </span>
+            <div className="truncate max-w-[130px] text-[11px]">{row.original.planNombre}</div>
           </div>
         ),
       },
@@ -494,7 +501,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
     []
   )
 
-  // 6. TanStack Table Instance
+  // 6. Instancia de TanStack Table
   const table = useReactTable({
     data: filteredItems,
     columns,
@@ -516,7 +523,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
     },
   })
 
-  // Selection computations
+  // Cálculos de selección activa
   const selectedRowIds = Object.keys(rowSelection).filter((id) => rowSelection[id])
   const selectedCount = selectedRowIds.length
 
@@ -532,7 +539,6 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
     setRowSelection({})
   }
 
-  // Calculate stats for active selection
   const selectionStats = React.useMemo(() => {
     if (!hierarchyData?.items || selectedCount === 0) {
       return { sectionsCount: 0, coursesCount: 0, studentsTotal: 0 }
@@ -540,7 +546,6 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
 
     const selectedSet = new Set(selectedRowIds)
     const selectedItems = hierarchyData.items.filter((item) => selectedSet.has(String(item.id)))
-
     const uniqueCourses = new Set(selectedItems.map((item) => item.cursoId))
     const totalStudents = selectedItems.reduce((acc, item) => acc + item.estudiantesCount, 0)
 
@@ -556,28 +561,28 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
 
   return (
     <div className="space-y-6 w-full">
-      {/* 1. Header & Case Selector Bar */}
+      {/* 1. Encabezado y Selector de Caso Activo */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 rounded-xl border border-border bg-card shadow-xs">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Layers className="size-5 text-foreground/80" />
             <h2 className="text-lg font-semibold tracking-tight text-foreground">
-              Hierarchical Data Selection
+              Jerarquía y Selección de Datos Canvas LMS
             </h2>
             <Badge variant="outline" className="text-xs font-mono font-normal">
               TanStack Table v8
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
-            Filter academic structures, select sections for SIS export, and inspect enrolled students.
+            Explore la jerarquía oficial de Cuentas, Subcuentas, Cursos y Secciones, aplique filtros y seleccione entidades para exportación o migración SIS.
           </p>
         </div>
 
-        {/* Case Switcher */}
+        {/* Selector de Casos */}
         <div className="flex items-center gap-2.5 flex-wrap">
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-              Active Case:
+              Caso Activo:
             </span>
             <select
               value={selectedCaseId}
@@ -585,10 +590,10 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
               disabled={isLoadingCases || cases.length === 0}
               className="h-9 rounded-md border border-input bg-background px-3 py-1 text-xs font-medium text-foreground shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
             >
-              {cases.length === 0 && <option value="">No cases available</option>}
+              {cases.length === 0 && <option value="">Sin casos registrados</option>}
               {cases.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} ({c.totalRows.toLocaleString()} rows)
+                  {c.name} ({c.totalRows.toLocaleString()} registros)
                 </option>
               ))}
             </select>
@@ -600,10 +605,10 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
             onClick={loadCases}
             disabled={isLoadingCases}
             className="h-9 px-2.5 text-xs gap-1.5"
-            title="Refresh cases list"
+            title="Refrescar lista de casos"
           >
             <RefreshCw className={`size-3.5 ${isLoadingCases ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Refresh</span>
+            <span className="hidden sm:inline">Refrescar</span>
           </Button>
 
           {onNavigateToCases && (
@@ -614,41 +619,41 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
               className="h-9 px-3 text-xs gap-1.5"
             >
               <ExternalLink className="size-3.5" />
-              <span>Manage Cases</span>
+              <span>Gestionar Casos</span>
             </Button>
           )}
         </div>
       </div>
 
-      {/* Case Details Badge Strip */}
+      {/* Tira de información del Caso Activo */}
       {selectedCase && (
         <div className="flex items-center gap-3 text-xs text-muted-foreground px-1 flex-wrap">
           <span className="font-mono text-foreground">{selectedCase.id}</span>
           <span>•</span>
-          <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+          <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
             <CheckCircle2 className="size-3.5" />
-            <span>{selectedCase.status}</span>
+            <span>Completado</span>
           </span>
           <span>•</span>
-          <span>{selectedCase.totalTables} raw tables</span>
+          <span>{selectedCase.totalTables} tablas fuente</span>
           <span>•</span>
-          <span>{selectedCase.totalRows.toLocaleString()} total database rows</span>
+          <span>{selectedCase.totalRows.toLocaleString()} registros totales en BD</span>
           {selectedCase.createdAt && (
             <>
               <span>•</span>
-              <span>Imported {new Date(selectedCase.createdAt).toLocaleString()}</span>
+              <span>Extraído el {new Date(selectedCase.createdAt).toLocaleString('es-ES')}</span>
             </>
           )}
         </div>
       )}
 
-      {/* 2. Hierarchical Filter Controls */}
+      {/* 2. Filtros Jerárquicos en Cascada */}
       <div className="rounded-xl border border-border bg-card p-4 space-y-4 shadow-xs">
         <div className="flex items-center justify-between gap-2 border-b border-border pb-3">
           <div className="flex items-center gap-2">
             <Filter className="size-4 text-muted-foreground" />
             <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
-              Hierarchical Filters
+              Filtros Jerárquicos en Cascada
             </span>
           </div>
 
@@ -658,7 +663,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
                 checked={excludeNoHabilitado}
                 onCheckedChange={(checked) => setExcludeNoHabilitado(!!checked)}
               />
-              <span>Exclude &ldquo;NO HABILITADO&rdquo; sections</span>
+              <span>Excluir secciones «NO HABILITADO»</span>
             </label>
 
             <Button
@@ -668,14 +673,14 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
               className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1 px-2"
             >
               <RotateCcw className="size-3" />
-              <span>Reset Filters</span>
+              <span>Restablecer Filtros</span>
             </Button>
           </div>
         </div>
 
-        {/* Filter Dropdowns Grid */}
+        {/* Desplegables de los 6 Niveles Jerárquicos */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {/* Level 1: Periodo */}
+          {/* Nivel 1: Periodo */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
               <Calendar className="size-3" />
@@ -698,11 +703,11 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
             </select>
           </div>
 
-          {/* Level 2: Sede */}
+          {/* Nivel 2: Sede (Cuenta) */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
               <Building2 className="size-3" />
-              <span>2. Sede</span>
+              <span>2. Sede (Cuenta)</span>
             </label>
             <select
               value={sedeFilter}
@@ -724,7 +729,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
             </select>
           </div>
 
-          {/* Level 3: Modalidad */}
+          {/* Nivel 3: Modalidad (Subcuenta) */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
               <Layers className="size-3" />
@@ -744,7 +749,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
             </select>
           </div>
 
-          {/* Level 4: Facultad */}
+          {/* Nivel 4: Facultad (Subcuenta) */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
               <GraduationCap className="size-3" />
@@ -768,7 +773,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
             </select>
           </div>
 
-          {/* Level 5: Carrera */}
+          {/* Nivel 5: Carrera (Subcuenta) */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
               <BookOpen className="size-3" />
@@ -797,11 +802,11 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
             </select>
           </div>
 
-          {/* Level 6: Plan */}
+          {/* Nivel 6: Plan Curricular (Subcuenta) */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
               <Layers className="size-3" />
-              <span>6. Plan</span>
+              <span>6. Plan de Estudios</span>
             </label>
             <select
               value={planFilter}
@@ -824,13 +829,13 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
           </div>
         </div>
 
-        {/* Text Search Input Bar */}
+        {/* Buscador libre de texto */}
         <div className="pt-1">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search by Course Code, Course Name, Section, Teacher Name, DNI, Career..."
+              placeholder="Buscar por código de curso, nombre, sección, docente, DNI, carrera..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 h-9 text-xs"
@@ -840,26 +845,53 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
                 onClick={() => setSearchQuery('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
               >
-                Clear
+                Limpiar
               </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* 3. Selection Control & Summary Bar */}
+      {/* 3. Barra de Control de Selección y Selector de Vista */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-lg border border-border bg-muted/30">
         <div className="flex items-center gap-3 flex-wrap text-xs">
+          {/* Selector de modo de vista: Árbol Anidado vs Tabla */}
+          <div className="flex items-center bg-background border border-border rounded-md p-0.5">
+            <button
+              onClick={() => setViewMode('tree')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                viewMode === 'tree'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <ListTree className="size-3.5" />
+              <span>Vista Jerárquica Anidada (Árbol)</span>
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                viewMode === 'table'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <TableIcon className="size-3.5" />
+              <span>Vista Tabla Detallada</span>
+            </button>
+          </div>
+
+          <span className="text-muted-foreground">•</span>
           <div className="flex items-center gap-1.5 font-medium text-foreground">
             <CheckSquare className="size-4 text-primary" />
             <span>
-              <strong className="text-foreground">{selectedCount}</strong> sections selected
+              <strong className="text-foreground">{selectedCount}</strong> secciones seleccionadas
             </span>
           </div>
           <span className="text-muted-foreground">•</span>
           <span className="text-muted-foreground">
-            {filteredItems.length.toLocaleString()} matching filters (of{' '}
-            {hierarchyData?.items.length.toLocaleString() || 0} total)
+            {filteredItems.length.toLocaleString()} coincidentes (de{' '}
+            {hierarchyData?.items.length.toLocaleString() || 0} en total)
           </span>
           {selectedCount > 0 && (
             <>
@@ -868,7 +900,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
                 <strong className="text-foreground font-mono">
                   {selectionStats.studentsTotal.toLocaleString()}
                 </strong>{' '}
-                enrolled students in selection
+                estudiantes matriculados
               </span>
             </>
           )}
@@ -883,7 +915,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
             className="text-xs h-7 gap-1"
           >
             <CheckSquare className="size-3" />
-            <span>Select Filtered ({filteredItems.length})</span>
+            <span>Seleccionar Filtrados ({filteredItems.length})</span>
           </Button>
 
           <Button
@@ -894,7 +926,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
             className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground"
           >
             <Square className="size-3" />
-            <span>Clear</span>
+            <span>Limpiar</span>
           </Button>
 
           {selectedCount > 0 && (
@@ -904,33 +936,44 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
               onClick={() => setIsSummaryOpen(true)}
               className="text-xs h-7 gap-1"
             >
-              <span>View Selection Details</span>
+              <span>Ver Detalle de Selección</span>
             </Button>
           )}
         </div>
       </div>
 
-      {/* 4. TanStack Table */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs">
-        {isLoadingHierarchy ? (
-          <div className="p-12 text-center space-y-3">
-            <RefreshCw className="size-6 text-muted-foreground animate-spin mx-auto" />
-            <p className="text-xs text-muted-foreground">
-              Loading and resolving academic hierarchy data from case snapshot...
-            </p>
-          </div>
-        ) : filteredItems.length === 0 ? (
-          <div className="p-12 text-center space-y-2">
-            <AlertCircle className="size-6 text-muted-foreground mx-auto" />
-            <p className="text-sm font-medium text-foreground">No sections match the current filters</p>
-            <p className="text-xs text-muted-foreground">
-              Try adjusting your hierarchical filters, clearing the search query, or disabling the &ldquo;NO HABILITADO&rdquo; filter.
-            </p>
-            <Button variant="outline" size="sm" onClick={handleResetFilters} className="mt-2 text-xs">
-              Reset Filters
-            </Button>
-          </div>
-        ) : (
+      {/* 4. Contenido Principal: Árbol Jerárquico Anidado O Tabla TanStack */}
+      {isLoadingHierarchy ? (
+        <div className="p-12 text-center space-y-3 rounded-xl border border-border bg-card">
+          <RefreshCw className="size-6 text-muted-foreground animate-spin mx-auto" />
+          <p className="text-xs text-muted-foreground">
+            Construyendo jerarquía académica y resolviendo cuentas, subcuentas, cursos y secciones...
+          </p>
+        </div>
+      ) : filteredItems.length === 0 ? (
+        <div className="p-12 text-center space-y-2 rounded-xl border border-border bg-card">
+          <AlertCircle className="size-6 text-muted-foreground mx-auto" />
+          <p className="text-sm font-medium text-foreground">
+            Ninguna sección coincide con los filtros aplicados
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Pruebe ajustando los filtros jerárquicos o desactivando el filtro de &ldquo;NO HABILITADO&rdquo;.
+          </p>
+          <Button variant="outline" size="sm" onClick={handleResetFilters} className="mt-2 text-xs">
+            Restablecer Filtros
+          </Button>
+        </div>
+      ) : viewMode === 'tree' ? (
+        /* VISTA 1: Árbol Jerárquico Anidado (Cuentas > Subcuentas > Cursos > Secciones) */
+        <HierarchyTreeTable
+          items={filteredItems}
+          selectedRowIds={rowSelection}
+          onToggleSelect={handleToggleBatchSelection}
+          onInspectStudents={handleInspectStudents}
+        />
+      ) : (
+        /* VISTA 2: Tabla Plana Detallada (TanStack Table) */
+        <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -967,13 +1010,11 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
               </TableBody>
             </Table>
           </div>
-        )}
 
-        {/* Table Pagination Bar */}
-        {filteredItems.length > 0 && (
+          {/* Paginación de la Tabla */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-border bg-card text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
-              <span>Rows per page:</span>
+              <span>Filas por página:</span>
               <select
                 value={table.getState().pagination.pageSize}
                 onChange={(e) => table.setPageSize(Number(e.target.value))}
@@ -986,13 +1027,13 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
                 ))}
               </select>
               <span>
-                Showing {table.getRowModel().rows.length} of {filteredItems.length.toLocaleString()} rows
+                Mostrando {table.getRowModel().rows.length} de {filteredItems.length.toLocaleString()} filas
               </span>
             </div>
 
             <div className="flex items-center gap-1.5">
               <span>
-                Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
+                Página {table.getState().pagination.pageIndex + 1} de {table.getPageCount() || 1}
               </span>
               <div className="flex items-center gap-1 ml-2">
                 <Button
@@ -1000,7 +1041,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
                   size="icon-xs"
                   onClick={() => table.setPageIndex(0)}
                   disabled={!table.getCanPreviousPage()}
-                  title="First page"
+                  title="Primera página"
                 >
                   <ChevronsLeft className="size-3" />
                 </Button>
@@ -1009,7 +1050,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
                   size="icon-xs"
                   onClick={() => table.previousPage()}
                   disabled={!table.getCanPreviousPage()}
-                  title="Previous page"
+                  title="Página anterior"
                 >
                   <ChevronLeft className="size-3" />
                 </Button>
@@ -1018,7 +1059,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
                   size="icon-xs"
                   onClick={() => table.nextPage()}
                   disabled={!table.getCanNextPage()}
-                  title="Next page"
+                  title="Página siguiente"
                 >
                   <ChevronRight className="size-3" />
                 </Button>
@@ -1027,17 +1068,17 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
                   size="icon-xs"
                   onClick={() => table.setPageIndex(table.getPageCount() - 1)}
                   disabled={!table.getCanNextPage()}
-                  title="Last page"
+                  title="Última página"
                 >
                   <ChevronsRight className="size-3" />
                 </Button>
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* 5. Enrolled Students Inspection Dialog */}
+      {/* 5. Modal de Inspección de Estudiantes Matriculados */}
       <Dialog open={!!inspectingItem} onOpenChange={(open) => !open && setInspectingItem(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -1050,7 +1091,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
                 <div className="text-foreground font-medium">
                   {inspectingItem.cursoCodigo} - {inspectingItem.cursoNombre} ({inspectingItem.seccionNombre})
                 </div>
-                <div className="flex items-center gap-2 text-[11px]">
+                <div className="flex items-center gap-2 text-[11px] flex-wrap">
                   <span>Docente: {inspectingItem.docenteNombre}</span>
                   {inspectingItem.docenteDni && <span>(DNI: {inspectingItem.docenteDni})</span>}
                   <span>•</span>
@@ -1075,7 +1116,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
                 <TableHeader>
                   <TableRow className="bg-muted/30">
                     <TableHead className="text-xs py-2 w-12">#</TableHead>
-                    <TableHead className="text-xs py-2">Código</TableHead>
+                    <TableHead className="text-xs py-2">Código Alumno</TableHead>
                     <TableHead className="text-xs py-2">Nombre Completo</TableHead>
                     <TableHead className="text-xs py-2">Correo Institucional</TableHead>
                   </TableRow>
@@ -1086,10 +1127,12 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
                       <TableCell className="text-xs py-2 font-mono text-muted-foreground">
                         {idx + 1}
                       </TableCell>
-                      <TableCell className="text-xs py-2 font-mono font-medium">
+                      <TableCell className="text-xs py-2 font-mono font-medium text-foreground">
                         {st.codigo}
                       </TableCell>
-                      <TableCell className="text-xs py-2">{st.fullName}</TableCell>
+                      <TableCell className="text-xs py-2 text-foreground font-medium">
+                        {st.fullName}
+                      </TableCell>
                       <TableCell className="text-xs py-2 font-mono text-muted-foreground">
                         {st.email}
                       </TableCell>
@@ -1102,16 +1145,16 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
         </DialogContent>
       </Dialog>
 
-      {/* 6. Active Selection Summary Dialog */}
+      {/* 6. Modal de Resumen de Selección Activa */}
       <Dialog open={isSummaryOpen} onOpenChange={setIsSummaryOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold flex items-center gap-2">
               <CheckSquare className="size-4 text-primary" />
-              <span>Selection Details Summary</span>
+              <span>Resumen de Selección Activa</span>
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Overview of the {selectedCount} sections currently marked for synchronization or export.
+              Detalle cuantitativo de las {selectedCount} secciones marcadas para sincronización o exportación a Canvas LMS.
             </DialogDescription>
           </DialogHeader>
 
@@ -1121,29 +1164,29 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
                 <div className="text-2xl font-bold font-mono text-foreground">
                   {selectionStats.sectionsCount}
                 </div>
-                <div className="text-[11px] text-muted-foreground">Sections Selected</div>
+                <div className="text-[11px] text-muted-foreground">Secciones Seleccionadas</div>
               </div>
               <div className="p-3 rounded-lg border border-border bg-muted/20 text-center">
                 <div className="text-2xl font-bold font-mono text-foreground">
                   {selectionStats.coursesCount}
                 </div>
-                <div className="text-[11px] text-muted-foreground">Unique Courses</div>
+                <div className="text-[11px] text-muted-foreground">Cursos Únicos</div>
               </div>
               <div className="p-3 rounded-lg border border-border bg-muted/20 text-center">
                 <div className="text-2xl font-bold font-mono text-primary">
                   {selectionStats.studentsTotal.toLocaleString()}
                 </div>
-                <div className="text-[11px] text-muted-foreground">Total Enrollments</div>
+                <div className="text-[11px] text-muted-foreground">Matrículas Totales</div>
               </div>
             </div>
 
-            <div className="text-xs text-muted-foreground">
-              These selected sections can be directly converted into Canvas SIS CSV imports or exported as differential archives in the next step.
-            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Estas secciones seleccionadas conservan su jerarquía completa (Cuenta Sede &gt; Subcuentas &gt; Curso &gt; Sección) y están listas para ser exportadas a formato estándar SIS CSV o sincronizadas vía API a Canvas LMS.
+            </p>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" size="sm" onClick={() => setIsSummaryOpen(false)}>
-                Close
+                Cerrar
               </Button>
             </div>
           </div>

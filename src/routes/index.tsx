@@ -37,7 +37,7 @@ function Home() {
           }`}
         >
           <Layers className="size-3.5" />
-          <span>Hierarchy & Selection</span>
+          <span>Jerarquía y Selección</span>
         </button>
 
         <button
@@ -49,7 +49,7 @@ function Home() {
           }`}
         >
           <Database className="size-3.5" />
-          <span>Import Cases Registry</span>
+          <span>Registro de Casos de Importación</span>
         </button>
       </div>
 
