@@ -54,6 +54,7 @@
     - Sorting and pagination across course-sections.
     - Modal dialog displaying enrolled students for any selected section.
     - Selection summary breakdown modal.
+    - **Granular Manual & Batch Folding / Unfolding Engine**: Resolved bounce-back re-expansion bug when clicking "Plegar Todo", added level-based batch controls (Plegar Todo, Nivel Sedes, Nivel Carreras, Nivel Cursos, Todo con Matriculados), branch-level toggles on Periodo, Sede, Carrera, Plan, and Curso with Alt+Click support, plus TanStack Table batch page unfolding controls.
     - **100% Spanish translation** across all UI texts, labels, buttons, dialogs, and messages.
 - [ ] **Phase 4: Transformation, Normalization & Diff Engine**
   - [ ] Transform selected case data into standard SIS Canvas format (`accounts.csv`, `terms.csv`, `users.csv`, `courses.csv`, `sections.csv`, `enrollments.csv`).
@@ -202,6 +203,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-11T12:10:00` | `a881abf` | Antigravity | Feature/UI | Nested account/subaccount tree table view, dual-view mode switcher, and complete Spanish UI translation | `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/cases/case-manager.tsx`, `src/routes/index.tsx`, `src/components/layout/app-layout.tsx` |
 | `2026-09-11T12:20:00` | `4a7e9b1` | Antigravity | Feature/UX | Cross-case selection & exploration linking Case Manager table/detail directly with Hierarchy Selector | `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/cases/case-manager.tsx`, `src/routes/index.tsx` |
 | `2026-09-11T12:30:00` | `a02718c` | Antigravity | Feature/UI | Inline Docentes (D) & Alumnos Matriculados (E) breakdown under sections across Tree Table & TanStack Table | `src/server/services/hierarchy-service.ts`, `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx` |
+| `2026-09-11T12:41:00` | `4079c8b` | Antigravity | Fix/UX | Resolved collapse bounce-back bug, added granular level-based batch unfolding and branch-level toggles | `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx` |
 
 ---
 
@@ -251,6 +253,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Selection Control Bar**: Sticky/inline bar displaying selected count, filtered count, total students represented, "Seleccionar Filtrados", and "Limpiar".
   - **Student Inspector Modal**: Dialog rendering full roster of enrolled students (`#`, `Código Alumno`, `Nombre Completo`, `Correo Institucional`) for any selected section.
   - **Selection Summary Modal**: Overview of selected sections, unique courses, and total enrollments ready for SIS packaging.
+  - **TanStack Table Sub-toolbar**: Batch page unfolding button (`Desplegar Página (N)`) and `Plegar Todo` for inline teacher & student rosters, with counter badge.
 - **Nested Hierarchical Tree Table (`src/components/hierarchy/hierarchy-tree-table.tsx`)**:
   - Exact mirroring of Canvas LMS SIS accounts and subaccounts:
     `[PERIODO] T-id` > `[CUENTA] Sede S-id` > `[SUBCUENTA] Modalidad M-id` > `[SUBCUENTA] Facultad F-id` > `[SUBCUENTA] Carrera C-id` > `[SUBCUENTA] Plan P-codigo` > `[CURSO] CUR-codigo` > `[SECCION]` > `[MATRICULADOS]`.
@@ -259,5 +262,10 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
     - `(E) [ESTUDIANTE] <Código> - <Nombre Completo> <<Email>>` with numbered roster and active SIS status.
     - Fallback `(Sin alumnos ni docentes matriculados)` for inactive/unassigned sections.
   - Cascading multi-level selection with indeterminate minus state (`Checkbox`).
-  - Action buttons: "Desplegar Cursos", "Desplegar con Matriculados", and "Plegar Todo".
+  - **Granular Batch & Branch Folding/Unfolding**:
+    - **Global Level Unfolding**: "Plegar Todo", "Nivel Sedes", "Nivel Carreras", "Nivel Cursos", and "Todo (+ Matriculados)".
+    - **Branch Toggles**: Direct "Rama" buttons on Periodo, Sede, Carrera, and Plan to fold/unfold that branch and all its descendants.
+    - **Curso-Level Matriculados Toggle**: Button on each course header to expand/collapse all section rosters of that specific course.
+    - **Alt+Click Shortcut**: Clicking any chevron while holding `Alt` automatically toggles that branch and its descendants.
+    - **Expansion Counter Badge**: Displays total open branches (`N ramas desplegadas` or `Todo plegado`).
   - Direct student roster inspection modal per section with search by student code and teacher DNI.
