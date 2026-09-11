@@ -27,8 +27,13 @@
   - [x] Left drawer menu (`src/components/ui/sheet.tsx` + `src/components/layout/app-layout.tsx`) with toggle trigger.
   - [x] Central panel: full-width (`w-full flex-1`), clean and responsive.
   - [x] Explicitly avoided unsolicited dashboard or extra metric widgets.
-- [ ] **Phase 2: Feature Implementation (Waiting for User Direction)**
-  - [ ] Awaiting user specifications for domain features and data models.
+- [x] **Source Canvas LMS Reference & Architecture Audit**
+  - [x] Extracted connection credentials from `/home/mateo/projects/canvas/.env` (MSSQL `BDACADEMICO5`, `BDAUTENTICACION5`, Canvas API production and sandbox tokens).
+  - [x] Audited latest `/new` architecture: clean pipeline, differential export engine, hierarchy writer, and ZIP packager.
+  - [x] Documented Canvas LMS SIS import/export specs, teacher DNI normalization, subaccount tree, and REST API sync in [`docs/CANVAS_REFERENCE.md`](file:///home/mateo/projects/canvas-migrate/docs/CANVAS_REFERENCE.md).
+- [ ] **Phase 2: Canvas Migration Web Engine & UI (Ready for Design)**
+  - [ ] Implement database models in SQLite / Drizzle to store credentials, migration jobs, and entity mappings.
+  - [ ] Build migration tools (export from SQL, diff calculation, Canvas SIS import runner) inside the full-width workspace.
   - [ ] Maintain minimal UI footprint without unauthorized widgets.
 
 ---
@@ -107,6 +112,20 @@ canvas-migrate/
   - `npm run db:migrate` - run migrations.
   - `npm run db:studio` - start Drizzle Studio.
 
+### Canvas LMS Integration & Migration Reference Architecture
+Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mateo/projects/canvas-migrate/docs/CANVAS_REFERENCE.md):
+- **Source MSSQL Databases**: `BDACADEMICO5` (academic loads, courses, sections, enrollments) & `BDAUTENTICACION5` (`Personal.Utb_Persona` for teacher DNI/emails) hosted on `localhost:1433` (`sa` / `1Ltseosb.`).
+- **Canvas LMS API**: Production instance `https://politecnica.instructure.com/` (`CANVAS_API_KEY=29445~KWnHVkUQTMY43Jw3WFWmnwcTL4CYYMDx4wR34DMP3LEkXcfthUWDZzmT9BHCyXBr`).
+- **Data Pipelines (`canvas/new/`)**:
+  - `hierarchy.ts`: Multi-level academic tree builder.
+  - `sis_exporter.ts`: Canvas Standard SIS CSV formatter (`accounts`, `terms`, `users`, `courses`, `sections`, `enrollments`).
+  - `diff_engine.ts`: Differential detection against previous exports (`_added`, `_deleted`, `_updated`, `enrollments_to_delete`, `enrollments_to_conclude`).
+  - `hierarchy_writer.ts`: Formatted tabbed hierarchy tree output (`hierarchy.txt`).
+- **Key Normalization Rules**:
+  - Teacher SIS ID: Normalized to official National ID / DNI (replaces legacy emails and sequential IDs).
+  - Subaccount Hierarchy: `Sede` -> `Modalidad` -> `Facultad` -> `Carrera` -> `Plan`.
+  - Exclusion filter: Sections with `"NO HABILITADO"` omitted when flag is false.
+
 ---
 
 ## 3. Commit & Change Log
@@ -123,6 +142,7 @@ canvas-migrate/
 | `2026-09-11T10:13:00` | - | Antigravity | DB | Executed `db:push` to verify SQLite database generation | `dev.db`, `.gitignore` |
 | `2026-09-11T10:14:00` | - | Antigravity | Docs/Rules | Created `PROJECT_MEMORY.md`, configured `AGENTS.md` and `GEMINI.md` as mandatory read/update rules | `PROJECT_MEMORY.md`, `AGENTS.md`, `GEMINI.md` |
 | `2026-09-11T10:16:00` | `11f84fe` | Antigravity | Commit | Initial commit of TanStack Start foundation, SQLite, shadcn 4, Gray theme, and Geist Sans | All project files |
+| `2026-09-11T10:28:00` | - | Antigravity | Reference | Analyzed Canvas source app, credentials, /new pipeline, and created CANVAS_REFERENCE.md | `docs/CANVAS_REFERENCE.md`, `PROJECT_MEMORY.md` |
 
 ---
 
