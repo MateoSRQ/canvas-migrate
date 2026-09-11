@@ -4,6 +4,11 @@ import {
   getSectionEnrolledStudents,
   clearHierarchyCache,
 } from '#/server/services/hierarchy-service'
+import {
+  exportSelectedToCanvasCsv,
+  type ExportCanvasInput,
+  type ExportCanvasResult,
+} from '#/server/services/canvas-exporter'
 
 export const getCaseHierarchyFn = createServerFn({ method: 'GET' })
   .validator((caseId: string) => caseId)
@@ -22,4 +27,10 @@ export const clearHierarchyCacheFn = createServerFn({ method: 'POST' })
   .handler(async ({ data: caseId }) => {
     clearHierarchyCache(caseId)
     return { success: true }
+  })
+
+export const exportToCanvasCsvFn = createServerFn({ method: 'POST' })
+  .validator((payload: ExportCanvasInput) => payload)
+  .handler(async ({ data }): Promise<ExportCanvasResult> => {
+    return exportSelectedToCanvasCsv(data)
   })

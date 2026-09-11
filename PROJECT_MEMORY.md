@@ -56,10 +56,14 @@
     - Selection summary breakdown modal.
     - **Granular Manual & Batch Folding / Unfolding Engine**: Resolved bounce-back re-expansion bug when clicking "Plegar Todo", added level-based batch controls (Plegar Todo, Nivel Sedes, Nivel Carreras, Nivel Cursos, Todo con Matriculados), branch-level toggles on Periodo, Sede, Carrera, Plan, and Curso with Alt+Click support, plus TanStack Table batch page unfolding controls.
     - **100% Spanish translation** across all UI texts, labels, buttons, dialogs, and messages.
-- [ ] **Phase 4: Transformation, Normalization & Diff Engine**
-  - [ ] Transform selected case data into standard SIS Canvas format (`accounts.csv`, `terms.csv`, `users.csv`, `courses.csv`, `sections.csv`, `enrollments.csv`).
+- [x] **Phase 4: Transformation, Normalization & Canvas Migration Exporter**
+  - [x] Transform selected case data into standard SIS Canvas format (`accounts.csv`, `terms.csv`, `users.csv`, `courses.csv`, `sections.csv`, `enrollments.csv`).
+  - [x] Canvas Exporter engine creating directory `migraciones/[nombre de periodo - timestamp como YYYYMMDDHHMMSS]` with sanitized path names.
+  - [x] Topological sort for Canvas subaccounts (`Sede` -> `Modalidad` -> `Facultad` -> `Carrera` -> `Plan`).
+  - [x] Teacher identification normalized to official National ID / DNI and student codes.
+  - [x] Automatic generation of visual tree `hierarchy.txt`, technical report `RESUMEN.md`, and ZIP archive `canvas_migration.zip`.
+  - [x] Export action button and full-featured confirmation & inspection modal in `HierarchySelector`.
   - [ ] Implement differential engine comparing Case A against Case B (`_added`, `_updated`, `_deleted`, `_concluded`).
-  - [ ] Packager into Canvas SIS Import zip archives.
 - [ ] **Phase 5: Canvas LMS API Synchronization & Monitoring**
   - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
   - [ ] Job status polling, import log inspection, and error auditing.
@@ -118,7 +122,8 @@ canvas-migrate/
     │   ├── services/
     │   │   ├── sql-server.ts # MSSQL connection pool manager & table extractor
     │   │   ├── importer.ts   # Case extraction, batch ingestion & normalization engine
-    │   │   └── hierarchy-service.ts # Academic tree assembler, teacher resolver & memory cache
+    │   │   ├── hierarchy-service.ts # Academic tree assembler, teacher resolver & memory cache
+    │   │   └── canvas-exporter.ts # Canvas SIS CSV exporter, hierarchy writer & zip packager
     │   └── functions/
     │       ├── cases.ts      # TanStack Start server functions for cases (RPC)
     │       └── hierarchy.ts  # TanStack Start server functions for hierarchy & students (RPC)
@@ -204,6 +209,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-11T12:20:00` | `4a7e9b1` | Antigravity | Feature/UX | Cross-case selection & exploration linking Case Manager table/detail directly with Hierarchy Selector | `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/cases/case-manager.tsx`, `src/routes/index.tsx` |
 | `2026-09-11T12:30:00` | `a02718c` | Antigravity | Feature/UI | Inline Docentes (D) & Alumnos Matriculados (E) breakdown under sections across Tree Table & TanStack Table | `src/server/services/hierarchy-service.ts`, `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx` |
 | `2026-09-11T12:41:00` | `4079c8b` | Antigravity | Fix/UX | Resolved collapse bounce-back bug, added granular level-based batch unfolding and branch-level toggles | `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx` |
+| `2026-09-11T12:55:00` | - | Antigravity | Feature/Export | Exportación a archivos CSV para migración Canvas en /migraciones/[periodo - YYYYMMDDHHMMSS] con hierarchy.txt y zip | `src/server/services/canvas-exporter.ts`, `src/server/functions/hierarchy.ts`, `src/components/hierarchy/hierarchy-selector.tsx`, `.gitignore` |
 
 ---
 
@@ -269,3 +275,15 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
     - **Alt+Click Shortcut**: Clicking any chevron while holding `Alt` automatically toggles that branch and its descendants.
     - **Expansion Counter Badge**: Displays total open branches (`N ramas desplegadas` or `Todo plegado`).
   - Direct student roster inspection modal per section with search by student code and teacher DNI.
+- **Exportación a Canvas LMS SIS CSV (`src/components/hierarchy/hierarchy-selector.tsx` & `src/server/services/canvas-exporter.ts`)**:
+  - **Botón de Exportación en Barra de Selección**: `Exportar para Canvas ({selectedCount})` con acento visual en esmeralda (`bg-emerald-600 hover:bg-emerald-700`), visible de inmediato al seleccionar 1 o más secciones tanto en vista árbol como tabla.
+  - **Acceso Cruzado desde Resumen**: Botón de exportación integrado directamente dentro del modal de "Resumen de Selección Activa".
+  - **Modal de Exportación Multifase (`Dialog`)**:
+    - **Fase Inicial (Confirmación y Alcance)**: Desglose cuantitativo (secciones, cursos únicos, matrículas totales estimadas, periodo académico), directorio destino objetivo `migraciones/[Periodo] - [YYYYMMDDHHMMSS]/`, y lista de los 6 archivos CSV estándar de Canvas + documentación + ZIP.
+    - **Fase de Procesamiento**: Indicador giratorio con feedback en tiempo real mientras se ensamblan las cuentas, términos, cursos, secciones, usuarios y matrículas y se genera el archivo ZIP.
+    - **Fase de Éxito e Inspección**:
+      - Banner de éxito con icono de confirmación.
+      - Tarjeta de directorio con ruta absoluta copiable en un clic (`navigator.clipboard.writeText`) y badge de confirmación "¡Ruta Copiada!".
+      - Cuadrícula de 6 métricas clave: Cuentas, Periodos, Cursos, Secciones, Usuarios (Docentes D / Estudiantes E), Matrículas Totales.
+      - Tabla de archivos generados con nombres, tipos, conteo de filas y tamaño en KB (`accounts.csv`, `terms.csv`, `courses.csv`, `sections.csv`, `users.csv`, `enrollments.csv`, `hierarchy.txt`, `RESUMEN.md`, `canvas_migration.zip`).
+      - Guía rápida paso a paso para carga de SIS Import en la consola de administración de Canvas LMS.
