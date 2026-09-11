@@ -1,0 +1,3 @@
+# Always read PROJECT_MEMORY.md first before performing any task.
+# Always update PROJECT_MEMORY.md upon making any change or update (Plan, Memory/Architecture, Commit Log, UI Design Log).
+# Maintain full-width central panel with left drawer menu. Do not add dashboard or unrequested components.
