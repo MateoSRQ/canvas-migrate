@@ -31,10 +31,21 @@
   - [x] Extracted connection credentials from `/home/mateo/projects/canvas/.env` (MSSQL `BDACADEMICO5`, `BDAUTENTICACION5`, Canvas API production and sandbox tokens).
   - [x] Audited latest `/new` architecture: clean pipeline, differential export engine, hierarchy writer, and ZIP packager.
   - [x] Documented Canvas LMS SIS import/export specs, teacher DNI normalization, subaccount tree, and REST API sync in [`docs/CANVAS_REFERENCE.md`](file:///home/mateo/projects/canvas-migrate/docs/CANVAS_REFERENCE.md).
-- [ ] **Phase 2: Canvas Migration Web Engine & UI (Ready for Design)**
-  - [ ] Implement database models in SQLite / Drizzle to store credentials, migration jobs, and entity mappings.
-  - [ ] Build migration tools (export from SQL, diff calculation, Canvas SIS import runner) inside the full-width workspace.
-  - [ ] Maintain minimal UI footprint without unauthorized widgets.
+- [x] **Phase 2: SQL Server Data Extraction & Independent Case System**
+  - [x] Implemented relational schema in SQLite / Drizzle supporting segregated import cases (`import_cases`, `case_raw_tables`, `case_periods`, `case_courses`, `case_sections`, `case_users`, `case_enrollments`).
+  - [x] Multi-database MSSQL connection pool (`BDACADEMICO5` + `BDAUTENTICACION5`) on `localhost:1433`.
+  - [x] Extracted 20 source tables (19 academic tables + `Personal.Utb_Persona`) with reserved keyword escaping (`[Academico].[Plan]`).
+  - [x] Fast batch ingestion (500 records/batch) into SQLite: raw JSON table dumps and normalized relational records.
+  - [x] Verified complete isolation between runs (e.g. `case_20260911161211_xhnnq` and `case_20260911161521_nizlz` co-exist with 121,091 records each without cross-contamination).
+  - [x] TanStack Start server functions (`runImportCaseFn`, `getCasesFn`, `getCaseDetailFn`, `deleteCaseFn`, `getTableSampleFn`).
+  - [x] Full-width Case Manager UI with modal import launcher, status badges, table list, and top-50 record inspector.
+- [ ] **Phase 3: Transformation, Normalization & Diff Engine**
+  - [ ] Transform case raw tables into standard SIS Canvas format (`accounts.csv`, `terms.csv`, `users.csv`, `courses.csv`, `sections.csv`, `enrollments.csv`).
+  - [ ] Implement differential engine comparing Case A against Case B (`_added`, `_updated`, `_deleted`, `_concluded`).
+  - [ ] Packager into Canvas SIS Import zip archives.
+- [ ] **Phase 4: Canvas LMS API Synchronization & Monitoring**
+  - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
+  - [ ] Job status polling, import log inspection, and error auditing.
 
 ---
 
@@ -70,7 +81,7 @@ The application is a full-stack React application built on **TanStack Start**, l
 ### Directory Structure
 ```
 canvas-migrate/
-├── .env.example              # Environment variables template
+├── .env.example              # Environment variables template (MSSQL & SQLite config)
 ├── .env.local                # Local environment secrets (ignored)
 ├── AGENTS.md                 # Agent instructions & memory reading rule
 ├── GEMINI.md                 # Gemini / Antigravity workspace rule
@@ -82,19 +93,30 @@ canvas-migrate/
 ├── vite.config.ts            # Vite configuration with Tailwind and TanStack Start
 └── src/
     ├── db/
-    │   ├── index.ts          # Drizzle client instance
-    │   └── schema.ts         # SQLite table definitions
+    │   ├── index.ts          # Drizzle client instance (better-sqlite3)
+    │   └── schema.ts         # SQLite schema: import_cases, case_raw_tables, case_*
     ├── lib/
     │   └── utils.ts          # Utility functions (cn helper)
+    ├── server/
+    │   ├── services/
+    │   │   ├── sql-server.ts # MSSQL connection pool manager & table extractor
+    │   │   └── importer.ts   # Case extraction, batch ingestion & normalization engine
+    │   └── functions/
+    │       └── cases.ts      # TanStack Start server functions (RPC endpoints)
     ├── components/
+    │   ├── cases/
+    │   │   └── case-manager.tsx # Full-width Case Manager UI & table sample inspector
     │   ├── layout/
     │   │   └── app-layout.tsx# Global layout: Top header, left drawer menu, full-width panel
     │   └── ui/
+    │       ├── badge.tsx     # shadcn Badge component
     │       ├── button.tsx    # shadcn Button component
-    │       └── sheet.tsx     # shadcn Sheet component (used for drawer)
+    │       ├── dialog.tsx    # shadcn Dialog modal component
+    │       ├── sheet.tsx     # shadcn Sheet component (drawer)
+    │       └── table.tsx     # shadcn Table component
     ├── routes/
     │   ├── __root.tsx        # Root route shell with AppLayout & font integration
-    │   └── index.tsx         # Home route (central full-width workspace)
+    │   └── index.tsx         # Home route hosting CaseManager
     ├── router.tsx            # TanStack router factory
     └── styles.css            # Tailwind v4 styles, Gray theme OKLCH tokens & Geist font
 ```
@@ -102,10 +124,18 @@ canvas-migrate/
 ### Path Aliasing
 - `#/` and `@/` both resolve to `./src/*` across `package.json` imports and `tsconfig.json` paths.
 
-### Database Architecture
-- **Provider**: SQLite via `better-sqlite3`
-- **Config**: `drizzle.config.ts` points to `DATABASE_URL` (default: `dev.db`).
-- **Initial Tables**: `todos` table in `src/db/schema.ts` (prepared for initial verification).
+### Database Architecture & Independent Case Model
+- **Provider**: SQLite via `better-sqlite3` (`dev.db`).
+- **Isolation Guarantee**: Each import run creates a distinct, globally unique `case_id` (`case_<timestamp>_<rand>`). Subsequent imports never overwrite, mutate, or conflict with previous imports.
+- **Relational Case Tables**:
+  - `import_cases`: Metadata, status (`pending`, `in_progress`, `completed`, `failed`), timing, total tables, total rows, and JSON execution stats per table.
+  - `case_raw_tables`: Full raw snapshot of every extracted table as JSON (`data_json`), indexed by `(case_id, table_name)`. Enables lossless historic diffing and debugging.
+  - `case_periods`: Normalized academic periods for the case (`periodo_id`, `nombre`, `tipo_periodo`, `activo`).
+  - `case_courses`: Normalized courses for the case (`curso_id`, `cod_curso`, `nombre`, `plan_id`, `ciclo`).
+  - `case_sections`: Normalized class sections for the case (`seccion_id`, `nombre`, `carga_academica_sede_id`).
+  - `case_users`: Normalized teachers and students with official National ID / DNI (`user_id`, `full_name`, `email`, `user_type`).
+  - `case_enrollments`: Normalized enrollment records linking users to courses and sections with roles (`student`, `teacher`).
+- **Cascade Deletion**: All `case_*` rows reference `import_cases.id` with `onDelete: 'cascade'`, ensuring clean atomic case removals without orphaned records.
 - **Scripts**:
   - `npm run db:push` - push schema changes directly to SQLite database.
   - `npm run db:generate` - generate Drizzle migrations.
@@ -143,6 +173,8 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-11T10:14:00` | - | Antigravity | Docs/Rules | Created `PROJECT_MEMORY.md`, configured `AGENTS.md` and `GEMINI.md` as mandatory read/update rules | `PROJECT_MEMORY.md`, `AGENTS.md`, `GEMINI.md` |
 | `2026-09-11T10:16:00` | `11f84fe` | Antigravity | Commit | Initial commit of TanStack Start foundation, SQLite, shadcn 4, Gray theme, and Geist Sans | All project files |
 | `2026-09-11T10:28:00` | `fc34acf` | Antigravity | Reference | Analyzed Canvas source app, credentials, /new pipeline, and created CANVAS_REFERENCE.md | `docs/CANVAS_REFERENCE.md`, `PROJECT_MEMORY.md` |
+| `2026-09-11T11:25:00` | - | Antigravity | Feature | MSSQL multi-db extraction engine and relational independent case schema in SQLite | `src/server/services/sql-server.ts`, `src/server/services/importer.ts`, `src/db/schema.ts`, `src/db/index.ts` |
+| `2026-09-11T11:28:00` | - | Antigravity | UI/RPC | TanStack Start server functions and full-width Case Manager UI with sample inspector | `src/components/cases/case-manager.tsx`, `src/components/ui/badge.tsx`, `src/components/ui/dialog.tsx`, `src/components/ui/table.tsx`, `src/server/functions/cases.ts`, `src/routes/index.tsx` |
 
 ---
 
@@ -175,3 +207,11 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - Full width (`w-full flex-1`), expanding across the entire viewport.
   - Flexible height (`min-h-[calc(100vh-3.5rem)]`).
   - Zero unrequested dashboard components, metrics cards, or charts. Pure, focused canvas workspace.
+
+### Component Design (Case Manager Workspace)
+- **Case Manager (`src/components/cases/case-manager.tsx`)**:
+  - Clean two-column split on desktop (Case directory list on the left, selected case detail & inspector on the right).
+  - Status Indicators: Minimalist `Badge` components (e.g. `completed` = subtle emerald/gray badge, `in_progress` = blue/gray badge, `failed` = destructive badge).
+  - Table Catalog: Lists all 20 extracted tables with row counts and duration, offering a "View Data" button.
+  - Raw Record Inspector: Modal `Dialog` displaying top 50 rows in a scrollable, monospace `Table` with auto-derived column headers from JSON keys.
+  - Action Controls: "New Import Case" trigger opening a clean configuration dialog for custom case names and descriptions; "Delete Case" button with cascade purge.

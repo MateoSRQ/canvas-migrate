@@ -17,3 +17,4 @@ todos.json
 *.db-wal
 .idea
 .vscode
+/new/
