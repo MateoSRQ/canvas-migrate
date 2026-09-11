@@ -47,28 +47,20 @@ export function AppLayout({ children }: AppLayoutProps) {
               {/* Drawer Menu Items */}
               <nav className="flex-1 overflow-y-auto p-4 space-y-1 text-sm font-medium">
                 <a
-                  href="/"
+                  href="/#hierarchy"
                   className="flex items-center gap-3 px-3 py-2 rounded-md bg-sidebar-accent text-sidebar-accent-foreground transition-colors"
                   onClick={() => setIsDrawerOpen(false)}
                 >
-                  <Home className="h-4 w-4" />
-                  <span>Main View</span>
+                  <Layers className="h-4 w-4" />
+                  <span>Hierarchy & Selection</span>
                 </a>
                 <a
-                  href="#documents"
+                  href="/#cases"
                   className="flex items-center gap-3 px-3 py-2 rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground transition-colors"
                   onClick={() => setIsDrawerOpen(false)}
                 >
                   <FileText className="h-4 w-4" />
-                  <span>Documents</span>
-                </a>
-                <a
-                  href="#settings"
-                  className="flex items-center gap-3 px-3 py-2 rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground transition-colors"
-                  onClick={() => setIsDrawerOpen(false)}
-                >
-                  <Settings className="h-4 w-4" />
-                  <span>Settings</span>
+                  <span>Import Cases Registry</span>
                 </a>
               </nav>
 
