@@ -30,10 +30,13 @@ import {
   ExternalLink,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   ChevronsLeft,
   ChevronsRight,
   ListTree,
   Table as TableIcon,
+  Eye,
+  UserCheck,
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
@@ -113,6 +116,15 @@ export function HierarchySelector({
   // Estado de la tabla TanStack
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({})
+  const [tableExpandedRows, setTableExpandedRows] = React.useState<Set<number>>(new Set())
+  const toggleTableRow = React.useCallback((id: number) => {
+    setTableExpandedRows((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
 
   // Diálogo de estudiantes matriculados
   const [inspectingItem, setInspectingItem] = React.useState<HierarchyItem | null>(null)
@@ -222,6 +234,12 @@ export function HierarchySelector({
         const matchTeacher = item.docenteNombre.toLowerCase().includes(query)
         const matchDni = item.docenteDni.toLowerCase().includes(query)
         const matchCareer = item.carreraNombre.toLowerCase().includes(query)
+        const matchStudent = item.estudiantes?.some(
+          (s) => s.codigo.toLowerCase().includes(query) || s.fullName.toLowerCase().includes(query)
+        )
+        const matchAnyTeacher = item.docentes?.some(
+          (t) => t.dni.toLowerCase().includes(query) || t.fullName.toLowerCase().includes(query)
+        )
 
         if (
           !matchCourseCode &&
@@ -229,7 +247,9 @@ export function HierarchySelector({
           !matchSectionName &&
           !matchTeacher &&
           !matchDni &&
-          !matchCareer
+          !matchCareer &&
+          !matchStudent &&
+          !matchAnyTeacher
         ) {
           return false
         }
@@ -447,22 +467,35 @@ export function HierarchySelector({
         id: 'docente',
         header: 'Docente Asignado',
         accessorKey: 'docenteNombre',
-        cell: ({ row }) => (
-          <div className="space-y-0.5 max-w-[200px]">
-            <div className="text-xs font-medium text-foreground truncate">
-              {row.original.docenteNombre}
+        cell: ({ row }) => {
+          const docs = row.original.docentes || []
+          return (
+            <div className="space-y-0.5 max-w-[200px]">
+              <div className="text-xs font-medium text-foreground truncate flex items-center gap-1.5">
+                <span className="truncate">{row.original.docenteNombre}</span>
+                {docs.length > 1 && (
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 font-mono shrink-0">
+                    +{docs.length - 1}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                {row.original.docenteDni ? (
+                  <span className="font-mono bg-muted px-1 rounded">
+                    DNI: {row.original.docenteDni}
+                  </span>
+                ) : (
+                  <span className="italic text-muted-foreground/60">Sin DNI</span>
+                )}
+                {row.original.docenteEmail && (
+                  <span className="truncate max-w-[110px] font-mono">
+                    {row.original.docenteEmail}
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-              {row.original.docenteDni ? (
-                <span className="font-mono bg-muted px-1 rounded">
-                  DNI: {row.original.docenteDni}
-                </span>
-              ) : (
-                <span className="italic text-muted-foreground/60">Sin DNI</span>
-              )}
-            </div>
-          </div>
-        ),
+          )
+        },
       },
       {
         id: 'estudiantes',
@@ -495,26 +528,38 @@ export function HierarchySelector({
       },
       {
         id: 'actions',
-        header: '',
-        cell: ({ row }) => (
-          <div className="flex items-center justify-end">
-            <Button
-              variant="ghost"
-              size="xs"
-              className="text-xs gap-1 hover:bg-accent"
-              onClick={() => handleInspectStudents(row.original)}
-              title="Ver estudiantes matriculados"
-            >
-              <Users className="size-3" />
-              <span>Ver</span>
-            </Button>
-          </div>
-        ),
+        header: 'Matriculados',
+        cell: ({ row }) => {
+          const isExpanded = tableExpandedRows.has(row.original.id)
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <Button
+                variant={isExpanded ? 'secondary' : 'outline'}
+                size="xs"
+                className="text-xs h-7 gap-1 px-2"
+                onClick={() => toggleTableRow(row.original.id)}
+                title="Desplegar docentes y alumnos matriculados en esta fila"
+              >
+                <Users className="size-3" />
+                <span>{isExpanded ? 'Plegar' : 'Detalle'}</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                onClick={() => handleInspectStudents(row.original)}
+                title="Abrir ventana modal con lista de alumnos"
+              >
+                <Eye className="size-3.5" />
+              </Button>
+            </div>
+          )
+        },
         enableSorting: false,
-        size: 50,
+        size: 110,
       },
     ],
-    []
+    [tableExpandedRows, toggleTableRow]
   )
 
   // 6. Instancia de TanStack Table
@@ -1010,19 +1055,151 @@ export function HierarchySelector({
                 ))}
               </TableHeader>
               <TableBody>
-                {table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    data-state={row.getIsSelected() && 'selected'}
-                    className="hover:bg-muted/40 data-[state=selected]:bg-muted/60 transition-colors"
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="py-2.5 text-xs">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
+                {table.getRowModel().rows.map((row) => {
+                  const isRowExpanded = tableExpandedRows.has(row.original.id)
+                  const item = row.original
+                  return (
+                    <React.Fragment key={row.id}>
+                      <TableRow
+                        data-state={row.getIsSelected() && 'selected'}
+                        className="hover:bg-muted/40 data-[state=selected]:bg-muted/60 transition-colors"
+                      >
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell key={cell.id} className="py-2.5 text-xs">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+
+                      {/* Fila expandida con desglose de Matriculados (Docentes y Alumnos) */}
+                      {isRowExpanded && (
+                        <TableRow className="bg-muted/15 border-b border-border/50 hover:bg-muted/20">
+                          <TableCell colSpan={row.getVisibleCells().length} className="py-3 px-6">
+                            <div className="space-y-2.5">
+                              {/* Encabezado del Desglose */}
+                              <div className="flex items-center justify-between gap-2 pb-1 border-b border-border/40 text-[11px]">
+                                <div className="flex items-center gap-2 font-medium text-foreground">
+                                  <Users className="size-3.5 text-primary" />
+                                  <span>Matriculados en Sección:</span>
+                                  <span className="font-mono text-primary font-bold">
+                                    {item.seccionNombre}
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    ({item.cursoCodigo} - {item.cursoNombre})
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+                                  <Badge variant="outline" className="px-1.5 py-0 h-4">
+                                    (D) {item.docentes?.length || 0} {item.docentes?.length === 1 ? 'Docente' : 'Docentes'}
+                                  </Badge>
+                                  <Badge variant="outline" className="px-1.5 py-0 h-4">
+                                    (E) {item.estudiantes?.length || 0} {item.estudiantes?.length === 1 ? 'Estudiante' : 'Estudiantes'}
+                                  </Badge>
+                                </div>
+                              </div>
+
+                              {/* 1. Docentes asignados (D) */}
+                              <div className="space-y-1">
+                                <div className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider">
+                                  Docentes Asignados:
+                                </div>
+                                {item.docentes && item.docentes.length > 0 ? (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                                    {item.docentes.map((doc, dIdx) => (
+                                      <div
+                                        key={`table-doc-${item.id}-${doc.dni || dIdx}`}
+                                        className="flex items-center gap-2 py-1 px-2.5 rounded bg-background border border-border/60 text-xs shadow-2xs"
+                                      >
+                                        <Badge
+                                          variant="default"
+                                          className="text-[9px] px-1.5 py-0 h-4 font-mono font-bold tracking-tight"
+                                        >
+                                          (D) [DOCENTE]
+                                        </Badge>
+                                        <span className="font-mono font-bold text-primary text-[11px]">
+                                          {doc.dni || 'S/DNI'}
+                                        </span>
+                                        <span className="text-muted-foreground">-</span>
+                                        <span className="font-sans font-medium text-foreground truncate flex-1">
+                                          {doc.fullName}
+                                        </span>
+                                        {doc.email && (
+                                          <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[170px]">
+                                            &lt;{doc.email}&gt;
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-[11px] italic text-muted-foreground pl-2 py-0.5 font-sans">
+                                    (Sin docente asignado)
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* 2. Estudiantes Matriculados (E) */}
+                              <div className="space-y-1 pt-1">
+                                <div className="text-[10px] uppercase font-semibold text-muted-foreground flex items-center justify-between tracking-wider">
+                                  <span>Alumnos Matriculados ({item.estudiantes?.length || 0}):</span>
+                                  {item.estudiantes && item.estudiantes.length > 0 && (
+                                    <span className="text-[10px] text-muted-foreground font-normal font-sans">
+                                      Rol SIS: Student • Estado: Active
+                                    </span>
+                                  )}
+                                </div>
+
+                                {item.estudiantes && item.estudiantes.length > 0 ? (
+                                  <div className="max-h-60 overflow-y-auto divide-y divide-border/20 border border-border/50 rounded bg-background/80 p-1">
+                                    {item.estudiantes.map((est, eIdx) => (
+                                      <div
+                                        key={`table-est-${item.id}-${est.id}-${eIdx}`}
+                                        className="flex items-center gap-2 py-1 px-2 hover:bg-muted/50 rounded text-xs transition-colors"
+                                      >
+                                        <span className="text-[10px] text-muted-foreground w-6 text-right font-mono">
+                                          {eIdx + 1}.
+                                        </span>
+                                        <Badge
+                                          variant="secondary"
+                                          className="text-[9px] px-1 py-0 h-4 font-mono text-muted-foreground"
+                                        >
+                                          (E) [ESTUDIANTE]
+                                        </Badge>
+                                        <span className="font-semibold text-primary font-mono text-[11px]">
+                                          {est.codigo}
+                                        </span>
+                                        <span className="text-muted-foreground">-</span>
+                                        <span className="text-foreground flex-1 truncate font-sans">
+                                          {est.fullName}
+                                        </span>
+                                        {est.email && (
+                                          <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline truncate max-w-[220px]">
+                                            &lt;{est.email}&gt;
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-[11px] italic text-muted-foreground pl-2 py-0.5 font-sans">
+                                    (Sin alumnos matriculados en esta sección)
+                                  </div>
+                                )}
+                              </div>
+
+                              {(!item.docentes || item.docentes.length === 0) &&
+                                (!item.estudiantes || item.estudiantes.length === 0) && (
+                                  <div className="text-[11px] italic text-muted-foreground pl-2 py-1 font-mono">
+                                    (Sin alumnos ni docentes matriculados)
+                                  </div>
+                                )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  )
+                })}
               </TableBody>
             </Table>
           </div>

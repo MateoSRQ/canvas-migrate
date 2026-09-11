@@ -2,6 +2,19 @@ import { db } from '#/db'
 import { caseRawTables } from '#/db/schema'
 import { eq, and } from 'drizzle-orm'
 
+export interface EnrolledTeacher {
+  dni: string
+  fullName: string
+  email: string
+}
+
+export interface EnrolledStudent {
+  id: number
+  codigo: string
+  fullName: string
+  email: string
+}
+
 export interface HierarchyItem {
   id: number // Carga_Academica_Sede_Curso.id
   periodoId: number
@@ -28,6 +41,8 @@ export interface HierarchyItem {
   docenteNombre: string
   docenteDni: string
   docenteEmail: string
+  docentes: EnrolledTeacher[]
+  estudiantes: EnrolledStudent[]
 }
 
 export interface HierarchyFilterOptions {
@@ -37,13 +52,6 @@ export interface HierarchyFilterOptions {
   facultades: { id: number; nombre: string }[]
   carreras: { id: number; nombre: string; facultadId: number }[]
   planes: { id: number; nombre: string; carreraId: number }[]
-}
-
-export interface EnrolledStudent {
-  id: number
-  codigo: string
-  fullName: string
-  email: string
 }
 
 // In-memory cache for loaded cases to guarantee sub-millisecond response times
@@ -96,6 +104,8 @@ export function getCaseHierarchyData(caseId: string): {
   const detalles = getTableFromDb(caseId, 'Carga_Academica.Carga_Academica_Sede_Curso_Horario_Detalle')
   const utbPersonas = getTableFromDb(caseId, 'Personal.Utb_Persona')
   const matriculas = getTableFromDb(caseId, 'Matricula.Matricula_Alumno_Curso')
+  const alumnos = getTableFromDb(caseId, 'Academico.Alumno')
+  const personas = getTableFromDb(caseId, 'General.Persona')
 
   // Build lookup maps
   const periodoMap = new Map(periodos.map((p) => [p.id, p]))
@@ -117,32 +127,66 @@ export function getCaseHierarchyData(caseId: string): {
     if (id) utbMap.set(id, p)
   }
 
-  // Count matriculas by horario id
-  const matriculaCountByHorario = new Map<number, number>()
-  for (const m of matriculas) {
-    const hid = m.carga_academica_sede_curso_horario_id
-    if (hid) {
-      matriculaCountByHorario.set(hid, (matriculaCountByHorario.get(hid) || 0) + 1)
-    }
+  // Student lookup map from Academico.Alumno + General.Persona
+  const personaMap = new Map(personas.map((p) => [p.id, p]))
+  const alumnoMap = new Map<number, EnrolledStudent>()
+  for (const a of alumnos) {
+    const p = a.persona_id ? personaMap.get(a.persona_id) : null
+    const first = (p?.nombre || '').trim()
+    const pat = (p?.apellido_paterno || '').trim()
+    const mat = (p?.apellido_materno || '').trim()
+    const fullName = [first, pat, mat].filter(Boolean).join(' ') || `Estudiante ${a.codigo_alumno}`
+    const codigo = String(a.codigo_alumno || '').trim()
+    const email =
+      a.email_principal && String(a.email_principal).includes('@')
+        ? String(a.email_principal).trim()
+        : `${codigo}@politecnica.edu.pe`
+    alumnoMap.set(a.id, { id: a.id, codigo, fullName, email })
   }
 
-  // Teacher by horario id
-  const teacherByHorario = new Map<number, { name: string; dni: string; email: string }>()
+  // Students by Horario ID
+  const studentsByHorario = new Map<number, EnrolledStudent[]>()
+  for (const m of matriculas) {
+    const hid = m.carga_academica_sede_curso_horario_id
+    if (!hid) continue
+    const stu = alumnoMap.get(m.matricula_alumno_id)
+    if (!stu) continue
+    let list = studentsByHorario.get(hid)
+    if (!list) {
+      list = []
+      studentsByHorario.set(hid, list)
+    }
+    list.push(stu)
+  }
+
+  // Teachers by Horario ID
+  const teachersByHorario = new Map<number, EnrolledTeacher[]>()
   for (const d of detalles) {
-    if (d.docente_id && !teacherByHorario.has(d.carga_academica_sede_curso_horario_id)) {
-      const rawP = utbMap.get(String(d.docente_id))
-      if (rawP) {
-        const first = (rawP.Nombres || rawP.nombres || '').trim()
-        const paternal = (rawP.ApellidoPaterno || rawP.apellido_paterno || '').trim()
-        const maternal = (rawP.ApellidoMaterno || rawP.apellido_materno || '').trim()
-        const name = [first, paternal, maternal].filter(Boolean).join(' ')
-        const dni = (rawP.Documento || rawP.documento || rawP.Codigo || '').trim()
-        const email = (rawP.CorreoCorporativo || rawP.CorreoPersonal || '').trim()
-        teacherByHorario.set(d.carga_academica_sede_curso_horario_id, { name, dni, email })
-      } else {
-        teacherByHorario.set(d.carga_academica_sede_curso_horario_id, {
-          name: `Docente ${d.docente_id}`,
+    if (!d.docente_id) continue
+    const hid = d.carga_academica_sede_curso_horario_id
+    if (!hid) continue
+    let list = teachersByHorario.get(hid)
+    if (!list) {
+      list = []
+      teachersByHorario.set(hid, list)
+    }
+    const rawP = utbMap.get(String(d.docente_id))
+    if (rawP) {
+      const first = (rawP.Nombres || rawP.nombres || '').trim()
+      const paternal = (rawP.ApellidoPaterno || rawP.apellido_paterno || '').trim()
+      const maternal = (rawP.ApellidoMaterno || rawP.apellido_materno || '').trim()
+      const fullName = [first, paternal, maternal].filter(Boolean).join(' ') || `Docente ${d.docente_id}`
+      const dni = (rawP.Documento || rawP.documento || rawP.Codigo || '').trim()
+      const email = (rawP.CorreoCorporativo || rawP.CorreoPersonal || '').trim()
+      if (!list.some((t) => t.dni === dni && t.fullName === fullName)) {
+        list.push({ dni, fullName, email })
+      }
+    } else {
+      const fallbackName = `Docente ${d.docente_id}`
+      if (!list.some((t) => t.fullName === fallbackName)) {
+        list.push({
           dni: '',
+          fullName: fallbackName,
           email: '',
         })
       }
@@ -186,15 +230,33 @@ export function getCaseHierarchyData(caseId: string): {
     const plan = planMap.get(curso.plan_id)
 
     const hs = horariosByCargaCurso.get(cc.id) || []
-    let totalStudents = 0
-    let teacher: { name: string; dni: string; email: string } | null = null
+    const sectionStudentsMap = new Map<number, EnrolledStudent>()
+    const sectionTeachersMap = new Map<string, EnrolledTeacher>()
 
     for (const h of hs) {
-      totalStudents += matriculaCountByHorario.get(h.id) || 0
-      if (!teacher && teacherByHorario.has(h.id)) {
-        teacher = teacherByHorario.get(h.id)!
+      const hStudents = studentsByHorario.get(h.id) || []
+      for (const s of hStudents) {
+        if (!sectionStudentsMap.has(s.id)) {
+          sectionStudentsMap.set(s.id, s)
+        }
+      }
+
+      const hTeachers = teachersByHorario.get(h.id) || []
+      for (const t of hTeachers) {
+        const key = t.dni || t.fullName
+        if (!sectionTeachersMap.has(key)) {
+          sectionTeachersMap.set(key, t)
+        }
       }
     }
+
+    const sectionStudents = Array.from(sectionStudentsMap.values()).sort((a, b) =>
+      a.fullName.localeCompare(b.fullName)
+    )
+    const sectionTeachers = Array.from(sectionTeachersMap.values()).sort((a, b) =>
+      a.fullName.localeCompare(b.fullName)
+    )
+    const primaryTeacher = sectionTeachers[0] || null
 
     const sedeId = sede?.id ?? 0
     const sedeNombre = sede?.nombre || 'Sin Sede'
@@ -240,10 +302,12 @@ export function getCaseHierarchyData(caseId: string): {
       seccionId: sec.id,
       seccionNombre: sec.nombre,
       isNoHabilitado: /no\s+habilitad/i.test(sec.nombre || ''),
-      estudiantesCount: totalStudents,
-      docenteNombre: teacher?.name || 'Sin Asignar',
-      docenteDni: teacher?.dni || '',
-      docenteEmail: teacher?.email || '',
+      estudiantesCount: sectionStudents.length,
+      docenteNombre: primaryTeacher ? primaryTeacher.fullName : 'Sin Asignar',
+      docenteDni: primaryTeacher ? primaryTeacher.dni : '',
+      docenteEmail: primaryTeacher ? primaryTeacher.email : '',
+      docentes: sectionTeachers,
+      estudiantes: sectionStudents,
     })
   }
 
@@ -290,6 +354,14 @@ export function getCaseHierarchyData(caseId: string): {
 }
 
 export function getSectionEnrolledStudents(caseId: string, cargaCursoId: number): EnrolledStudent[] {
+  const cached = hierarchyCache.get(caseId)
+  if (cached) {
+    const it = cached.items.find((i) => i.id === cargaCursoId)
+    if (it && it.estudiantes) {
+      return it.estudiantes
+    }
+  }
+
   const matriculas = getTableFromDb(caseId, 'Matricula.Matricula_Alumno_Curso')
   const alumnos = getTableFromDb(caseId, 'Academico.Alumno')
   const personas = getTableFromDb(caseId, 'General.Persona')

@@ -49,6 +49,7 @@
     - "Exclude 'NO HABILITADO'" sections toggle and global text search filter.
     - Dual-view switcher: **Vista Jerárquica Anidada (Árbol)** vs **Vista Tabla Detallada (TanStack Table)**.
     - **Nested Tree Table (`src/components/hierarchy/hierarchy-tree-table.tsx`)**: Account (Sede) > Subaccount (Modalidad > Facultad > Carrera > Plan) > Curso > Nested Table of Secciones, with multi-level cascading checkboxes, collapse/expand all, and student rosters.
+    - **Inline Matriculados Breakdown [(D) Docentes / (E) Estudiantes]**: Full inline expansion under every section showing assigned teachers with DNI and enrolled students with student code and email, matching `hierarchy.txt` reference.
     - Multi-row selection with "Select All Filtered", "Clear", and selection metrics (sections, courses, students).
     - Sorting and pagination across course-sections.
     - Modal dialog displaying enrolled students for any selected section.
@@ -200,6 +201,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-11T12:00:00` | `b0e5e29` | Antigravity | Feature/UI | Hierarchical data selection, 6-level cascading filters, TanStack Table v8, and student inspector | `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/ui/checkbox.tsx`, `src/components/ui/input.tsx`, `src/server/services/hierarchy-service.ts`, `src/server/functions/hierarchy.ts`, `src/routes/index.tsx`, `src/components/layout/app-layout.tsx` |
 | `2026-09-11T12:10:00` | `a881abf` | Antigravity | Feature/UI | Nested account/subaccount tree table view, dual-view mode switcher, and complete Spanish UI translation | `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/cases/case-manager.tsx`, `src/routes/index.tsx`, `src/components/layout/app-layout.tsx` |
 | `2026-09-11T12:20:00` | `4a7e9b1` | Antigravity | Feature/UX | Cross-case selection & exploration linking Case Manager table/detail directly with Hierarchy Selector | `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/cases/case-manager.tsx`, `src/routes/index.tsx` |
+| `2026-09-11T12:30:00` | - | Antigravity | Feature/UI | Inline Docentes (D) & Alumnos Matriculados (E) breakdown under sections across Tree Table & TanStack Table | `src/server/services/hierarchy-service.ts`, `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx` |
 
 ---
 
@@ -251,7 +253,11 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Selection Summary Modal**: Overview of selected sections, unique courses, and total enrollments ready for SIS packaging.
 - **Nested Hierarchical Tree Table (`src/components/hierarchy/hierarchy-tree-table.tsx`)**:
   - Exact mirroring of Canvas LMS SIS accounts and subaccounts:
-    `[PERIODO] T-id` > `[CUENTA] Sede S-id` > `[SUBCUENTA] Modalidad M-id` > `[SUBCUENTA] Facultad F-id` > `[SUBCUENTA] Carrera C-id` > `[SUBCUENTA] Plan P-codigo` > `[CURSO] CUR-codigo` > `Tabla Anidada de [SECCIONES]`.
+    `[PERIODO] T-id` > `[CUENTA] Sede S-id` > `[SUBCUENTA] Modalidad M-id` > `[SUBCUENTA] Facultad F-id` > `[SUBCUENTA] Carrera C-id` > `[SUBCUENTA] Plan P-codigo` > `[CURSO] CUR-codigo` > `[SECCION]` > `[MATRICULADOS]`.
+  - **Inline Matriculados Breakdown**:
+    - `(D) [DOCENTE] <DNI> - <Nombre Completo> <<Email>>` with official DNI normalization. Supports multiple teachers per section (`+N más`).
+    - `(E) [ESTUDIANTE] <Código> - <Nombre Completo> <<Email>>` with numbered roster and active SIS status.
+    - Fallback `(Sin alumnos ni docentes matriculados)` for inactive/unassigned sections.
   - Cascading multi-level selection with indeterminate minus state (`Checkbox`).
-  - Expand all and collapse all action controls.
-  - Direct student roster inspection modal per section.
+  - Action buttons: "Desplegar Cursos", "Desplegar con Matriculados", and "Plegar Todo".
+  - Direct student roster inspection modal per section with search by student code and teacher DNI.

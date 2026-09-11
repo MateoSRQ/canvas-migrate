@@ -12,6 +12,7 @@ import {
   Square,
   Maximize2,
   Minimize2,
+  UserCheck,
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
@@ -24,7 +25,11 @@ import {
   TableHeader,
   TableRow,
 } from '#/components/ui/table'
-import type { HierarchyItem } from '#/server/services/hierarchy-service'
+import type {
+  HierarchyItem,
+  EnrolledTeacher,
+  EnrolledStudent,
+} from '#/server/services/hierarchy-service'
 
 interface HierarchyTreeTableProps {
   items: HierarchyItem[]
@@ -41,6 +46,8 @@ interface TreeSectionNode {
   docenteNombre: string
   docenteDni: string
   docenteEmail: string
+  docentes: EnrolledTeacher[]
+  estudiantes: EnrolledStudent[]
   estudiantesCount: number
   item: HierarchyItem
 }
@@ -235,6 +242,8 @@ export function HierarchyTreeTable({
         docenteNombre: it.docenteNombre,
         docenteDni: it.docenteDni,
         docenteEmail: it.docenteEmail,
+        docentes: it.docentes || [],
+        estudiantes: it.estudiantes || [],
         estudiantesCount: it.estudiantesCount,
         item: it,
       })
@@ -278,7 +287,7 @@ export function HierarchyTreeTable({
   }
 
   // Expand / Collapse all
-  const handleExpandAll = () => {
+  const handleExpandAll = (includeMatriculados = false) => {
     const allKeys = new Set<string>()
     for (const p of tree) {
       allKeys.add(`periodo-${p.periodoId}`)
@@ -300,6 +309,13 @@ export function HierarchyTreeTable({
                   allKeys.add(
                     `curso-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}`
                   )
+                  if (includeMatriculados) {
+                    for (const sec of cur.secciones) {
+                      allKeys.add(
+                        `sec-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}-${sec.id}`
+                      )
+                    }
+                  }
                 }
               }
             }
@@ -344,21 +360,32 @@ export function HierarchyTreeTable({
   return (
     <div className="space-y-4">
       {/* Barra de Acciones de Jerarquía */}
-      <div className="flex items-center justify-between gap-3 text-xs border-b border-border pb-2.5">
-        <div className="flex items-center gap-2 text-muted-foreground">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border-b border-border pb-2.5">
+        <div className="flex items-center gap-2 text-muted-foreground flex-wrap">
           <span className="font-semibold text-foreground">Jerarquía Académica Canvas LMS:</span>
-          <span>Periodo &gt; Cuenta (Sede) &gt; Subcuentas (Modalidad &gt; Facultad &gt; Carrera &gt; Plan) &gt; Cursos &gt; Secciones</span>
+          <span className="hidden md:inline">Periodo &gt; Cuenta (Sede) &gt; Subcuentas &gt; Curso &gt; Sección &gt; Matriculados [(D) Docentes / (E) Estudiantes]</span>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <Button
             variant="outline"
             size="xs"
-            onClick={handleExpandAll}
+            onClick={() => handleExpandAll(false)}
             className="text-xs h-7 gap-1"
+            title="Desplegar todas las cuentas, subcuentas, cursos y secciones"
           >
             <Maximize2 className="size-3" />
-            <span>Desplegar Todo</span>
+            <span>Desplegar Cursos</span>
+          </Button>
+          <Button
+            variant="default"
+            size="xs"
+            onClick={() => handleExpandAll(true)}
+            className="text-xs h-7 gap-1"
+            title="Desplegar todo el árbol incluyendo docentes y alumnos matriculados"
+          >
+            <Users className="size-3" />
+            <span>Desplegar con Matriculados</span>
           </Button>
           <Button
             variant="outline"
@@ -815,6 +842,7 @@ export function HierarchyTreeTable({
                                                                                   <Table>
                                                                                     <TableHeader>
                                                                                       <TableRow className="bg-muted/10 hover:bg-muted/10 text-[11px]">
+                                                                                        <TableHead className="w-8 text-center py-2"></TableHead>
                                                                                         <TableHead className="w-10 text-center py-2">
                                                                                           Sel.
                                                                                         </TableHead>
@@ -822,12 +850,12 @@ export function HierarchyTreeTable({
                                                                                           Sección Canvas
                                                                                         </TableHead>
                                                                                         <TableHead className="py-2">
-                                                                                          Docente Asignado
+                                                                                          Docente(s) Asignado(s)
                                                                                         </TableHead>
                                                                                         <TableHead className="py-2 text-right">
                                                                                           Matriculados
                                                                                         </TableHead>
-                                                                                        <TableHead className="w-20 text-right py-2">
+                                                                                        <TableHead className="w-28 text-right py-2">
                                                                                           Acciones
                                                                                         </TableHead>
                                                                                       </TableRow>
@@ -841,113 +869,265 @@ export function HierarchyTreeTable({
                                                                                                 sec.id
                                                                                               )
                                                                                             ]
+                                                                                          const secKey = `sec-${periodo.periodoId}-${sede.sedeId}-${modalidad.modalidadId}-${facultad.facultadId}-${carrera.carreraId}-${plan.planId}-${curso.cursoId}-${sec.id}`
+                                                                                          const isSecExpanded =
+                                                                                            expandedNodes.has(secKey)
 
                                                                                           return (
-                                                                                            <TableRow
-                                                                                              key={
-                                                                                                sec.id
-                                                                                              }
-                                                                                              data-state={
-                                                                                                isSecSelected &&
-                                                                                                'selected'
-                                                                                              }
-                                                                                              className="hover:bg-muted/30 data-[state=selected]:bg-muted/50 text-xs"
-                                                                                            >
-                                                                                              <TableCell className="text-center py-2">
-                                                                                                <Checkbox
-                                                                                                  checked={
-                                                                                                    isSecSelected
-                                                                                                  }
-                                                                                                  onCheckedChange={(
-                                                                                                    val
-                                                                                                  ) =>
-                                                                                                    onToggleSelect(
-                                                                                                      [
-                                                                                                        sec.id,
-                                                                                                      ],
-                                                                                                      !!val
-                                                                                                    )
-                                                                                                  }
-                                                                                                />
-                                                                                              </TableCell>
-                                                                                              <TableCell className="py-2">
-                                                                                                <div className="flex items-center gap-2">
-                                                                                                  <span className="font-semibold text-foreground">
-                                                                                                    {
-                                                                                                      sec.seccionNombre
+                                                                                            <React.Fragment key={sec.id}>
+                                                                                              <TableRow
+                                                                                                data-state={
+                                                                                                  isSecSelected &&
+                                                                                                  'selected'
+                                                                                                }
+                                                                                                className="hover:bg-muted/30 data-[state=selected]:bg-muted/50 text-xs"
+                                                                                              >
+                                                                                                <TableCell className="w-8 text-center py-2">
+                                                                                                  <button
+                                                                                                    type="button"
+                                                                                                    onClick={() =>
+                                                                                                      toggleNode(secKey)
                                                                                                     }
-                                                                                                  </span>
-                                                                                                  {sec.isNoHabilitado && (
-                                                                                                    <Badge
-                                                                                                      variant="destructive"
-                                                                                                      className="text-[9px] px-1 py-0 h-4"
-                                                                                                    >
-                                                                                                      NO
-                                                                                                      HABILITADO
-                                                                                                    </Badge>
+                                                                                                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                                                                                    title={
+                                                                                                      isSecExpanded
+                                                                                                        ? 'Plegar matriculados'
+                                                                                                        : 'Desplegar docentes y alumnos matriculados'
+                                                                                                    }
+                                                                                                  >
+                                                                                                    {isSecExpanded ? (
+                                                                                                      <ChevronDown className="size-3 text-primary font-bold" />
+                                                                                                    ) : (
+                                                                                                      <ChevronRight className="size-3" />
+                                                                                                    )}
+                                                                                                  </button>
+                                                                                                </TableCell>
+                                                                                                <TableCell className="text-center py-2">
+                                                                                                  <Checkbox
+                                                                                                    checked={
+                                                                                                      isSecSelected
+                                                                                                    }
+                                                                                                    onCheckedChange={(
+                                                                                                      val
+                                                                                                    ) =>
+                                                                                                      onToggleSelect(
+                                                                                                        [
+                                                                                                          sec.id,
+                                                                                                        ],
+                                                                                                        !!val
+                                                                                                      )
+                                                                                                    }
+                                                                                                  />
+                                                                                                </TableCell>
+                                                                                                <TableCell className="py-2">
+                                                                                                  <div className="flex items-center gap-2">
+                                                                                                    <span className="font-semibold text-foreground">
+                                                                                                      {
+                                                                                                        sec.seccionNombre
+                                                                                                      }
+                                                                                                    </span>
+                                                                                                    {sec.isNoHabilitado && (
+                                                                                                      <Badge
+                                                                                                        variant="destructive"
+                                                                                                        className="text-[9px] px-1 py-0 h-4"
+                                                                                                      >
+                                                                                                        NO
+                                                                                                        HABILITADO
+                                                                                                      </Badge>
+                                                                                                    )}
+                                                                                                  </div>
+                                                                                                </TableCell>
+                                                                                                <TableCell className="py-2">
+                                                                                                  {sec.docentes.length > 0 ? (
+                                                                                                    <div className="space-y-0.5">
+                                                                                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                                                                                        <span className="font-medium text-foreground">
+                                                                                                          {sec.docentes[0].fullName}
+                                                                                                        </span>
+                                                                                                        {sec.docentes.length > 1 && (
+                                                                                                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">
+                                                                                                            +{sec.docentes.length - 1} más
+                                                                                                          </Badge>
+                                                                                                        )}
+                                                                                                      </div>
+                                                                                                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                                                                                                        {sec.docentes[0].dni && (
+                                                                                                          <span className="font-mono bg-muted px-1 rounded">
+                                                                                                            DNI: {sec.docentes[0].dni}
+                                                                                                          </span>
+                                                                                                        )}
+                                                                                                        {sec.docentes[0].email && (
+                                                                                                          <span className="truncate max-w-[180px]">
+                                                                                                            {sec.docentes[0].email}
+                                                                                                          </span>
+                                                                                                        )}
+                                                                                                      </div>
+                                                                                                    </div>
+                                                                                                  ) : (
+                                                                                                    <span className="text-muted-foreground/60 italic text-[11px]">
+                                                                                                      Sin docente asignado
+                                                                                                    </span>
                                                                                                   )}
-                                                                                                </div>
-                                                                                              </TableCell>
-                                                                                              <TableCell className="py-2">
-                                                                                                <div className="space-y-0.5">
-                                                                                                  <div className="font-medium text-foreground">
-                                                                                                    {
-                                                                                                      sec.docenteNombre
+                                                                                                </TableCell>
+                                                                                                <TableCell className="text-right py-2 font-mono">
+                                                                                                  <Badge
+                                                                                                    variant={
+                                                                                                      sec.estudiantesCount >
+                                                                                                      0
+                                                                                                        ? 'secondary'
+                                                                                                        : 'outline'
                                                                                                     }
+                                                                                                    className="text-xs px-2 py-0.5"
+                                                                                                  >
+                                                                                                    {
+                                                                                                      sec.estudiantesCount
+                                                                                                    }
+                                                                                                  </Badge>
+                                                                                                </TableCell>
+                                                                                                <TableCell className="text-right py-2">
+                                                                                                  <div className="flex items-center justify-end gap-1">
+                                                                                                    <Button
+                                                                                                      variant={isSecExpanded ? 'secondary' : 'ghost'}
+                                                                                                      size="xs"
+                                                                                                      onClick={() => toggleNode(secKey)}
+                                                                                                      className="h-6 text-[11px] gap-1 px-1.5"
+                                                                                                      title="Desplegar docentes y alumnos matriculados en este árbol"
+                                                                                                    >
+                                                                                                      <Users className="size-3" />
+                                                                                                      <span>{isSecExpanded ? 'Plegar' : 'Ver'}</span>
+                                                                                                    </Button>
+                                                                                                    <Button
+                                                                                                      variant="ghost"
+                                                                                                      size="icon"
+                                                                                                      onClick={() =>
+                                                                                                        onInspectStudents(
+                                                                                                          sec.item
+                                                                                                        )
+                                                                                                      }
+                                                                                                      className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                                                                                      title="Abrir modal detallado de estudiantes"
+                                                                                                    >
+                                                                                                      <UserCheck className="size-3" />
+                                                                                                    </Button>
                                                                                                   </div>
-                                                                                                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                                                                                                    {sec.docenteDni && (
-                                                                                                      <span className="font-mono bg-muted px-1 rounded">
-                                                                                                        DNI:{' '}
-                                                                                                        {
-                                                                                                          sec.docenteDni
-                                                                                                        }
-                                                                                                      </span>
-                                                                                                    )}
-                                                                                                    {sec.docenteEmail && (
-                                                                                                      <span className="truncate max-w-[180px]">
-                                                                                                        {
-                                                                                                          sec.docenteEmail
-                                                                                                        }
-                                                                                                      </span>
-                                                                                                    )}
-                                                                                                  </div>
-                                                                                                </div>
-                                                                                              </TableCell>
-                                                                                              <TableCell className="text-right py-2 font-mono">
-                                                                                                <Badge
-                                                                                                  variant={
-                                                                                                    sec.estudiantesCount >
-                                                                                                    0
-                                                                                                      ? 'secondary'
-                                                                                                      : 'outline'
-                                                                                                  }
-                                                                                                  className="text-xs px-2 py-0.5"
-                                                                                                >
-                                                                                                  {
-                                                                                                    sec.estudiantesCount
-                                                                                                  }
-                                                                                                </Badge>
-                                                                                              </TableCell>
-                                                                                              <TableCell className="text-right py-2">
-                                                                                                <Button
-                                                                                                  variant="ghost"
-                                                                                                  size="xs"
-                                                                                                  onClick={() =>
-                                                                                                    onInspectStudents(
-                                                                                                      sec.item
-                                                                                                    )
-                                                                                                  }
-                                                                                                  className="h-6 text-xs gap-1"
-                                                                                                  title="Ver lista de alumnos"
-                                                                                                >
-                                                                                                  <Users className="size-3" />
-                                                                                                  <span>
-                                                                                                    Alumnos
-                                                                                                  </span>
-                                                                                                </Button>
-                                                                                            </TableCell>
-                                                                                            </TableRow>
+                                                                                                </TableCell>
+                                                                                              </TableRow>
+
+                                                                                              {/* Rama Nivel 8: Matriculados [(D) Docentes / (E) Estudiantes] */}
+                                                                                              {isSecExpanded && (
+                                                                                                <TableRow className="bg-muted/10 border-b border-border/40 hover:bg-muted/15">
+                                                                                                  <TableCell colSpan={6} className="py-2.5 px-4 pl-10">
+                                                                                                    <div className="space-y-2.5">
+                                                                                                      {/* Encabezado del Desglose de Matriculados */}
+                                                                                                      <div className="flex items-center justify-between gap-2 pb-1 border-b border-border/40 text-[11px]">
+                                                                                                        <div className="flex items-center gap-2 font-medium text-foreground">
+                                                                                                          <Users className="size-3.5 text-primary" />
+                                                                                                          <span>Matriculados en Sección:</span>
+                                                                                                          <span className="font-mono text-primary font-bold">{sec.seccionNombre}</span>
+                                                                                                        </div>
+                                                                                                        <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+                                                                                                          <Badge variant="outline" className="px-1.5 py-0 h-4">
+                                                                                                            (D) {sec.docentes.length} {sec.docentes.length === 1 ? 'Docente' : 'Docentes'}
+                                                                                                          </Badge>
+                                                                                                          <Badge variant="outline" className="px-1.5 py-0 h-4">
+                                                                                                            (E) {sec.estudiantes.length} {sec.estudiantes.length === 1 ? 'Estudiante' : 'Estudiantes'}
+                                                                                                          </Badge>
+                                                                                                        </div>
+                                                                                                      </div>
+
+                                                                                                      {/* 1. Docentes asignados (D) */}
+                                                                                                      <div className="space-y-1">
+                                                                                                        <div className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider">
+                                                                                                          Docentes Asignados:
+                                                                                                        </div>
+                                                                                                        {sec.docentes.length > 0 ? (
+                                                                                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                                                                                                            {sec.docentes.map((doc, dIdx) => (
+                                                                                                              <div
+                                                                                                                key={`doc-${sec.id}-${doc.dni || dIdx}`}
+                                                                                                                className="flex items-center gap-2 py-1 px-2.5 rounded bg-background border border-border/60 text-xs shadow-2xs"
+                                                                                                              >
+                                                                                                                <Badge variant="default" className="text-[9px] px-1.5 py-0 h-4 font-mono font-bold tracking-tight">
+                                                                                                                  (D) [DOCENTE]
+                                                                                                                </Badge>
+                                                                                                                <span className="font-mono font-bold text-primary text-[11px]">
+                                                                                                                  {doc.dni || 'S/DNI'}
+                                                                                                                </span>
+                                                                                                                <span className="text-muted-foreground">-</span>
+                                                                                                                <span className="font-sans font-medium text-foreground truncate flex-1">
+                                                                                                                  {doc.fullName}
+                                                                                                                </span>
+                                                                                                                {doc.email && (
+                                                                                                                  <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[170px]">
+                                                                                                                    &lt;{doc.email}&gt;
+                                                                                                                  </span>
+                                                                                                                )}
+                                                                                                              </div>
+                                                                                                            ))}
+                                                                                                          </div>
+                                                                                                        ) : (
+                                                                                                          <div className="text-[11px] italic text-muted-foreground pl-2 py-0.5">
+                                                                                                            (Sin docente asignado)
+                                                                                                          </div>
+                                                                                                        )}
+                                                                                                      </div>
+
+                                                                                                      {/* 2. Estudiantes Matriculados (E) */}
+                                                                                                      <div className="space-y-1 pt-1">
+                                                                                                        <div className="text-[10px] uppercase font-semibold text-muted-foreground flex items-center justify-between tracking-wider">
+                                                                                                          <span>Alumnos Matriculados ({sec.estudiantes.length}):</span>
+                                                                                                          {sec.estudiantes.length > 0 && (
+                                                                                                            <span className="text-[10px] text-muted-foreground font-normal font-sans">
+                                                                                                              Rol SIS: Student • Estado: Active
+                                                                                                            </span>
+                                                                                                          )}
+                                                                                                        </div>
+
+                                                                                                        {sec.estudiantes.length > 0 ? (
+                                                                                                          <div className="max-h-60 overflow-y-auto divide-y divide-border/20 border border-border/50 rounded bg-background/80 p-1">
+                                                                                                            {sec.estudiantes.map((est, eIdx) => (
+                                                                                                              <div
+                                                                                                                key={`est-${sec.id}-${est.id}-${eIdx}`}
+                                                                                                                className="flex items-center gap-2 py-1 px-2 hover:bg-muted/50 rounded text-xs transition-colors"
+                                                                                                              >
+                                                                                                                <span className="text-[10px] text-muted-foreground w-6 text-right font-mono">
+                                                                                                                  {eIdx + 1}.
+                                                                                                                </span>
+                                                                                                                <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 font-mono text-muted-foreground">
+                                                                                                                  (E) [ESTUDIANTE]
+                                                                                                                </Badge>
+                                                                                                                <span className="font-semibold text-primary font-mono text-[11px]">
+                                                                                                                  {est.codigo}
+                                                                                                                </span>
+                                                                                                                <span className="text-muted-foreground">-</span>
+                                                                                                                <span className="text-foreground flex-1 truncate font-sans">
+                                                                                                                  {est.fullName}
+                                                                                                                </span>
+                                                                                                                {est.email && (
+                                                                                                                  <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline truncate max-w-[200px]">
+                                                                                                                    &lt;{est.email}&gt;
+                                                                                                                  </span>
+                                                                                                                )}
+                                                                                                              </div>
+                                                                                                            ))}
+                                                                                                          </div>
+                                                                                                        ) : (
+                                                                                                          <div className="text-[11px] italic text-muted-foreground pl-2 py-0.5 font-sans">
+                                                                                                            (Sin alumnos matriculados en esta sección)
+                                                                                                          </div>
+                                                                                                        )}
+                                                                                                      </div>
+
+                                                                                                      {sec.docentes.length === 0 && sec.estudiantes.length === 0 && (
+                                                                                                        <div className="text-[11px] italic text-muted-foreground pl-2 py-1 font-mono">
+                                                                                                          (Sin alumnos ni docentes matriculados)
+                                                                                                        </div>
+                                                                                                      )}
+                                                                                                    </div>
+                                                                                                  </TableCell>
+                                                                                                </TableRow>
+                                                                                              )}
+                                                                                            </React.Fragment>
                                                                                           )
                                                                                         }
                                                                                       )}
