@@ -210,6 +210,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-11T12:30:00` | `a02718c` | Antigravity | Feature/UI | Inline Docentes (D) & Alumnos Matriculados (E) breakdown under sections across Tree Table & TanStack Table | `src/server/services/hierarchy-service.ts`, `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx` |
 | `2026-09-11T12:41:00` | `4079c8b` | Antigravity | Fix/UX | Resolved collapse bounce-back bug, added granular level-based batch unfolding and branch-level toggles | `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx` |
 | `2026-09-11T12:55:00` | `e5cb780` | Antigravity | Feature/Export | Exportación a archivos CSV para migración Canvas en /migraciones/[periodo - YYYYMMDDHHMMSS] con hierarchy.txt y zip | `src/server/services/canvas-exporter.ts`, `src/server/functions/hierarchy.ts`, `src/components/hierarchy/hierarchy-selector.tsx`, `.gitignore` |
+| `2026-09-11T13:25:00` | - | Antigravity | Fix/UX | Corrección integral del sistema de plegado/desplegado: toggleBranchKeys basado en estado de raíz, botón Plegar Matriculados, autosincronización y poda de claves válidas y startTransition de React 19 | `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx` |
 
 ---
 
@@ -269,11 +270,15 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
     - Fallback `(Sin alumnos ni docentes matriculados)` for inactive/unassigned sections.
   - Cascading multi-level selection with indeterminate minus state (`Checkbox`).
   - **Granular Batch & Branch Folding/Unfolding**:
-    - **Global Level Unfolding**: "Plegar Todo", "Nivel Sedes", "Nivel Carreras", "Nivel Cursos", and "Todo (+ Matriculados)".
-    - **Branch Toggles**: Direct "Rama" buttons on Periodo, Sede, Carrera, and Plan to fold/unfold that branch and all its descendants.
-    - **Curso-Level Matriculados Toggle**: Button on each course header to expand/collapse all section rosters of that specific course.
-    - **Alt+Click Shortcut**: Clicking any chevron while holding `Alt` automatically toggles that branch and its descendants.
-    - **Expansion Counter Badge**: Displays total open branches (`N ramas desplegadas` or `Todo plegado`).
+    - **Global Level Batch Controls**: "Plegar Todo", "Plegar Matriculados", "Nivel Sedes", "Nivel Carreras", "Nivel Cursos", and "Todo (+ Matriculados)".
+    - **Plegar Todo**: Plegado limpio a 0 nodos abiertos con deshabilitación automática cuando `visibleExpandedCount === 0`.
+    - **Plegar Matriculados ({N})**: Botón contextual que aparece al haber desgloses de alumnos/docentes abiertos (`sec-*`), plegando instantáneamente todas las listas de estudiantes sin cerrar los cursos ni subcuentas.
+    - **Branch Toggles Inversos Corregidos**: Botones "Rama..." en Periodo, Sede, Carrera, Plan y Curso basan su decisión en el estado del nodo raíz (`isRootOpen`), plegando la rama y eliminando nodos huérfanos si la raíz estaba abierta, o desplegándola si estaba cerrada.
+    - **Alt+Click Shortcut**: Funcionalidad en chevrons para alternar ramas completas con comportamiento simétrico.
+    - **Renderizado Concurrente No Bloqueante (`useTransition`)**: Actualizaciones del árbol jerárquico envueltas en `startTransition` de React 19 con spinner de feedback en vivo (`Loader2`), garantizando que la UI nunca congele la pestaña ni pierda eventos de clic.
+    - **Autosincronización y Poda de Claves**: `allValidKeys` valida las ramas abiertas ante cambios de filtros en cascada o cambio de caso (`key={selectedCaseId}`), autodesplegando el primer periodo y sede si la vista está vacía sin claves obsoletas.
+    - **Límite de 30 Alumnos Inline por Sección**: Despliegue de los primeros 30 estudiantes con botón directo al modal para los restantes, previniendo sobrecarga en el DOM ante despliegues masivos.
+    - **Contador Dinámico Preciso**: Badge con conteo exacto de ramas visibles válidas (`N ramas desplegadas` o `Todo plegado`).
   - Direct student roster inspection modal per section with search by student code and teacher DNI.
 - **Exportación a Canvas LMS SIS CSV (`src/components/hierarchy/hierarchy-selector.tsx` & `src/server/services/canvas-exporter.ts`)**:
   - **Botón de Exportación en Barra de Selección**: `Exportar para Canvas ({selectedCount})` con acento visual en esmeralda (`bg-emerald-600 hover:bg-emerald-700`), visible de inmediato al seleccionar 1 o más secciones tanto en vista árbol como tabla.

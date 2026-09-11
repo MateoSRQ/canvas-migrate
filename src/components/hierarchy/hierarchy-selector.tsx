@@ -187,6 +187,7 @@ export function HierarchySelector({
     let isMounted = true
     setIsLoadingHierarchy(true)
     setRowSelection({})
+    setTableExpandedRows(new Set())
 
     getCaseHierarchyFn({ data: selectedCaseId })
       .then((res) => {
@@ -300,6 +301,7 @@ export function HierarchySelector({
     setPlanFilter('all')
     setExcludeNoHabilitado(true)
     setSearchQuery('')
+    setTableExpandedRows(new Set())
   }
 
   // 5. Manejo de selección en lote (utilizado tanto por la tabla como por el árbol)
@@ -1107,6 +1109,7 @@ export function HierarchySelector({
       ) : viewMode === 'tree' ? (
         /* VISTA 1: Árbol Jerárquico Anidado (Cuentas > Subcuentas > Cursos > Secciones) */
         <HierarchyTreeTable
+          key={selectedCaseId}
           items={filteredItems}
           selectedRowIds={rowSelection}
           onToggleSelect={handleToggleBatchSelection}

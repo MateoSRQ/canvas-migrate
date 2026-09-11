@@ -15,6 +15,8 @@ import {
   FoldVertical,
   ChevronsUpDown,
   UserCheck,
+  Loader2,
+  ExternalLink,
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
@@ -254,40 +256,119 @@ export function HierarchyTreeTable({
     return Array.from(periodosMap.values())
   }, [items])
 
-  // Auto-expand first period and its branches only on initial load (does not re-trigger on user collapse)
-  const isInitialLoadRef = React.useRef(true)
+  // Transición no bloqueante para operaciones masivas de plegado/desplegado
+  const [isPendingTransition, startTransition] = React.useTransition()
+  const userExplicitlyCollapsedAllRef = React.useRef(false)
+  const prevPeriodIdsRef = React.useRef<string>('')
 
-  React.useEffect(() => {
-    if (tree.length > 0 && isInitialLoadRef.current) {
-      isInitialLoadRef.current = false
-      const initialSet = new Set<string>()
-      const firstPeriodo = tree[0]
-      initialSet.add(`periodo-${firstPeriodo.periodoId}`)
-
-      // Also expand first sede
-      const firstSede = Array.from(firstPeriodo.sedes.values())[0]
-      if (firstSede) {
-        initialSet.add(`sede-${firstPeriodo.periodoId}-${firstSede.sedeId}`)
-        // Expand first modality
-        const firstMod = Array.from(firstSede.modalidades.values())[0]
-        if (firstMod) {
-          initialSet.add(`mod-${firstPeriodo.periodoId}-${firstSede.sedeId}-${firstMod.modalidadId}`)
+  // Mapa de todas las claves válidas presentes en el árbol actual
+  const allValidKeys = React.useMemo(() => {
+    const keys = new Set<string>()
+    for (const p of tree) {
+      keys.add(`periodo-${p.periodoId}`)
+      for (const s of p.sedes.values()) {
+        keys.add(`sede-${p.periodoId}-${s.sedeId}`)
+        for (const m of s.modalidades.values()) {
+          keys.add(`mod-${p.periodoId}-${s.sedeId}-${m.modalidadId}`)
+          for (const f of m.facultades.values()) {
+            keys.add(`fac-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}`)
+            for (const c of f.carreras.values()) {
+              keys.add(
+                `carr-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}`
+              )
+              for (const pl of c.planes.values()) {
+                keys.add(
+                  `plan-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}`
+                )
+                for (const cur of pl.cursos.values()) {
+                  keys.add(
+                    `curso-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}`
+                  )
+                  for (const sec of cur.secciones) {
+                    keys.add(
+                      `sec-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}-${sec.id}`
+                    )
+                  }
+                }
+              }
+            }
+          }
         }
       }
-      setExpandedNodes(initialSet)
     }
+    return keys
   }, [tree])
 
-  // Helper to toggle a single node manually
-  const toggleNode = (nodeKey: string) => {
+  // Conteo de ramas realmente visibles y válidas abiertas
+  const visibleExpandedCount = React.useMemo(() => {
+    let count = 0
+    for (const k of expandedNodes) {
+      if (allValidKeys.has(k)) count++
+    }
+    return count
+  }, [expandedNodes, allValidKeys])
+
+  // Conteo de desgloses de matriculados actualmente abiertos
+  const expandedMatriculadosCount = React.useMemo(() => {
+    let count = 0
+    for (const k of expandedNodes) {
+      if (k.startsWith('sec-') && allValidKeys.has(k)) count++
+    }
+    return count
+  }, [expandedNodes, allValidKeys])
+
+  // Sincronizar y purgar claves obsoletas cuando cambian los filtros o el árbol
+  React.useEffect(() => {
+    if (tree.length === 0) return
+
+    const currentPeriodIds = tree.map((p) => p.periodoId).join(',')
+    const periodIdsChanged = prevPeriodIdsRef.current !== currentPeriodIds
+    prevPeriodIdsRef.current = currentPeriodIds
+
     setExpandedNodes((prev) => {
-      const next = new Set(prev)
-      if (next.has(nodeKey)) {
-        next.delete(nodeKey)
-      } else {
-        next.add(nodeKey)
+      // Purgar claves que no existen en el árbol actual
+      const pruned = new Set<string>()
+      for (const k of prev) {
+        if (allValidKeys.has(k)) {
+          pruned.add(k)
+        }
       }
-      return next
+
+      // Si cambiaron los periodos mostrados o no hay nada abierto y el usuario no colapsó todo deliberadamente:
+      if ((periodIdsChanged || pruned.size === 0) && !userExplicitlyCollapsedAllRef.current) {
+        const initialSet = new Set<string>()
+        const firstPeriodo = tree[0]
+        initialSet.add(`periodo-${firstPeriodo.periodoId}`)
+
+        const firstSede = Array.from(firstPeriodo.sedes.values())[0]
+        if (firstSede) {
+          initialSet.add(`sede-${firstPeriodo.periodoId}-${firstSede.sedeId}`)
+          const firstMod = Array.from(firstSede.modalidades.values())[0]
+          if (firstMod) {
+            initialSet.add(
+              `mod-${firstPeriodo.periodoId}-${firstSede.sedeId}-${firstMod.modalidadId}`
+            )
+          }
+        }
+        return initialSet
+      }
+
+      return pruned
+    })
+  }, [tree, allValidKeys])
+
+  // Alternar un único nodo manualmente
+  const toggleNode = (nodeKey: string) => {
+    startTransition(() => {
+      setExpandedNodes((prev) => {
+        const next = new Set(prev)
+        if (next.has(nodeKey)) {
+          next.delete(nodeKey)
+        } else {
+          next.add(nodeKey)
+        }
+        return next
+      })
     })
   }
 
@@ -436,53 +517,73 @@ export function HierarchyTreeTable({
     []
   )
 
-  // Toggle all keys in a branch (Alt+Click or Rama button)
+  // Alternar todas las claves de una rama (Alt+Clic o botones "Rama ...")
   const toggleBranchKeys = (keys: string[], forceExpand?: boolean) => {
-    setExpandedNodes((prev) => {
-      const next = new Set(prev)
-      const shouldExpand =
-        forceExpand !== undefined ? forceExpand : !keys.every((k) => prev.has(k))
-      if (shouldExpand) {
-        for (const k of keys) next.add(k)
-      } else {
-        for (const k of keys) next.delete(k)
-      }
-      return next
+    if (keys.length === 0) return
+    const rootKey = keys[0]
+    startTransition(() => {
+      setExpandedNodes((prev) => {
+        const next = new Set(prev)
+        const isRootOpen = prev.has(rootKey)
+        // Si la raíz de la rama ya está abierta, el usuario desea PLEGAR; si está cerrada, DESPLEGAR
+        const shouldExpand = forceExpand !== undefined ? forceExpand : !isRootOpen
+
+        if (shouldExpand) {
+          for (const k of keys) next.add(k)
+        } else {
+          // Plegar la raíz y todos los nodos de la rama
+          for (const k of keys) next.delete(k)
+
+          // Purgar también cualquier nodo descendiente o desglose de matriculados huérfano
+          const rawId = rootKey.replace(/^[a-z]+-/, '')
+          const token = `-${rawId}-`
+          const exactSuffix = `-${rawId}`
+          for (const k of prev) {
+            if (k.includes(token) || k.endsWith(exactSuffix)) {
+              next.delete(k)
+            }
+          }
+        }
+        return next
+      })
     })
   }
 
-  // Batch expand to specific level
+  // Desplegar por lote hasta un nivel específico
   const handleExpandToLevel = (level: 'sedes' | 'carreras' | 'cursos' | 'all') => {
-    const allKeys = new Set<string>()
-    for (const p of tree) {
-      allKeys.add(`periodo-${p.periodoId}`)
-      for (const s of p.sedes.values()) {
-        allKeys.add(`sede-${p.periodoId}-${s.sedeId}`)
-        if (level === 'sedes') continue
+    userExplicitlyCollapsedAllRef.current = false
+    startTransition(() => {
+      const allKeys = new Set<string>()
+      for (const p of tree) {
+        allKeys.add(`periodo-${p.periodoId}`)
+        for (const s of p.sedes.values()) {
+          allKeys.add(`sede-${p.periodoId}-${s.sedeId}`)
+          if (level === 'sedes') continue
 
-        for (const m of s.modalidades.values()) {
-          allKeys.add(`mod-${p.periodoId}-${s.sedeId}-${m.modalidadId}`)
-          for (const f of m.facultades.values()) {
-            allKeys.add(`fac-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}`)
-            for (const c of f.carreras.values()) {
-              allKeys.add(
-                `carr-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}`
-              )
-              if (level === 'carreras') continue
-
-              for (const pl of c.planes.values()) {
+          for (const m of s.modalidades.values()) {
+            allKeys.add(`mod-${p.periodoId}-${s.sedeId}-${m.modalidadId}`)
+            for (const f of m.facultades.values()) {
+              allKeys.add(`fac-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}`)
+              for (const c of f.carreras.values()) {
                 allKeys.add(
-                  `plan-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}`
+                  `carr-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}`
                 )
-                for (const cur of pl.cursos.values()) {
+                if (level === 'carreras') continue
+
+                for (const pl of c.planes.values()) {
                   allKeys.add(
-                    `curso-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}`
+                    `plan-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}`
                   )
-                  if (level === 'all') {
-                    for (const sec of cur.secciones) {
-                      allKeys.add(
-                        `sec-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}-${sec.id}`
-                      )
+                  for (const cur of pl.cursos.values()) {
+                    allKeys.add(
+                      `curso-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}`
+                    )
+                    if (level === 'all') {
+                      for (const sec of cur.secciones) {
+                        allKeys.add(
+                          `sec-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}-${sec.id}`
+                        )
+                      }
                     }
                   }
                 }
@@ -491,13 +592,31 @@ export function HierarchyTreeTable({
           }
         }
       }
-    }
-    setExpandedNodes(allKeys)
+      setExpandedNodes(allKeys)
+    })
   }
 
-  // Batch collapse everything to 0 open nodes cleanly
+  // Plegar absolutamente todo a 0 nodos abiertos
   const handleCollapseAll = () => {
-    setExpandedNodes(new Set())
+    userExplicitlyCollapsedAllRef.current = true
+    startTransition(() => {
+      setExpandedNodes(new Set())
+    })
+  }
+
+  // Plegar únicamente los matriculados (docentes y alumnos) de todas las secciones abiertas
+  const handleCollapseMatriculados = () => {
+    startTransition(() => {
+      setExpandedNodes((prev) => {
+        const next = new Set<string>()
+        for (const k of prev) {
+          if (!k.startsWith('sec-')) {
+            next.add(k)
+          }
+        }
+        return next
+      })
+    })
   }
 
   // Helper to evaluate checkbox state for a group of section IDs
@@ -537,10 +656,16 @@ export function HierarchyTreeTable({
             Periodo &gt; Cuenta (Sede) &gt; Subcuentas &gt; Curso &gt; Sección &gt; Matriculados [(D) Docentes / (E) Estudiantes]
           </span>
           <Badge variant="outline" className="text-[10px] font-mono ml-1 bg-background">
-            {expandedNodes.size === 0
+            {visibleExpandedCount === 0
               ? 'Todo plegado'
-              : `${expandedNodes.size} ramas desplegadas`}
+              : `${visibleExpandedCount} ramas desplegadas`}
           </Badge>
+          {isPendingTransition && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-primary animate-pulse ml-1">
+              <Loader2 className="size-3 animate-spin" />
+              <span>Actualizando vista...</span>
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -548,12 +673,26 @@ export function HierarchyTreeTable({
             variant="outline"
             size="xs"
             onClick={handleCollapseAll}
+            disabled={visibleExpandedCount === 0}
             className="text-xs h-7 gap-1"
             title="Plegar todos los niveles del árbol jerárquico"
           >
             <FoldVertical className="size-3 text-muted-foreground" />
             <span>Plegar Todo</span>
           </Button>
+
+          {expandedMatriculadosCount > 0 && (
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={handleCollapseMatriculados}
+              className="text-xs h-7 gap-1 border-primary/30 text-primary hover:bg-primary/5"
+              title="Plegar el desglose de alumnos y docentes matriculados en todas las secciones abiertas"
+            >
+              <Users className="size-3" />
+              <span>Plegar Matriculados ({expandedMatriculadosCount})</span>
+            </Button>
+          )}
 
           <Button
             variant="outline"
@@ -1170,17 +1309,19 @@ export function HierarchyTreeTable({
                                                                                         const allSecExpanded = secKeys.every((k) =>
                                                                                           expandedNodes.has(k)
                                                                                         )
-                                                                                        setExpandedNodes((prev) => {
-                                                                                          const next = new Set(prev)
-                                                                                          next.add(curKey)
-                                                                                          for (const k of secKeys) {
-                                                                                            if (allSecExpanded) {
-                                                                                              next.delete(k)
-                                                                                            } else {
-                                                                                              next.add(k)
+                                                                                        startTransition(() => {
+                                                                                          setExpandedNodes((prev) => {
+                                                                                            const next = new Set(prev)
+                                                                                            next.add(curKey)
+                                                                                            for (const k of secKeys) {
+                                                                                              if (allSecExpanded) {
+                                                                                                next.delete(k)
+                                                                                              } else {
+                                                                                                next.add(k)
+                                                                                              }
                                                                                             }
-                                                                                          }
-                                                                                          return next
+                                                                                            return next
+                                                                                          })
                                                                                         })
                                                                                       }}
                                                                                       className="h-5 text-[10px] gap-1 px-1.5 text-muted-foreground hover:text-foreground"
@@ -1449,33 +1590,46 @@ export function HierarchyTreeTable({
                                                                                                         </div>
 
                                                                                                         {sec.estudiantes.length > 0 ? (
-                                                                                                          <div className="max-h-60 overflow-y-auto divide-y divide-border/20 border border-border/50 rounded bg-background/80 p-1">
-                                                                                                            {sec.estudiantes.map((est, eIdx) => (
-                                                                                                              <div
-                                                                                                                key={`est-${sec.id}-${est.id}-${eIdx}`}
-                                                                                                                className="flex items-center gap-2 py-1 px-2 hover:bg-muted/50 rounded text-xs transition-colors"
-                                                                                                              >
-                                                                                                                <span className="text-[10px] text-muted-foreground w-6 text-right font-mono">
-                                                                                                                  {eIdx + 1}.
-                                                                                                                </span>
-                                                                                                                <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 font-mono text-muted-foreground">
-                                                                                                                  (E) [ESTUDIANTE]
-                                                                                                                </Badge>
-                                                                                                                <span className="font-semibold text-primary font-mono text-[11px]">
-                                                                                                                  {est.codigo}
-                                                                                                                </span>
-                                                                                                                <span className="text-muted-foreground">-</span>
-                                                                                                                <span className="text-foreground flex-1 truncate font-sans">
-                                                                                                                  {est.fullName}
-                                                                                                                </span>
-                                                                                                                {est.email && (
-                                                                                                                  <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline truncate max-w-[200px]">
-                                                                                                                    &lt;{est.email}&gt;
+                                                                                                           <div className="max-h-60 overflow-y-auto divide-y divide-border/20 border border-border/50 rounded bg-background/80 p-1">
+                                                                                                              {sec.estudiantes.slice(0, 30).map((est, eIdx) => (
+                                                                                                                <div
+                                                                                                                  key={`est-${sec.id}-${est.id}-${eIdx}`}
+                                                                                                                  className="flex items-center gap-2 py-1 px-2 hover:bg-muted/50 rounded text-xs transition-colors"
+                                                                                                                >
+                                                                                                                  <span className="text-[10px] text-muted-foreground w-6 text-right font-mono">
+                                                                                                                    {eIdx + 1}.
                                                                                                                   </span>
-                                                                                                                )}
-                                                                                                              </div>
-                                                                                                            ))}
-                                                                                                          </div>
+                                                                                                                  <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 font-mono text-muted-foreground">
+                                                                                                                    (E) [ESTUDIANTE]
+                                                                                                                  </Badge>
+                                                                                                                  <span className="font-semibold text-primary font-mono text-[11px]">
+                                                                                                                    {est.codigo}
+                                                                                                                  </span>
+                                                                                                                  <span className="text-muted-foreground">-</span>
+                                                                                                                  <span className="text-foreground flex-1 truncate font-sans">
+                                                                                                                    {est.fullName}
+                                                                                                                  </span>
+                                                                                                                  {est.email && (
+                                                                                                                    <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline truncate max-w-[200px]">
+                                                                                                                      &lt;{est.email}&gt;
+                                                                                                                    </span>
+                                                                                                                  )}
+                                                                                                                </div>
+                                                                                                              ))}
+                                                                                                              {sec.estudiantes.length > 30 && (
+                                                                                                                <div className="p-1.5 text-center bg-muted/20 border-t border-border/30">
+                                                                                                                  <Button
+                                                                                                                    variant="ghost"
+                                                                                                                    size="xs"
+                                                                                                                    onClick={() => onInspectStudents(sec.item)}
+                                                                                                                    className="text-[11px] h-6 text-primary gap-1"
+                                                                                                                  >
+                                                                                                                    <span>Ver los {sec.estudiantes.length - 30} alumnos restantes en el modal</span>
+                                                                                                                    <ExternalLink className="size-3" />
+                                                                                                                  </Button>
+                                                                                                                </div>
+                                                                                                              )}
+                                                                                                            </div>
                                                                                                         ) : (
                                                                                                           <div className="text-[11px] italic text-muted-foreground pl-2 py-0.5 font-sans">
                                                                                                             (Sin alumnos matriculados en esta sección)
