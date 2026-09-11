@@ -41,7 +41,11 @@ import {
   getTableSampleFn,
 } from "#/server/functions/cases"
 
-export function CaseManager() {
+interface CaseManagerProps {
+  onExploreHierarchy?: (caseId: string) => void
+}
+
+export function CaseManager({ onExploreHierarchy }: CaseManagerProps) {
   const [cases, setCases] = React.useState<ImportCase[]>([])
   const [selectedCaseId, setSelectedCaseId] = React.useState<string | null>(null)
   const [caseDetail, setCaseDetail] = React.useState<{
@@ -186,11 +190,22 @@ export function CaseManager() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground hidden sm:inline">
               Extraído:{" "}
               <strong>{caseItem.createdAt ? new Date(caseItem.createdAt).toLocaleString("es-ES") : "N/A"}</strong>
             </span>
+            {onExploreHierarchy && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => onExploreHierarchy(caseItem.id)}
+                className="gap-1.5 text-xs h-8"
+              >
+                <Layers className="h-3.5 w-3.5" />
+                <span>Explorar Jerarquía</span>
+              </Button>
+            )}
           </div>
         </div>
 
@@ -495,6 +510,18 @@ export function CaseManager() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                      {onExploreHierarchy && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onExploreHierarchy(c.id)}
+                          className="text-xs h-8 gap-1.5"
+                          title="Ver jerarquía académica de este caso"
+                        >
+                          <Layers className="h-3.5 w-3.5" />
+                          <span>Ver Jerarquía</span>
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"

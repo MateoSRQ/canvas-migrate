@@ -66,15 +66,31 @@ import type { ImportCase } from '#/db/schema'
 
 interface HierarchySelectorProps {
   onNavigateToCases?: () => void
+  selectedCaseId?: string
+  onSelectCaseId?: (caseId: string) => void
 }
 
-export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps) {
+export function HierarchySelector({
+  onNavigateToCases,
+  selectedCaseId: externalCaseId,
+  onSelectCaseId,
+}: HierarchySelectorProps) {
   // Modo de vista: Jerárquica Anidada (Árbol) vs Tabla Detallada (TanStack Table)
   const [viewMode, setViewMode] = React.useState<'tree' | 'table'>('tree')
 
   // Estado de casos
   const [cases, setCases] = React.useState<ImportCase[]>([])
-  const [selectedCaseId, setSelectedCaseId] = React.useState<string>('')
+  const [internalCaseId, setInternalCaseId] = React.useState<string>('')
+  const selectedCaseId = externalCaseId || internalCaseId
+
+  const handleSelectCaseId = React.useCallback(
+    (newId: string) => {
+      setInternalCaseId(newId)
+      onSelectCaseId?.(newId)
+    },
+    [onSelectCaseId]
+  )
+
   const [isLoadingCases, setIsLoadingCases] = React.useState(true)
 
   // Estado de datos jerárquicos
@@ -114,14 +130,14 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
       setCases(data)
       if (!selectedCaseId && data.length > 0) {
         const firstCompleted = data.find((c) => c.status === 'completed') || data[0]
-        setSelectedCaseId(firstCompleted.id)
+        handleSelectCaseId(firstCompleted.id)
       }
     } catch (err) {
       console.error('Error al cargar casos:', err)
     } finally {
       setIsLoadingCases(false)
     }
-  }, [selectedCaseId])
+  }, [selectedCaseId, handleSelectCaseId])
 
   React.useEffect(() => {
     loadCases()
@@ -586,7 +602,7 @@ export function HierarchySelector({ onNavigateToCases }: HierarchySelectorProps)
             </span>
             <select
               value={selectedCaseId}
-              onChange={(e) => setSelectedCaseId(e.target.value)}
+              onChange={(e) => handleSelectCaseId(e.target.value)}
               disabled={isLoadingCases || cases.length === 0}
               className="h-9 rounded-md border border-input bg-background px-3 py-1 text-xs font-medium text-foreground shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
             >

@@ -199,6 +199,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-11T11:28:00` | `9d2eea2` | Antigravity | UI/RPC | TanStack Start server functions and full-width Case Manager UI with sample inspector | `src/components/cases/case-manager.tsx`, `src/components/ui/badge.tsx`, `src/components/ui/dialog.tsx`, `src/components/ui/table.tsx`, `src/server/functions/cases.ts`, `src/routes/index.tsx` |
 | `2026-09-11T12:00:00` | `b0e5e29` | Antigravity | Feature/UI | Hierarchical data selection, 6-level cascading filters, TanStack Table v8, and student inspector | `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/ui/checkbox.tsx`, `src/components/ui/input.tsx`, `src/server/services/hierarchy-service.ts`, `src/server/functions/hierarchy.ts`, `src/routes/index.tsx`, `src/components/layout/app-layout.tsx` |
 | `2026-09-11T12:10:00` | `a881abf` | Antigravity | Feature/UI | Nested account/subaccount tree table view, dual-view mode switcher, and complete Spanish UI translation | `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/cases/case-manager.tsx`, `src/routes/index.tsx`, `src/components/layout/app-layout.tsx` |
+| `2026-09-11T12:20:00` | - | Antigravity | Feature/UX | Cross-case selection & exploration linking Case Manager table/detail directly with Hierarchy Selector | `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/cases/case-manager.tsx`, `src/routes/index.tsx` |
 
 ---
 
@@ -239,10 +240,10 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - Status Indicators: Minimalist `Badge` components in Spanish (`Completado`, `En Progreso`, `Fallido`).
   - Table Catalog: Lists all 20 extracted tables with row counts and duration, offering a "Ver Registros" button.
   - Raw Record Inspector: Modal `Dialog` displaying top 50 rows in a scrollable, monospace `Table` with auto-derived column headers from JSON keys.
-  - Action Controls: "Nuevo Caso de Importación" modal trigger; "Eliminar Caso" button with cascade purge.
+  - Action Controls: "Nuevo Caso de Importación" modal trigger; "Ver Jerarquía" button on each table row; "Explorar Jerarquía" in inspector header; "Eliminar Caso" button with cascade purge.
 - **Hierarchical Selector Workspace (`src/components/hierarchy/hierarchy-selector.tsx`)**:
   - **Dual-View Switcher**: Toggle smoothly between **Vista Jerárquica Anidada (Árbol)** and **Vista Tabla Detallada (TanStack Table)**.
-  - **Case Switcher Bar**: Clean top selector showing case name, total database rows, and status with immediate re-evaluation.
+  - **Case Switcher Bar**: Clean top selector showing case name, total database rows, and status with immediate re-evaluation, synchronized bidirectionally with Case Manager.
   - **Cascading Filter Grid**: 6-level hierarchical selectors (`Periodo` -> `Sede` -> `Modalidad` -> `Facultad` -> `Carrera` -> `Plan`), with dynamic parent-child option binding.
   - **Business Filters**: Toggle for "Excluir secciones «NO HABILITADO»" and free-text search across codes, names, sections, careers, and teachers/DNI.
   - **Selection Control Bar**: Sticky/inline bar displaying selected count, filtered count, total students represented, "Seleccionar Filtrados", and "Limpiar".

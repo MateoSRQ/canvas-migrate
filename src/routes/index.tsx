@@ -8,6 +8,7 @@ export const Route = createFileRoute('/')({ component: Home })
 
 function Home() {
   const [activeTab, setActiveTab] = React.useState<'hierarchy' | 'cases'>('hierarchy')
+  const [selectedCaseId, setSelectedCaseId] = React.useState<string>('')
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -24,12 +25,30 @@ function Home() {
     }
   }, [])
 
+  const handleExploreHierarchy = (caseId: string) => {
+    setSelectedCaseId(caseId)
+    setActiveTab('hierarchy')
+    if (typeof window !== 'undefined') {
+      window.location.hash = 'hierarchy'
+    }
+  }
+
+  const handleNavigateToCases = () => {
+    setActiveTab('cases')
+    if (typeof window !== 'undefined') {
+      window.location.hash = 'cases'
+    }
+  }
+
   return (
     <div className="w-full flex-1 p-6 md:p-8 space-y-6">
       {/* Top Workspace Tab Switcher */}
       <div className="flex items-center gap-1 border-b border-border pb-3">
         <button
-          onClick={() => setActiveTab('hierarchy')}
+          onClick={() => {
+            setActiveTab('hierarchy')
+            if (typeof window !== 'undefined') window.location.hash = 'hierarchy'
+          }}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
             activeTab === 'hierarchy'
               ? 'bg-primary text-primary-foreground shadow-xs'
@@ -41,7 +60,7 @@ function Home() {
         </button>
 
         <button
-          onClick={() => setActiveTab('cases')}
+          onClick={handleNavigateToCases}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
             activeTab === 'cases'
               ? 'bg-primary text-primary-foreground shadow-xs'
@@ -55,9 +74,13 @@ function Home() {
 
       {/* Main Workspace Panels */}
       {activeTab === 'hierarchy' ? (
-        <HierarchySelector onNavigateToCases={() => setActiveTab('cases')} />
+        <HierarchySelector
+          onNavigateToCases={handleNavigateToCases}
+          selectedCaseId={selectedCaseId}
+          onSelectCaseId={setSelectedCaseId}
+        />
       ) : (
-        <CaseManager />
+        <CaseManager onExploreHierarchy={handleExploreHierarchy} />
       )}
     </div>
   )
