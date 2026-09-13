@@ -43,6 +43,8 @@ interface CanvasExportDialogProps {
   onCreateRootAccountChange: (value: boolean) => void
   rootAccountName: string
   onRootAccountNameChange: (value: string) => void
+  isolateAccountPrefix: boolean
+  onIsolateAccountPrefixChange: (value: boolean) => void
   onCopyPath: (targetPath: string) => void
   onResetExport: () => void
   onExecuteExport: () => void
@@ -64,6 +66,8 @@ export function CanvasExportDialog({
   onCreateRootAccountChange,
   rootAccountName,
   onRootAccountNameChange,
+  isolateAccountPrefix,
+  onIsolateAccountPrefixChange,
   onCopyPath,
   onResetExport,
   onExecuteExport,
@@ -110,6 +114,12 @@ export function CanvasExportDialog({
                   <code className="font-semibold font-mono">canvas_migration.zip</code> listo para importar en
                   Canvas.
                 </p>
+                {exportResult.isolateAccountPrefix && (
+                  <div className="mt-2 flex items-center gap-2 text-[11px] font-mono text-emerald-950 dark:text-emerald-100 bg-emerald-600/15 border border-emerald-600/25 px-2.5 py-1 rounded-md">
+                    <span className="font-bold">Sandbox Aislado:</span>
+                    <span>Prefijo aplicado a subcuentas: <strong>{exportResult.accountPrefix}</strong></span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -411,6 +421,33 @@ export function CanvasExportDialog({
                       />
                     </div>
                   )}
+
+                  {/* Opción de Aislamiento Sandbox (Recomendación 1) */}
+                  <div className="pt-2 border-t border-border/40 flex items-start gap-2.5">
+                    <Checkbox
+                      id="isolate-account-prefix"
+                      checked={isolateAccountPrefix}
+                      onCheckedChange={(checked) => onIsolateAccountPrefixChange(Boolean(checked))}
+                      disabled={isExporting}
+                      className="mt-0.5"
+                    />
+                    <div className="space-y-1">
+                      <label
+                        htmlFor="isolate-account-prefix"
+                        className="text-xs font-medium text-foreground cursor-pointer select-none flex items-center gap-1.5 flex-wrap"
+                      >
+                        <span>Aislar estructura de cuentas para prueba (Prefijar con <code className="font-semibold text-foreground">{rootAccountId.trim()}_</code>)</span>
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-emerald-500/40 text-emerald-600 bg-emerald-500/10">
+                          Recomendado en Sandbox
+                        </Badge>
+                      </label>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        {isolateAccountPrefix
+                          ? `Las subcuentas se exportarán con identificadores únicos aislados (ej: ${rootAccountId.trim()}_S-001, ${rootAccountId.trim()}_M-..., etc.). Esto garantiza que Canvas LMS cree una estructura limpia e independiente sin alterar la SEDE LIMA real ni arrastrar carreras o cursos de pregrado preexistentes.`
+                          : 'Se utilizarán los SIS IDs globales estándar (ej: S-001). Tenga en cuenta que si la cuenta ya existe en Canvas, Canvas la reubicará bajo esta subcuenta junto con todas sus ramas y cursos preexistentes.'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

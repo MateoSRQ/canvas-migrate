@@ -1048,6 +1048,14 @@ export function CaseComparisonView({
                 <span>
                   <strong>Secciones:</strong> {migrationData?.totalSections || 0}
                 </span>
+                {selectedMigration?.sandboxIsolated && (
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] px-1.5 py-0 h-4 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-mono"
+                  >
+                    Aislado ({selectedMigration.sandboxPrefix || 'Sandbox'})
+                  </Badge>
+                )}
               </div>
 
               <div className="flex items-center gap-1">

@@ -178,6 +178,7 @@ export function HierarchySelector({
   const [exportRootAccountId, setExportRootAccountId] = React.useState('')
   const [createRootAccount, setCreateRootAccount] = React.useState(true)
   const [exportRootAccountName, setExportRootAccountName] = React.useState('')
+  const [isolateAccountPrefix, setIsolateAccountPrefix] = React.useState(true)
   const [exportResult, setExportResult] = React.useState<ExportCanvasResult | null>(null)
   const [exportError, setExportError] = React.useState<string | null>(null)
   const [copiedPath, setCopiedPath] = React.useState(false)
@@ -749,6 +750,7 @@ export function HierarchySelector({
           rootAccountId: exportRootAccountId.trim() || undefined,
           createRootAccount: Boolean(createRootAccount && exportRootAccountId.trim()),
           rootAccountName: exportRootAccountName.trim() || undefined,
+          isolateAccountPrefix: Boolean(isolateAccountPrefix && exportRootAccountId.trim()),
         },
       })
       setExportResult(res)
@@ -1583,6 +1585,8 @@ export function HierarchySelector({
         onCreateRootAccountChange={setCreateRootAccount}
         rootAccountName={exportRootAccountName}
         onRootAccountNameChange={setExportRootAccountName}
+        isolateAccountPrefix={isolateAccountPrefix}
+        onIsolateAccountPrefixChange={setIsolateAccountPrefix}
         onCopyPath={handleCopyPath}
         onResetExport={() => {
           setExportResult(null)

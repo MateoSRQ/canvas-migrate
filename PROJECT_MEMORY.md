@@ -106,6 +106,11 @@
     - [x] Panel derecho con árbol jerárquico del snapshot de Canvas (Cuentas -> Subcuentas -> Cursos -> Secciones -> Docentes D y Alumnos E bajo demanda).
     - [x] Barra superior con búsqueda sincronizada simultánea en ambos árboles y buscadores locales independientes.
     - [x] Controles de plegado y desplegado masivo por panel (Cursos, Plegar Todo).
+  - [x] **Modo de Aislamiento para Pruebas (Sandbox Prefix) (Completado)**
+    - [x] Prefijado automático de subcuentas con la subcuenta raíz (`${rootAccountId}_`) en `accounts.csv` y vinculación correspondiente en `courses.csv`.
+    - [x] Conmutador interactivo "Aislar estructura de cuentas para prueba (Prefijar con {rootAccountId}_)" en `CanvasExportDialog` con advertencia explicativa y badge "Recomendado en Sandbox".
+    - [x] Prevención efectiva contra la reubicación accidental de la cuenta global `SEDE LIMA (S-001)` y arrastre de facultades o cursos de pregrado no contemplados en la migración.
+    - [x] Detección y visualización del estado de aislamiento sandbox en el resumen técnico `RESUMEN.md`, encabezado `hierarchy.txt` y badge distintivo en el selector de paquetes de `CaseComparisonView`.
   - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
   - [ ] Job status polling, import log inspection, and error auditing.
 
@@ -253,6 +258,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - Exclusion filter: Sections with `"NO HABILITADO"` omitted when flag is false.
   - Course Placement (`courses.csv`): Associated directly with the Curricular Plan subaccount (`account_id: <cod_plan>`).
   - Root Account Association & SIS Provisioning: Top-level Sedes point to `parent_account_id: cleanRootAccountId` (o `""` para colgar directo de la raíz institucional de Canvas). Cuando `createRootAccount` está activo, el exportador genera en la primera fila de `accounts.csv` la definición de dicha subcuenta raíz personalizada con `parent_account_id: ""` y `status: "active"`. De este modo, Canvas LMS crea la subcuenta en el mismo proceso de importación SIS y cuelga de inmediato las Sedes sin emitir alertas de *"Parent account didn't exist"*. Se incluye además nombre visible opcional (`rootAccountName`).
+  - Modo Aislamiento para Pruebas (Sandbox Prefix): Al activar `isolateAccountPrefix` con una subcuenta raíz (ej. `TEST-5`), todas las subcuentas generadas (Sede, Modalidad, Facultad, Carrera, Plan) se prefijan con `${rootAccountId}_` (ej: `TEST-5_S-001`, `TEST-5_M-2264`, `TEST-5_P004084`) y se vinculan coherentemente en `courses.csv`. Esto garantiza un árbol 100% aislado en Canvas LMS, impidiendo que Canvas reparente o mueva la `SEDE LIMA` institucional real (`S-001`) ni arrastre subcuentas o cursos de otras facultades no seleccionadas.
 
 ---
 
@@ -296,6 +302,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-13T12:25:00` | `a3a2fff` | Antigravity | Feature/Comparison | Pantalla de comparativa lado a lado (BD vs Canvas LMS API), selectores de versión de cada caso, KPI diff y limpieza de modal de exportación | `src/components/comparison/case-comparison-view.tsx`, `src/server/services/case-comparison-service.ts`, `src/server/functions/cases.ts`, `src/routes/index.tsx`, `src/components/layout/app-layout.tsx`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T12:34:00` | `c57f383` | Antigravity | Refactor/Comparison | Rediseño de Comparativa a inspección manual lado a lado de casos importados (SQL vs Canvas) sin motor de discrepancias | `src/components/comparison/case-comparison-view.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T12:44:00` | `5d24680` | Antigravity | Feature/MigrationComparison | Comparativa lado a lado basada en paquetes de migración exportados (migraciones/) vs Snapshots Canvas LMS con selección de migración | `src/server/services/migration-service.ts`, `src/server/functions/migrations.ts`, `src/components/comparison/case-comparison-view.tsx`, `src/routes/index.tsx`, `PROJECT_MEMORY.md` |
+| `2026-09-13T13:25:00` | - | Antigravity | Feature/SandboxIsolation | Modo de aislamiento de pruebas (Sandbox Prefix) en exportador Canvas LMS y visualizador de comparativa | `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `src/server/services/migration-service.ts`, `src/components/comparison/case-comparison-view.tsx`, `PROJECT_MEMORY.md` |
 
 ---
 
@@ -345,6 +352,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Barra de Selección Enriquecida**: Controles explícitos "Seleccionar Todos / Deseleccionar Todos ({N})", "Invertir Selección" y "Limpiar".
 - **Modal de Exportación Simplificado (`CanvasExportDialog`)**:
   - Modal enfocado exclusivamente en la configuración de alcance (Secciones, Cursos Únicos, Matrículas Totales y Periodo Académico) y parámetros de subcuenta raíz (`parent_account_id`).
+  - **Modo Aislamiento para Pruebas (Sandbox Prefix)**: Casilla interactiva `Aislar estructura de cuentas para prueba (Prefijar con {rootAccountId}_)` con badge `Recomendado en Sandbox`. Genera identificadores aislados para pruebas, impidiendo arrastrar ramas preexistentes de Canvas. Banner de éxito con badge `Sandbox Aislado` y prefijo aplicado.
   - Eliminada la sección redundante inferior de archivos y la auditoría post-exportación para mantener el modal ligero y rápido, canalizando toda la inspección comparativa a la pantalla dedicada.
 - **Pantalla y Workspace de Comparativa de Migraciones vs Canvas LMS (`CaseComparisonView`)**:
   - **Sin Motor Automatizado de Discrepancias**:

@@ -16,6 +16,7 @@ export interface ExportCanvasInput {
   rootAccountId?: string // Subcuenta inicial o raíz en Canvas (opcional)
   createRootAccount?: boolean // Si se debe crear la subcuenta raíz como nueva en accounts.csv
   rootAccountName?: string // Nombre descriptivo para la subcuenta raíz (opcional)
+  isolateAccountPrefix?: boolean // Si se deben prefijar los IDs de cuentas con la subcuenta raíz para aislar pruebas en sandbox
 }
 
 export interface ExportCanvasResult {
@@ -26,6 +27,8 @@ export interface ExportCanvasResult {
   timestamp: string
   rootAccountId?: string
   rootAccountCreated?: boolean
+  isolateAccountPrefix?: boolean
+  accountPrefix?: string
   files: { name: string; sizeBytes: number; rowsCount: number }[]
   stats: {
     accountsCount: number
@@ -147,6 +150,8 @@ export async function exportSelectedToCanvasCsv(
   const cleanRootAccountId = input.rootAccountId ? input.rootAccountId.trim() : ''
   const shouldCreateRootAccount = Boolean(input.createRootAccount && cleanRootAccountId)
   const rootAccountName = input.rootAccountName?.trim() || cleanRootAccountId
+  const shouldIsolate = Boolean(input.isolateAccountPrefix && cleanRootAccountId)
+  const accPrefix = shouldIsolate ? `${cleanRootAccountId}_` : ''
 
   const accountsMap = new Map<string, AccountRow>()
   const rootOrder: AccountRow[] = []
@@ -169,7 +174,8 @@ export async function exportSelectedToCanvasCsv(
   }
 
   for (const it of selectedItems) {
-    const sedeAccId = it.sedeCodigo || sedeCodeMap.get(it.sedeId) || `S-${it.sedeId}`
+    const rawSedeAccId = it.sedeCodigo || sedeCodeMap.get(it.sedeId) || `S-${it.sedeId}`
+    const sedeAccId = accPrefix ? `${accPrefix}${rawSedeAccId}` : rawSedeAccId
     if (!accountsMap.has(sedeAccId)) {
       const row: AccountRow = {
         account_id: sedeAccId,
@@ -181,7 +187,8 @@ export async function exportSelectedToCanvasCsv(
       sedesOrder.push(row)
     }
 
-    const modAccId = `M-${it.modalidadId}`
+    const rawModAccId = `M-${it.modalidadId}`
+    const modAccId = accPrefix ? `${accPrefix}${rawModAccId}` : rawModAccId
     if (!accountsMap.has(modAccId)) {
       const row: AccountRow = {
         account_id: modAccId,
@@ -194,7 +201,8 @@ export async function exportSelectedToCanvasCsv(
     }
 
     const facCode = it.facultadCodigo || facultadCodeMap.get(it.facultadId) || `F-${it.facultadId}`
-    const facAccId = facCode.startsWith('F-') ? facCode : `F-${facCode}`
+    const rawFacAccId = facCode.startsWith('F-') ? facCode : `F-${facCode}`
+    const facAccId = accPrefix ? `${accPrefix}${rawFacAccId}` : rawFacAccId
     if (!accountsMap.has(facAccId)) {
       const row: AccountRow = {
         account_id: facAccId,
@@ -207,7 +215,8 @@ export async function exportSelectedToCanvasCsv(
     }
 
     const carrCode = it.carreraCodigo || carreraCodeMap.get(it.carreraId) || `C-${it.carreraId}`
-    const carrAccId = carrCode.startsWith('C-') ? carrCode : `C-${carrCode}`
+    const rawCarrAccId = carrCode.startsWith('C-') ? carrCode : `C-${carrCode}`
+    const carrAccId = accPrefix ? `${accPrefix}${rawCarrAccId}` : rawCarrAccId
     if (!accountsMap.has(carrAccId)) {
       const row: AccountRow = {
         account_id: carrAccId,
@@ -219,7 +228,8 @@ export async function exportSelectedToCanvasCsv(
       carrerasOrder.push(row)
     }
 
-    const planAccId = it.planCodigo ? it.planCodigo.trim() : `P-${it.planId}`
+    const rawPlanAccId = it.planCodigo ? it.planCodigo.trim() : `P-${it.planId}`
+    const planAccId = accPrefix ? `${accPrefix}${rawPlanAccId}` : rawPlanAccId
     if (!accountsMap.has(planAccId)) {
       const row: AccountRow = {
         account_id: planAccId,
@@ -295,7 +305,8 @@ export async function exportSelectedToCanvasCsv(
   const coursesMap = new Map<string, CourseRow>()
   for (const it of selectedItems) {
     const courseId = it.cursoCodigo.trim()
-    const planAccId = it.planCodigo ? it.planCodigo.trim() : `P-${it.planId}`
+    const rawPlanAccId = it.planCodigo ? it.planCodigo.trim() : `P-${it.planId}`
+    const planAccId = accPrefix ? `${accPrefix}${rawPlanAccId}` : rawPlanAccId
     const rawCurso = cursoRawMap.get(it.cursoId)
     const shortName = rawCurso?.abreviatura
       ? String(rawCurso.abreviatura).trim()
@@ -601,6 +612,7 @@ export async function exportSelectedToCanvasCsv(
     ...(cleanRootAccountId
       ? [
           `# Subcuenta Inicial Canvas (parent_account_id): ${cleanRootAccountId} (${shouldCreateRootAccount ? `Creada como "${rootAccountName}"` : 'Existente en Canvas'})`,
+          ...(shouldIsolate ? [`# Modo Aislamiento Sandbox: ACTIVO (Prefijo de subcuentas: "${accPrefix}")`] : []),
         ]
       : []),
     `# Fecha de exportación: ${new Date().toLocaleString('es-ES')}`,
@@ -698,6 +710,7 @@ export async function exportSelectedToCanvasCsv(
 
 **Periodo Principal:** ${primaryPeriodName}  
 **Subcuenta Inicial (parent_account_id de Sedes):** ${cleanRootAccountId ? `\`${cleanRootAccountId}\`${shouldCreateRootAccount ? ` (Creada en la migración como "${rootAccountName}")` : ' (Subcuenta existente en Canvas)'}` : '*Ninguna (Raíz institucional de Canvas)*'}  
+**Modo Aislamiento Sandbox:** ${shouldIsolate ? `Activo (Prefijo de subcuentas: \`${accPrefix}\`)` : 'Desactivado (SIS IDs globales estándar)'}  
 **Fecha de Exportación:** ${new Date().toLocaleString('es-ES')}  
 **Directorio:** \`${targetDir}\`  
 **Caso de Origen:** \`${caseId}\`
@@ -804,6 +817,8 @@ export async function exportSelectedToCanvasCsv(
     timestamp: timestampStr,
     rootAccountId: cleanRootAccountId || undefined,
     rootAccountCreated: shouldCreateRootAccount,
+    isolateAccountPrefix: shouldIsolate,
+    accountPrefix: accPrefix || undefined,
     files: filesMeta,
     stats: {
       accountsCount: sortedAccounts.length,

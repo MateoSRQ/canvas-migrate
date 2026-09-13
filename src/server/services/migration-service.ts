@@ -7,6 +7,8 @@ export interface MigrationSummary {
   createdAt: string
   mtime: number
   rootAccount: string
+  sandboxIsolated?: boolean
+  sandboxPrefix?: string
   coursesCount: number
   sectionsCount: number
   usersCount: number
@@ -117,6 +119,9 @@ export async function listMigrationPackages(): Promise<MigrationSummary[]> {
       const periodMatch = resumen.match(/\*\*Periodo Principal:\*\*\s*(.+)/)
       const dateMatch = resumen.match(/\*\*Fecha de Exportación:\*\*\s*(.+)/)
       const rootMatch = resumen.match(/\*\*Subcuenta Inicial[^*]*:\*\*\s*(.+)/)
+      const sandboxMatch = resumen.match(/\*\*Modo Aislamiento Sandbox:\*\*\s*(.+)/)
+      const isSandbox = Boolean(sandboxMatch && sandboxMatch[1].includes('Activo'))
+      const prefixMatch = sandboxMatch ? sandboxMatch[1].match(/`([^`]+)`/) : null
       const coursesMatch = resumen.match(/\|\s*\*\*Cursos\*\*\s*\|\s*(\d+)\s*\|/)
       const sectionsMatch = resumen.match(/\|\s*\*\*Secciones\*\*\s*\|\s*(\d+)\s*\|/)
       const usersMatch = resumen.match(/\|\s*\*\*Usuarios Totales\*\*\s*\|\s*(\d+)\s*\|/)
@@ -136,6 +141,8 @@ export async function listMigrationPackages(): Promise<MigrationSummary[]> {
         createdAt: dateMatch ? dateMatch[1].trim() : new Date(mtime).toLocaleString(),
         mtime,
         rootAccount: rootMatch ? rootMatch[1].trim() : '',
+        sandboxIsolated: isSandbox,
+        sandboxPrefix: prefixMatch ? prefixMatch[1] : undefined,
         coursesCount: coursesMatch ? parseInt(coursesMatch[1], 10) : 0,
         sectionsCount: sectionsMatch ? parseInt(sectionsMatch[1], 10) : 0,
         usersCount: usersMatch ? parseInt(usersMatch[1], 10) : 0,
