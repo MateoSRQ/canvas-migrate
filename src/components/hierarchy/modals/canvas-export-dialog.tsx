@@ -14,6 +14,7 @@ import {
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
 import { Input } from '#/components/ui/input'
+import { Checkbox } from '#/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,10 @@ interface CanvasExportDialogProps {
   selectedPeriodName: string
   rootAccountId: string
   onRootAccountIdChange: (value: string) => void
+  createRootAccount: boolean
+  onCreateRootAccountChange: (value: boolean) => void
+  rootAccountName: string
+  onRootAccountNameChange: (value: string) => void
   onCopyPath: (targetPath: string) => void
   onResetExport: () => void
   onExecuteExport: () => void
@@ -56,6 +61,10 @@ export function CanvasExportDialog({
   selectedPeriodName,
   rootAccountId,
   onRootAccountIdChange,
+  createRootAccount,
+  onCreateRootAccountChange,
+  rootAccountName,
+  onRootAccountNameChange,
   onCopyPath,
   onResetExport,
   onExecuteExport,
@@ -152,9 +161,14 @@ export function CanvasExportDialog({
                 <span>
                   Subcuenta Raíz:{' '}
                   {exportResult.rootAccountId ? (
-                    <strong className="text-emerald-600 font-mono">
-                      {exportResult.rootAccountId}
-                    </strong>
+                    <>
+                      <strong className="text-emerald-600 font-mono">
+                        {exportResult.rootAccountId}
+                      </strong>{' '}
+                      <span className="text-[10px] text-muted-foreground">
+                        ({exportResult.rootAccountCreated ? 'Creada en la migración' : 'Existente en Canvas'})
+                      </span>
+                    </>
                   ) : (
                     <strong className="text-muted-foreground italic font-normal">
                       Raíz institucional por defecto
@@ -328,7 +342,7 @@ export function CanvasExportDialog({
             </div>
 
             {/* Configuración de Subcuenta Inicial / Raíz en Canvas */}
-            <div className="p-3.5 rounded-xl border border-border bg-card space-y-2 text-xs">
+            <div className="p-3.5 rounded-xl border border-border bg-card space-y-3 text-xs">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-foreground flex items-center gap-1.5">
                   <Layers className="size-4 text-emerald-600" />
@@ -339,18 +353,59 @@ export function CanvasExportDialog({
                 </span>
               </div>
               <p className="text-muted-foreground text-[11px] leading-relaxed">
-                Ingrese el SIS ID o ID numérico de una subcuenta <strong>que ya exista en Canvas LMS</strong>{' '}
-                donde colgarán las sedes. Si la subcuenta no existe previamente o desea colgarlas directamente
-                de la raíz institucional de Canvas, <strong>déjelo en blanco</strong>.
+                Si desea que las Sedes cuelguen de una subcuenta específica en lugar de la raíz institucional de Canvas, ingrese su SIS ID o código (ej: <code className="font-semibold text-foreground">TEST-POSGRADO-2026-2</code> o <code className="font-semibold text-foreground">S-001</code>). Si lo deja en blanco, colgarán directamente de la raíz de Canvas.
               </p>
               <Input
                 type="text"
                 value={rootAccountId}
                 onChange={(e) => onRootAccountIdChange(e.target.value)}
-                placeholder="Dejar en blanco para raíz principal, o SIS ID existente (ej: S-001)"
+                placeholder="Dejar en blanco para raíz principal, o SIS ID de la subcuenta padre"
                 className="font-mono text-xs h-8 bg-background"
                 disabled={isExporting}
               />
+
+              {rootAccountId.trim().length > 0 && (
+                <div className="pt-2 border-t border-border/60 space-y-3">
+                  <div className="flex items-start gap-2.5">
+                    <Checkbox
+                      id="create-root-account"
+                      checked={createRootAccount}
+                      onCheckedChange={(checked) => onCreateRootAccountChange(Boolean(checked))}
+                      disabled={isExporting}
+                      className="mt-0.5"
+                    />
+                    <div className="space-y-1">
+                      <label
+                        htmlFor="create-root-account"
+                        className="text-xs font-medium text-foreground cursor-pointer select-none"
+                      >
+                        Crear esta subcuenta en Canvas LMS (se incluirá en accounts.csv como cuenta padre)
+                      </label>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        {createRootAccount
+                          ? 'Se generará una primera fila en accounts.csv para dar de alta esta subcuenta en la raíz institucional y colgar las sedes bajo ella en la misma importación SIS.'
+                          : 'La subcuenta ya debe existir previamente en Canvas LMS con este SIS ID o ID numérico.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {createRootAccount && (
+                    <div className="pl-6 space-y-1">
+                      <label className="text-[11px] font-medium text-muted-foreground">
+                        Nombre visible de la subcuenta en Canvas (Opcional):
+                      </label>
+                      <Input
+                        type="text"
+                        value={rootAccountName}
+                        onChange={(e) => onRootAccountNameChange(e.target.value)}
+                        placeholder={`Por defecto: ${rootAccountId.trim()}`}
+                        className="font-mono text-xs h-8 bg-background"
+                        disabled={isExporting}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="p-3.5 rounded-xl border border-border bg-muted/20 space-y-2 text-xs">

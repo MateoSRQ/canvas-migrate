@@ -185,6 +185,8 @@ export function HierarchySelector({
   const [isExportModalOpen, setIsExportModalOpen] = React.useState(false)
   const [isExporting, setIsExporting] = React.useState(false)
   const [exportRootAccountId, setExportRootAccountId] = React.useState('')
+  const [createRootAccount, setCreateRootAccount] = React.useState(true)
+  const [exportRootAccountName, setExportRootAccountName] = React.useState('')
   const [exportResult, setExportResult] = React.useState<ExportCanvasResult | null>(null)
   const [exportError, setExportError] = React.useState<string | null>(null)
   const [copiedPath, setCopiedPath] = React.useState(false)
@@ -728,6 +730,8 @@ export function HierarchySelector({
           caseId: selectedCaseId,
           selectedSectionIds: selectedIds,
           rootAccountId: exportRootAccountId.trim() || undefined,
+          createRootAccount: Boolean(createRootAccount && exportRootAccountId.trim()),
+          rootAccountName: exportRootAccountName.trim() || undefined,
         },
       })
       setExportResult(res)
@@ -1517,6 +1521,10 @@ export function HierarchySelector({
         selectedPeriodName={selectedPeriodName}
         rootAccountId={exportRootAccountId}
         onRootAccountIdChange={setExportRootAccountId}
+        createRootAccount={createRootAccount}
+        onCreateRootAccountChange={setCreateRootAccount}
+        rootAccountName={exportRootAccountName}
+        onRootAccountNameChange={setExportRootAccountName}
         onCopyPath={handleCopyPath}
         onResetExport={() => {
           setExportResult(null)

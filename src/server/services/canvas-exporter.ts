@@ -16,6 +16,8 @@ export interface ExportCanvasInput {
   caseId: string
   selectedSectionIds: number[] // Carga_Academica_Sede_Curso.id
   rootAccountId?: string // Subcuenta inicial o raíz en Canvas (opcional)
+  createRootAccount?: boolean // Si se debe crear la subcuenta raíz como nueva en accounts.csv
+  rootAccountName?: string // Nombre descriptivo para la subcuenta raíz (opcional)
 }
 
 export interface ExportCanvasResult {
@@ -25,6 +27,7 @@ export interface ExportCanvasResult {
   periodName: string
   timestamp: string
   rootAccountId?: string
+  rootAccountCreated?: boolean
   files: { name: string; sizeBytes: number; rowsCount: number }[]
   stats: {
     accountsCount: number
@@ -144,13 +147,28 @@ export async function exportSelectedToCanvasCsv(
   }
 
   const cleanRootAccountId = input.rootAccountId ? input.rootAccountId.trim() : ''
+  const shouldCreateRootAccount = Boolean(input.createRootAccount && cleanRootAccountId)
+  const rootAccountName = input.rootAccountName?.trim() || cleanRootAccountId
 
   const accountsMap = new Map<string, AccountRow>()
+  const rootOrder: AccountRow[] = []
   const sedesOrder: AccountRow[] = []
   const modalidadesOrder: AccountRow[] = []
   const facultadesOrder: AccountRow[] = []
   const carrerasOrder: AccountRow[] = []
   const planesOrder: AccountRow[] = []
+
+  // Si se solicita crear la subcuenta raíz en Canvas LMS (cuenta padre de las sedes)
+  if (shouldCreateRootAccount) {
+    const rootRow: AccountRow = {
+      account_id: cleanRootAccountId,
+      parent_account_id: '', // Se crea en la raíz institucional de Canvas
+      name: rootAccountName,
+      status: 'active',
+    }
+    accountsMap.set(cleanRootAccountId, rootRow)
+    rootOrder.push(rootRow)
+  }
 
   for (const it of selectedItems) {
     const sedeAccId = it.sedeCodigo || sedeCodeMap.get(it.sedeId) || `S-${it.sedeId}`
@@ -216,8 +234,9 @@ export async function exportSelectedToCanvasCsv(
     }
   }
 
-  // Orden topológico: Cuentas raíz (Sedes) -> Modalidades -> Facultades -> Carreras -> Planes
+  // Orden topológico: Subcuenta raíz personalizada (si se crea) -> Sedes -> Modalidades -> Facultades -> Carreras -> Planes
   const sortedAccounts = [
+    ...rootOrder,
     ...sedesOrder,
     ...modalidadesOrder,
     ...facultadesOrder,
@@ -582,7 +601,9 @@ export async function exportSelectedToCanvasCsv(
     `# ARBOL JERARQUICO DE MIGRACION A CANVAS LMS`,
     `# Periodo: ${primaryPeriodName}`,
     ...(cleanRootAccountId
-      ? [`# Subcuenta Inicial Canvas (parent_account_id): ${cleanRootAccountId}`]
+      ? [
+          `# Subcuenta Inicial Canvas (parent_account_id): ${cleanRootAccountId} (${shouldCreateRootAccount ? `Creada como "${rootAccountName}"` : 'Existente en Canvas'})`,
+        ]
       : []),
     `# Fecha de exportación: ${new Date().toLocaleString('es-ES')}`,
     `# Total secciones: ${selectedItems.length} | Cursos: ${coursesList.length}`,
@@ -624,8 +645,10 @@ export async function exportSelectedToCanvasCsv(
 
   for (const [pName, sedesG] of periodoGroup) {
     treeLines.push(`[PERIODO] ${pName}`)
-    if (cleanRootAccountId) {
-      treeLines.push(`\t[SUBCUENTA INICIAL] ${cleanRootAccountId}`)
+    if (shouldCreateRootAccount) {
+      treeLines.push(`\t[SUBCUENTA RAÍZ CREADA] ${cleanRootAccountId}: ${rootAccountName}`)
+    } else if (cleanRootAccountId) {
+      treeLines.push(`\t[SUBCUENTA INICIAL EXISTENTE] ${cleanRootAccountId}`)
     }
     const rootIndent = cleanRootAccountId ? '\t' : ''
     for (const [sName, modG] of sedesG) {
@@ -668,7 +691,7 @@ export async function exportSelectedToCanvasCsv(
   const resumenContent = `# RESUMEN DE MIGRACIÓN A CANVAS LMS
 
 **Periodo Principal:** ${primaryPeriodName}  
-**Subcuenta Inicial (parent_account_id de Sedes):** ${cleanRootAccountId ? `\`${cleanRootAccountId}\`` : '*Ninguna (Raíz institucional de Canvas)*'}  
+**Subcuenta Inicial (parent_account_id de Sedes):** ${cleanRootAccountId ? `\`${cleanRootAccountId}\`${shouldCreateRootAccount ? ` (Creada en la migración como "${rootAccountName}")` : ' (Subcuenta existente en Canvas)'}` : '*Ninguna (Raíz institucional de Canvas)*'}  
 **Fecha de Exportación:** ${new Date().toLocaleString('es-ES')}  
 **Directorio:** \`${targetDir}\`  
 **Caso de Origen:** \`${caseId}\`
@@ -774,6 +797,7 @@ export async function exportSelectedToCanvasCsv(
     periodName: primaryPeriodName,
     timestamp: timestampStr,
     rootAccountId: cleanRootAccountId || undefined,
+    rootAccountCreated: shouldCreateRootAccount,
     files: filesMeta,
     stats: {
       accountsCount: sortedAccounts.length,

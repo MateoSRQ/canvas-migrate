@@ -64,6 +64,7 @@
   - [x] Automatic generation of visual tree `hierarchy.txt`, technical report `RESUMEN.md`, and ZIP archive `canvas_migration.zip`.
   - [x] Export action button and full-featured confirmation & inspection modal in `HierarchySelector`.
   - [x] Subcuenta inicial / raíz configurable en modal de exportación (asigna `parent_account_id` a nivel de Sedes en `accounts.csv`, o vacío si se deja en blanco).
+  - [x] Creación e inyección automática de subcuenta raíz personalizada en `accounts.csv` con `parent_account_id: ""` para alta inmediata en Canvas LMS SIS Import, conmutador interactivo y nombre descriptivo opcional en `CanvasExportDialog`.
   - [x] **Arquitectura y Optimización de Deuda Técnica (Completado)**
     - [x] Optimización de base de datos SQLite: Pragmas WAL mode, foreign_keys ON, synchronous NORMAL y 64MB cache en `better-sqlite3`.
     - [x] Eliminación de sobrecarga de red (Overfetching): Lazy loading de alumnos matriculados (`estudiantes: []` y `estudiantesCount: N` en payload inicial, reduciendo transferencia JSON de 5.5MB a ~350KB).
@@ -219,7 +220,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - Subaccount Hierarchy: `Sede` -> `Modalidad` -> `Facultad` -> `Carrera` -> `Plan`.
   - Exclusion filter: Sections with `"NO HABILITADO"` omitted when flag is false.
   - Course Placement (`courses.csv`): Associated directly with the Curricular Plan subaccount (`account_id: <cod_plan>`).
-  - Root Account Association: Top-level Sedes currently set `parent_account_id: ""` (importing directly under the Canvas target root account). Configurable to point to an existing Canvas subaccount ID or custom organizational root.
+  - Root Account Association & SIS Provisioning: Top-level Sedes point to `parent_account_id: cleanRootAccountId` (o `""` para colgar directo de la raíz institucional de Canvas). Cuando `createRootAccount` está activo, el exportador genera en la primera fila de `accounts.csv` la definición de dicha subcuenta raíz personalizada con `parent_account_id: ""` y `status: "active"`. De este modo, Canvas LMS crea la subcuenta en el mismo proceso de importación SIS y cuelga de inmediato las Sedes sin emitir alertas de *"Parent account didn't exist"*. Se incluye además nombre visible opcional (`rootAccountName`).
 
 ---
 
@@ -255,6 +256,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-13T00:00:00` | `46bd26a` | Antigravity | Feature/CanvasAPI | Importador de casos Canvas LMS vía REST API y visualizador jerárquico de cuentas con buscador y métricas | `src/db/schema.ts`, `src/server/services/canvas-importer.ts`, `src/server/functions/canvas.ts`, `src/components/canvas/canvas-case-manager.tsx`, `src/routes/index.tsx`, `src/components/layout/app-layout.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T00:18:00` | `ab929d7` | Antigravity | Feature/CanvasHierarchy | Visualización análoga de Cursos, Secciones, Docentes (D) con DNI y Estudiantes (E) en el árbol Canvas LMS con lazy loading y caché SQLite | `src/db/schema.ts`, `src/server/services/canvas-importer.ts`, `src/server/functions/canvas.ts`, `src/components/canvas/canvas-case-manager.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T10:30:00` | `fc7fcf7` | Antigravity | Fix/SISExport | Corrección de resolución de códigos de Sede (S-001 vs S-174) y clarificación de parent_account_id en exportador Canvas | `src/server/services/hierarchy-service.ts`, `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `PROJECT_MEMORY.md` |
+| `2026-09-13T10:45:00` | - | Antigravity | Feature/SISExport | Creación automática de subcuenta padre en accounts.csv para SIS import y campos de control en modal de exportación | `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `PROJECT_MEMORY.md` |
 
 
 
@@ -330,12 +332,12 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Botón de Exportación en Barra de Selección**: `Exportar para Canvas ({selectedCount})` con acento visual en esmeralda (`bg-emerald-600 hover:bg-emerald-700`), visible de inmediato al seleccionar 1 o más secciones tanto en vista árbol como tabla.
   - **Acceso Cruzado desde Resumen**: Botón de exportación integrado directamente dentro del modal de "Resumen de Selección Activa".
   - **Modal de Exportación Multifase (`Dialog`)**:
-    - **Fase Inicial (Confirmación, Alcance y Configuración de Raíz)**: Desglose cuantitativo (secciones, cursos únicos, matrículas totales estimadas, periodo académico), campo de entrada `Input` para "Subcuenta Inicial / Raíz en Canvas (Opcional)" (`parent_account_id`) con texto explicativo, directorio destino objetivo `migraciones/[Periodo] - [YYYYMMDDHHMMSS]/`, y lista de los 6 archivos CSV estándar de Canvas + documentación + ZIP.
+    - **Fase Inicial (Confirmación, Alcance y Configuración de Raíz)**: Desglose cuantitativo (secciones, cursos únicos, matrículas totales estimadas, periodo académico), campo de entrada `Input` para "Subcuenta Inicial / Raíz en Canvas (Opcional)" (`parent_account_id`) con texto explicativo. Al ingresar un código, se despliega un `Checkbox` para indicar si debe crearse dicha subcuenta en Canvas LMS (incorporándola en la primera fila de `accounts.csv` como cuenta padre) y un campo opcional para su nombre visible. Directorio destino objetivo `migraciones/[Periodo] - [YYYYMMDDHHMMSS]/`, y lista de los 6 archivos CSV estándar de Canvas + documentación + ZIP.
     - **Fase de Procesamiento**: Indicador giratorio con feedback en tiempo real mientras se ensamblan las cuentas, términos, cursos, secciones, usuarios y matrículas y se genera el archivo ZIP.
     - **Fase de Éxito e Inspección**:
       - Banner de éxito con icono de confirmación.
       - Tarjeta de directorio con ruta absoluta copiable en un clic (`navigator.clipboard.writeText`) y badge de confirmación "¡Ruta Copiada!".
-      - Muestra dinámica de la Subcuenta Raíz utilizada (o indicativo de raíz institucional por defecto).
+      - Muestra dinámica de la Subcuenta Raíz utilizada indicando si fue creada en la migración o si es una subcuenta existente en Canvas.
       - Cuadrícula de 6 métricas clave: Cuentas, Periodos, Cursos, Secciones, Usuarios (Docentes D / Estudiantes E), Matrículas Totales.
       - Tabla de archivos generados con nombres, tipos, conteo de filas y tamaño en KB (`accounts.csv`, `terms.csv`, `courses.csv`, `sections.csv`, `users.csv`, `enrollments.csv`, `hierarchy.txt`, `RESUMEN.md`, `canvas_migration.zip`).
       - Guía rápida paso a paso para carga de SIS Import en la consola de administración de Canvas LMS.
