@@ -96,14 +96,16 @@
     - [x] Simplificación del Modal de Exportación (`CanvasExportDialog`): métricas destacadas de alcance en la parte superior (Secciones, Cursos Únicos, Matrículas Totales, Periodo) y eliminación de la sección redundante inferior. Eliminación de la revisión post-exportación en el modal para trasladar toda la capacidad de auditoría a una pantalla dedicada.
     - [x] Controles enriquecidos de selección en `HierarchySelector`: botón alternable "Seleccionar Todos / Deseleccionar Todos ({N})" sobre las secciones visibles según filtros activos, botón "Invertir Selección" y botón "Limpiar".
     - [x] Motor de Auditoría y Detección de Variaciones en Canvas LMS (`src/server/services/canvas-audit-service.ts` y RPC `auditCanvasExportFn`).
-  - [x] **Comparativa Manual Lado a Lado de Casos Importados (SQL vs Canvas LMS) (Completado)**
-    - [x] Pantalla y pestaña dedicada `Comparativa Lado a Lado (BD vs Canvas)` (`/#comparison`) con navegación superior y drawer lateral.
-    - [x] Selectores independientes para escoger cualquier versión de Caso Importado SQL (lado izquierdo) y cualquier Snapshot Importado de Canvas LMS API (lado derecho).
-    - [x] Enfoque de comparación manual sin motor automatizado de discrepancias (reconociendo que Canvas LMS puede albergar únicamente un subconjunto intencional de datos exportados).
-    - [x] Panel izquierdo con árbol jerárquico del caso SQL (Sedes -> Carreras -> Planes -> Cursos -> Secciones -> Docentes D con DNI y Alumnos E).
+  - [x] **Comparativa Manual Lado a Lado: Registros de Migración vs Snapshots Canvas LMS (Completado)**
+    - [x] Pantalla y pestaña dedicada `Comparativa Lado a Lado (Migración vs Canvas)` (`/#comparison`) con navegación superior y drawer lateral.
+    - [x] Selector de paquetes de migración exportados (`migraciones/[periodo - timestamp]`), permitiendo escoger cualquier versión histórica de migración generada en la aplicación.
+    - [x] Selector independiente de snapshots importados desde Canvas LMS API (`canvas_import_cases`).
+    - [x] Servicio de lectura y estructuración de paquetes de migración (`src/server/services/migration-service.ts` y RPCs `listMigrationsFn`, `getMigrationTreeFn`), ensamblando el árbol jerárquico real exportado (`accounts.csv`, `courses.csv`, `sections.csv`, `users.csv`, `enrollments.csv`, `RESUMEN.md`).
+    - [x] Enfoque de comparación manual sin motor automatizado de discrepancias (reconociendo que cada paquete de migración corresponde a una selección intencional de un subconjunto específico de datos).
+    - [x] Panel izquierdo con árbol jerárquico del paquete de migración (Cuentas/Sedes -> Subcuentas -> Cursos -> Secciones -> Docentes D con DNI y Alumnos E).
     - [x] Panel derecho con árbol jerárquico del snapshot de Canvas (Cuentas -> Subcuentas -> Cursos -> Secciones -> Docentes D y Alumnos E bajo demanda).
     - [x] Barra superior con búsqueda sincronizada simultánea en ambos árboles y buscadores locales independientes.
-    - [x] Controles de plegado y desplegado masivo por panel (Cursos, Plegar Todo, Plegar Alumnos).
+    - [x] Controles de plegado y desplegado masivo por panel (Cursos, Plegar Todo).
   - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
   - [ ] Job status polling, import log inspection, and error auditing.
 
@@ -166,11 +168,13 @@ canvas-migrate/
     │   │   ├── canvas-exporter.ts # Canvas SIS CSV exporter, hierarchy writer & zip packager
     │   │   ├── canvas-importer.ts # Canvas API client, live accounts & course ingestion
     │   │   ├── canvas-audit-service.ts # Auditoría contra Canvas REST API
-    │   │   └── case-comparison-service.ts # Motor local de comparativa BD vs Canvas Snapshot
+    │   │   ├── case-comparison-service.ts # Motor local de comparativa BD vs Canvas Snapshot
+    │   │   └── migration-service.ts # Servicio de lectura y estructuración de paquetes de migración exportados
     │   └── functions/
     │       ├── cases.ts      # TanStack Start server functions for cases & comparativa (RPC)
     │       ├── hierarchy.ts  # TanStack Start server functions for hierarchy & students (RPC)
-    │       └── canvas.ts     # TanStack Start server functions for Canvas API (RPC)
+    │       ├── canvas.ts     # TanStack Start server functions for Canvas API (RPC)
+    │       └── migrations.ts # TanStack Start server functions for migration packages (RPC)
     ├── components/
     │   ├── cases/
     │   │   └── case-manager.tsx # Full-width Case Manager UI & table sample inspector con spinning loaders
@@ -291,6 +295,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-13T12:08:00` | `ec47f2b` | Antigravity | UI/Enhancement | Destacado visual del filtro de exclusión de secciones NO HABILITADO y confirmación en modal de exportación | `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T12:25:00` | `a3a2fff` | Antigravity | Feature/Comparison | Pantalla de comparativa lado a lado (BD vs Canvas LMS API), selectores de versión de cada caso, KPI diff y limpieza de modal de exportación | `src/components/comparison/case-comparison-view.tsx`, `src/server/services/case-comparison-service.ts`, `src/server/functions/cases.ts`, `src/routes/index.tsx`, `src/components/layout/app-layout.tsx`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T12:34:00` | `c57f383` | Antigravity | Refactor/Comparison | Rediseño de Comparativa a inspección manual lado a lado de casos importados (SQL vs Canvas) sin motor de discrepancias | `src/components/comparison/case-comparison-view.tsx`, `PROJECT_MEMORY.md` |
+| `2026-09-13T12:44:00` | - | Antigravity | Feature/MigrationComparison | Comparativa lado a lado basada en paquetes de migración exportados (migraciones/) vs Snapshots Canvas LMS con selección de migración | `src/server/services/migration-service.ts`, `src/server/functions/migrations.ts`, `src/components/comparison/case-comparison-view.tsx`, `src/routes/index.tsx`, `PROJECT_MEMORY.md` |
 
 ---
 
@@ -318,7 +323,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 - **Left Drawer Menu**:
   - Built with shadcn `Sheet` (`SheetContent side="left"`).
   - Dimensions: `w-72 sm:w-80`, anchored to the left.
-  - Contains clean navigation items in Spanish (`Jerarquía y Selección`, `Registro de Casos de Importación`).
+  - Contains clean navigation items in Spanish (`Registro de Casos SQL`, `Visualización y Selección`, `Comparativa Lado a Lado`, `Casos Canvas LMS (API)`).
   - Drawer closes upon navigation link click or backdrop/close click.
 - **Central Panel**:
   - Full width (`w-full flex-1`), expanding across the entire viewport.
@@ -336,7 +341,27 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Dual-View Switcher**: Toggle smoothly between **Vista Jerárquica Anidada (Árbol)** and **Vista Tabla Detallada (TanStack Table)**.
   - **Case Switcher Bar**: Clean top selector showing case name, total database rows, and status with immediate re-evaluation, synchronized bidirectionally with Case Manager.
   - **Cascading Filter Grid**: 6-level hierarchical selectors (`Periodo` -> `Sede` -> `Modalidad` -> `Facultad` -> `Carrera` -> `Plan`), with dynamic parent-child option binding.
-  - **Business Filters**: Toggle for "Excluir secciones «NO HABILITADO»" and free-text search across codes, names, sections, careers, and teachers/DNI.
+  - **Business Filters**: Toggle for "Excluir secciones «NO HABILITADO»" y búsqueda textual global.
+  - **Barra de Selección Enriquecida**: Controles explícitos "Seleccionar Todos / Deseleccionar Todos ({N})", "Invertir Selección" y "Limpiar".
+- **Modal de Exportación Simplificado (`CanvasExportDialog`)**:
+  - Modal enfocado exclusivamente en la configuración de alcance (Secciones, Cursos Únicos, Matrículas Totales y Periodo Académico) y parámetros de subcuenta raíz (`parent_account_id`).
+  - Eliminada la sección redundante inferior de archivos y la auditoría post-exportación para mantener el modal ligero y rápido, canalizando toda la inspección comparativa a la pantalla dedicada.
+- **Pantalla y Workspace de Comparativa de Migraciones vs Canvas LMS (`CaseComparisonView`)**:
+  - **Sin Motor Automatizado de Discrepancias**:
+    - Comparación visual 100% manual entre la migración exportada seleccionada y el snapshot de Canvas LMS.
+    - Se evita cualquier cálculo engañoso de discrepancias que marque como "faltante" lo que intencionalmente no fue seleccionado en la migración.
+  - **Selector de Paquetes de Migración (Panel Izquierdo)**:
+    - Selector desplegable para escoger cualquier carpeta histórica de `migraciones/` (ej: `2026-2 POSGRADO - 20260913120429`).
+    - Métricas del paquete: total de cuentas, cursos exportados, secciones, docentes (DNI) y alumnos.
+    - Árbol jerárquico fiel a lo exportado: Cuentas/Sedes -> Subcuentas (Modalidad > Facultad > Carrera > Plan) -> Cursos -> Secciones -> Docentes `(D)` con DNI y Alumnos `(E)` con código.
+    - Botones de acción masiva: `Cursos`, `Plegar`. Buscador local de texto.
+  - **Selector de Snapshots de Canvas LMS (Panel Derecho)**:
+    - Selector desplegable para escoger cualquier versión histórica de Snapshots de Canvas LMS API (`canvas_import_cases`).
+    - Métricas del snapshot: total de cuentas y cursos.
+    - Árbol jerárquico Canvas estructurado: Cuentas -> Subcuentas -> Cursos (con SIS ID y Canvas ID) -> Secciones con ID SIS -> Docentes `(D)` y Alumnos `(E)` con carga bajo demanda en tiempo real.
+    - Botones de acción masiva: `Cuentas`, `Plegar`. Buscador local de texto.
+  - **Búsqueda Sincronizada Simultánea**:
+    - Input superior central que filtra en tiempo real ambos árboles simultáneamente (ej: `CUR006380`, `7121`, o apellido de docente), permitiendo un cotejo instantáneo del curso o sección entre lo exportado y lo presente en Canvas.
   - **Selection Control Bar**: Sticky/inline bar displaying selected count, filtered count, total students represented, "Seleccionar Filtrados", and "Limpiar".
   - **Student Inspector Modal**: Dialog rendering full roster of enrolled students (`#`, `Código Alumno`, `Nombre Completo`, `Correo Institucional`) for any selected section.
   - **Selection Summary Modal**: Overview of selected sections, unique courses, and total enrollments ready for SIS packaging.

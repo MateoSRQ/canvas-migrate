@@ -107,7 +107,7 @@ function Home() {
           }`}
         >
           <GitCompare className="size-3.5 text-blue-500" />
-          <span>Comparativa Lado a Lado (BD vs Canvas)</span>
+          <span>Comparativa Lado a Lado (Migración vs Canvas)</span>
         </button>
 
         <button
@@ -133,7 +133,7 @@ function Home() {
           onSelectCaseId={setSelectedCaseId}
         />
       ) : activeTab === 'comparison' ? (
-        <CaseComparisonView initialDbCaseId={selectedCaseId} />
+        <CaseComparisonView />
       ) : (
         <CanvasCaseManager />
       )}

@@ -1,6 +1,5 @@
 import * as React from 'react'
 import {
-  Database,
   Globe,
   Search,
   ChevronRight,
@@ -9,75 +8,73 @@ import {
   BookOpen,
   Building,
   Layers,
-  GraduationCap,
   FoldVertical,
   Maximize2,
   X,
+  PackageCheck,
+  FolderArchive,
 } from 'lucide-react'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
-import { getCasesFn } from '#/server/functions/cases'
+import {
+  listMigrationsFn,
+  getMigrationTreeFn,
+} from '#/server/functions/migrations'
 import {
   getCanvasCasesFn,
   getCanvasCaseAccountsTreeFn,
   getCanvasCourseEnrollmentsFn,
 } from '#/server/functions/canvas'
-import {
-  getCaseHierarchyFn,
-  getSectionStudentsFn,
-} from '#/server/functions/hierarchy'
-import type { ImportCase, CanvasImportCase } from '#/db/schema'
+import type { CanvasImportCase } from '#/db/schema'
 import type {
-  HierarchyItem,
-  EnrolledStudent,
-} from '#/server/services/hierarchy-service'
+  MigrationSummary,
+  MigrationTreeResult,
+  MigrationAccountNode,
+  MigrationCourseNode,
+} from '#/server/services/migration-service'
 import type {
   CanvasAccountTreeNode,
   CanvasCourseTreeNode,
 } from '#/server/services/canvas-importer'
 
 interface CaseComparisonViewProps {
-  initialDbCaseId?: string
+  initialMigrationFolder?: string
   initialCanvasCaseId?: string
 }
 
 export function CaseComparisonView({
-  initialDbCaseId,
+  initialMigrationFolder,
   initialCanvasCaseId,
 }: CaseComparisonViewProps) {
-  // 1. Listados de casos disponibles
-  const [dbCases, setDbCases] = React.useState<ImportCase[]>([])
+  // 1. Listados de fuentes disponibles
+  const [migrations, setMigrations] = React.useState<MigrationSummary[]>([])
   const [canvasCases, setCanvasCases] = React.useState<CanvasImportCase[]>([])
-  const [isLoadingCases, setIsLoadingCases] = React.useState(true)
+  const [isLoadingSources, setIsLoadingSources] = React.useState(true)
 
-  // 2. Selección de versiones
-  const [selectedDbCaseId, setSelectedDbCaseId] = React.useState<string>(
-    initialDbCaseId || ''
-  )
-  const [selectedCanvasCaseId, setSelectedCanvasCaseId] = React.useState<string>(
-    initialCanvasCaseId || ''
-  )
+  // 2. Selección activa
+  const [selectedMigrationFolder, setSelectedMigrationFolder] =
+    React.useState<string>(initialMigrationFolder || '')
+  const [selectedCanvasCaseId, setSelectedCanvasCaseId] =
+    React.useState<string>(initialCanvasCaseId || '')
 
-  // 3. Búsqueda compartida / independiente
+  // 3. Búsqueda compartida e independiente
   const [sharedSearch, setSharedSearch] = React.useState('')
-  const [dbSearch, setDbSearch] = React.useState('')
+  const [migrationSearch, setMigrationSearch] = React.useState('')
   const [canvasSearch, setCanvasSearch] = React.useState('')
 
-  // 4. Datos del caso SQL (Izquierda)
-  const [dbItems, setDbItems] = React.useState<HierarchyItem[]>([])
-  const [isLoadingDb, setIsLoadingDb] = React.useState(false)
-  const [dbExpandedNodes, setDbExpandedNodes] = React.useState<Set<string>>(
-    new Set()
-  )
-  const [dbLoadedStudents, setDbLoadedStudents] = React.useState<
-    Record<number, EnrolledStudent[]>
-  >({})
-  const [dbLoadingSections, setDbLoadingSections] = React.useState<Set<number>>(
-    new Set()
-  )
+  // 4. Datos de la Migración Seleccionada (Izquierda)
+  const [migrationData, setMigrationData] =
+    React.useState<MigrationTreeResult | null>(null)
+  const [isLoadingMigration, setIsLoadingMigration] = React.useState(false)
+  const [migrationExpandedNodes, setMigrationExpandedNodes] =
+    React.useState<Set<string>>(new Set())
+  const [migrationExpandedCourses, setMigrationExpandedCourses] =
+    React.useState<Set<string>>(new Set())
+  const [migrationExpandedSections, setMigrationExpandedSections] =
+    React.useState<Set<string>>(new Set())
 
-  // 5. Datos del caso Canvas (Derecha)
+  // 5. Datos del Snapshot de Canvas LMS (Derecha)
   const [canvasTree, setCanvasTree] = React.useState<{
     rootNodes: CanvasAccountTreeNode[]
     totalAccounts: number
@@ -120,86 +117,83 @@ export function CaseComparisonView({
     Set<number>
   >(new Set())
 
-  // Carga inicial de listas de casos
+  // Carga inicial de listas de migraciones y casos Canvas
   React.useEffect(() => {
     let isMounted = true
-    async function loadCases() {
-      setIsLoadingCases(true)
+    async function loadSources() {
+      setIsLoadingSources(true)
       try {
-        const [dbList, canvasList] = await Promise.all([
-          getCasesFn(),
+        const [migList, canvasList] = await Promise.all([
+          listMigrationsFn(),
           getCanvasCasesFn(),
         ])
         if (!isMounted) return
 
-        setDbCases(dbList)
+        setMigrations(migList)
         setCanvasCases(canvasList)
 
-        let defDbId = initialDbCaseId
-        if (!defDbId && dbList.length > 0) {
-          const completedDb = dbList.find((c) => c.status === 'completed')
-          defDbId = completedDb ? completedDb.id : dbList[0].id
+        // Preseleccionar la migración más reciente
+        let defMig = initialMigrationFolder
+        if (!defMig && migList.length > 0) {
+          defMig = migList[0].folderName
         }
-        if (defDbId) setSelectedDbCaseId(defDbId)
+        if (defMig) setSelectedMigrationFolder(defMig)
 
+        // Preseleccionar el caso Canvas más reciente completado
         let defCanvasId = initialCanvasCaseId
         if (!defCanvasId && canvasList.length > 0) {
-          const completedCanvas = canvasList.find(
-            (c) => c.status === 'completed'
-          )
-          defCanvasId = completedCanvas ? completedCanvas.id : canvasList[0].id
+          const completed = canvasList.find((c) => c.status === 'completed')
+          defCanvasId = completed ? completed.id : canvasList[0].id
         }
         if (defCanvasId) setSelectedCanvasCaseId(defCanvasId)
       } catch (err) {
-        console.error('Error cargando casos para comparativa:', err)
+        console.error('Error cargando fuentes de comparativa:', err)
       } finally {
-        if (isMounted) setIsLoadingCases(false)
+        if (isMounted) setIsLoadingSources(false)
       }
     }
 
-    loadCases()
+    loadSources()
     return () => {
       isMounted = false
     }
-  }, [initialDbCaseId, initialCanvasCaseId])
+  }, [initialMigrationFolder, initialCanvasCaseId])
 
-  // Cargar jerarquía de Caso SQL cuando cambia el caso
+  // Cargar datos de la migración seleccionada
   React.useEffect(() => {
-    if (!selectedDbCaseId) {
-      setDbItems([])
+    if (!selectedMigrationFolder) {
+      setMigrationData(null)
       return
     }
     let isMounted = true
-    setIsLoadingDb(true)
-    setDbLoadedStudents({})
-    setDbExpandedNodes(new Set())
+    setIsLoadingMigration(true)
+    setMigrationExpandedNodes(new Set())
+    setMigrationExpandedCourses(new Set())
+    setMigrationExpandedSections(new Set())
 
-    getCaseHierarchyFn({ data: selectedDbCaseId })
-      .then((res) => {
+    getMigrationTreeFn({ data: selectedMigrationFolder })
+      .then((tree) => {
         if (!isMounted) return
-        setDbItems(res.items || [])
-        // Auto-expandir el primer periodo y sede si existe
-        if (res.items && res.items.length > 0) {
-          const first = res.items[0]
-          const autoKeys = new Set<string>()
-          autoKeys.add(`p-${first.periodoId}`)
-          autoKeys.add(`s-${first.sedeId}`)
-          setDbExpandedNodes(autoKeys)
+        setMigrationData(tree)
+        // Auto-expandir cuentas raíz de la migración
+        if (tree?.rootNodes) {
+          const autoKeys = new Set<string>(tree.rootNodes.map((r) => r.accountId))
+          setMigrationExpandedNodes(autoKeys)
         }
       })
       .catch((err) => {
-        console.error('Error cargando jerarquía del caso SQL:', err)
+        console.error('Error cargando registros de la migración:', err)
       })
       .finally(() => {
-        if (isMounted) setIsLoadingDb(false)
+        if (isMounted) setIsLoadingMigration(false)
       })
 
     return () => {
       isMounted = false
     }
-  }, [selectedDbCaseId])
+  }, [selectedMigrationFolder])
 
-  // Cargar árbol de Caso Canvas cuando cambia el snapshot
+  // Cargar árbol de Canvas cuando cambia el snapshot
   React.useEffect(() => {
     if (!selectedCanvasCaseId) {
       setCanvasTree(null)
@@ -216,14 +210,14 @@ export function CaseComparisonView({
       .then((tree) => {
         if (!isMounted) return
         setCanvasTree(tree)
-        // Auto-expandir cuentas raíz
+        // Auto-expandir cuentas raíz de Canvas
         if (tree?.rootNodes) {
           const autoKeys = new Set<number>(tree.rootNodes.map((r) => r.canvasId))
           setCanvasExpandedNodes(autoKeys)
         }
       })
       .catch((err) => {
-        console.error('Error cargando árbol de cuentas de Canvas:', err)
+        console.error('Error cargando árbol de Canvas LMS:', err)
       })
       .finally(() => {
         if (isMounted) setIsLoadingCanvas(false)
@@ -234,35 +228,7 @@ export function CaseComparisonView({
     }
   }, [selectedCanvasCaseId])
 
-  // Carga bajo demanda de alumnos para sección SQL
-  const fetchDbSectionStudents = React.useCallback(
-    async (sectionId: number) => {
-      if (
-        !selectedDbCaseId ||
-        dbLoadedStudents[sectionId] ||
-        dbLoadingSections.has(sectionId)
-      )
-        return
-      setDbLoadingSections((prev) => new Set(prev).add(sectionId))
-      try {
-        const list = await getSectionStudentsFn({
-          data: { caseId: selectedDbCaseId, cargaCursoId: sectionId },
-        })
-        setDbLoadedStudents((prev) => ({ ...prev, [sectionId]: list }))
-      } catch (err) {
-        console.error('Error cargando alumnos SQL para sección:', sectionId, err)
-      } finally {
-        setDbLoadingSections((prev) => {
-          const next = new Set(prev)
-          next.delete(sectionId)
-          return next
-        })
-      }
-    },
-    [selectedDbCaseId, dbLoadedStudents, dbLoadingSections]
-  )
-
-  // Carga bajo demanda de matriculados para curso Canvas
+  // Carga bajo demanda de matrículas Canvas
   const fetchCanvasEnrollments = React.useCallback(
     async (courseId: number) => {
       if (
@@ -278,7 +244,7 @@ export function CaseComparisonView({
         })
         setCanvasRosters((prev) => ({ ...prev, [courseId]: data }))
       } catch (err) {
-        console.error('Error cargando matriculados Canvas para curso:', courseId, err)
+        console.error('Error cargando matrículas Canvas:', err)
       } finally {
         setCanvasLoadingRosters((prev) => {
           const next = new Set(prev)
@@ -290,17 +256,35 @@ export function CaseComparisonView({
     [selectedCanvasCaseId, canvasRosters, canvasLoadingRosters]
   )
 
-  // Manejo de alternancia de nodos en árbol SQL
-  const toggleDbNode = (key: string) => {
-    setDbExpandedNodes((prev) => {
+  // Alternancia en árbol de Migración
+  const toggleMigrationAccount = (id: string) => {
+    setMigrationExpandedNodes((prev) => {
       const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }
 
-  // Manejo de alternancia de nodos en árbol Canvas
+  const toggleMigrationCourse = (courseId: string) => {
+    setMigrationExpandedCourses((prev) => {
+      const next = new Set(prev)
+      if (next.has(courseId)) next.delete(courseId)
+      else next.add(courseId)
+      return next
+    })
+  }
+
+  const toggleMigrationSection = (sectionId: string) => {
+    setMigrationExpandedSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(sectionId)) next.delete(sectionId)
+      else next.add(sectionId)
+      return next
+    })
+  }
+
+  // Alternancia en árbol de Canvas
   const toggleCanvasNode = (id: number) => {
     setCanvasExpandedNodes((prev) => {
       const next = new Set(prev)
@@ -338,172 +322,41 @@ export function CaseComparisonView({
     })
   }
 
-  // Filtro de búsqueda efectivo
-  const effectiveDbSearch = (sharedSearch || dbSearch).trim().toLowerCase()
-  const effectiveCanvasSearch = (sharedSearch || canvasSearch).trim().toLowerCase()
-
-  // 6. Construir árbol estructurado para Caso SQL
-  interface SqlCourseItem {
-    cursoId: number
-    cursoCodigo: string
-    cursoNombre: string
-    secciones: HierarchyItem[]
-    totalStudents: number
-  }
-
-  interface SqlPlanItem {
-    planCodigo: string
-    planNombre: string
-    cursos: SqlCourseItem[]
-  }
-
-  interface SqlCarreraItem {
-    carreraNombre: string
-    carreraCodigo: string
-    planes: SqlPlanItem[]
-  }
-
-  interface SqlSedeItem {
-    sedeId: number
-    sedeNombre: string
-    carreras: SqlCarreraItem[]
-  }
-
-  const sqlTree = React.useMemo<SqlSedeItem[]>(() => {
-    if (!dbItems || dbItems.length === 0) return []
-
-    // Filtrar por texto si hay búsqueda
-    let filtered = dbItems
-    if (effectiveDbSearch) {
-      filtered = filtered.filter((it) => {
-        const q = effectiveDbSearch
-        return (
-          it.cursoCodigo.toLowerCase().includes(q) ||
-          it.cursoNombre.toLowerCase().includes(q) ||
-          it.seccionNombre.toLowerCase().includes(q) ||
-          it.carreraNombre.toLowerCase().includes(q) ||
-          it.sedeNombre.toLowerCase().includes(q) ||
-          it.docentes.some(
-            (d) =>
-              d.dni.toLowerCase().includes(q) ||
-              d.fullName.toLowerCase().includes(q)
-          )
-        )
-      })
-    }
-
-    // Agrupar Sede -> Carrera -> Plan -> Curso
-    const sedeMap = new Map<number, { sedeNombre: string; carreraMap: Map<string, { carreraCodigo: string; planMap: Map<string, { planNombre: string; cursoMap: Map<string, SqlCourseItem> }> }> }>()
-
-    for (const it of filtered) {
-      if (!sedeMap.has(it.sedeId)) {
-        sedeMap.set(it.sedeId, {
-          sedeNombre: it.sedeNombre,
-          carreraMap: new Map(),
-        })
-      }
-      const s = sedeMap.get(it.sedeId)!
-
-      const carKey = it.carreraNombre || 'Sin Carrera'
-      if (!s.carreraMap.has(carKey)) {
-        s.carreraMap.set(carKey, {
-          carreraCodigo: it.carreraCodigo,
-          planMap: new Map(),
-        })
-      }
-      const c = s.carreraMap.get(carKey)!
-
-      const planKey = it.planCodigo || 'Sin Plan'
-      if (!c.planMap.has(planKey)) {
-        c.planMap.set(planKey, {
-          planNombre: it.planNombre,
-          cursoMap: new Map(),
-        })
-      }
-      const p = c.planMap.get(planKey)!
-
-      const cursoKey = it.cursoCodigo || `CURSO-${it.cursoId}`
-      if (!p.cursoMap.has(cursoKey)) {
-        p.cursoMap.set(cursoKey, {
-          cursoId: it.cursoId,
-          cursoCodigo: it.cursoCodigo,
-          cursoNombre: it.cursoNombre,
-          secciones: [],
-          totalStudents: 0,
-        })
-      }
-      const cur = p.cursoMap.get(cursoKey)!
-      cur.secciones.push(it)
-      cur.totalStudents += it.estudiantesCount || 0
-    }
-
-    const result: SqlSedeItem[] = []
-    for (const [sedeId, s] of sedeMap.entries()) {
-      const carreras: SqlCarreraItem[] = []
-      for (const [carreraNombre, c] of s.carreraMap.entries()) {
-        const planes: SqlPlanItem[] = []
-        for (const [planCodigo, p] of c.planMap.entries()) {
-          planes.push({
-            planCodigo,
-            planNombre: p.planNombre,
-            cursos: Array.from(p.cursoMap.values()),
-          })
-        }
-        carreras.push({
-          carreraNombre,
-          carreraCodigo: c.carreraCodigo,
-          planes,
-        })
-      }
-      result.push({
-        sedeId,
-        sedeNombre: s.sedeNombre,
-        carreras,
-      })
-    }
-
-    return result
-  }, [dbItems, effectiveDbSearch])
-
-  // Controles de plegado para SQL
-  const handleCollapseAllSql = () => {
-    setDbExpandedNodes(new Set())
-  }
-
-  const handleExpandCoursesSql = () => {
-    const next = new Set<string>()
-    for (const s of sqlTree) {
-      next.add(`s-${s.sedeId}`)
-      for (const c of s.carreras) {
-        next.add(`car-${s.sedeId}-${c.carreraNombre}`)
-        for (const p of c.planes) {
-          next.add(`plan-${s.sedeId}-${c.carreraNombre}-${p.planCodigo}`)
-          for (const cur of p.cursos) {
-            next.add(`cur-${s.sedeId}-${cur.cursoCodigo}`)
-          }
-        }
+  // Controles masivos para Migración
+  const handleExpandAllMigrationAccounts = () => {
+    if (!migrationData) return
+    const all = new Set<string>()
+    function collect(nodes: MigrationAccountNode[]) {
+      for (const n of nodes) {
+        all.add(n.accountId)
+        if (n.children) collect(n.children)
       }
     }
-    setDbExpandedNodes(next)
+    collect(migrationData.rootNodes)
+    setMigrationExpandedNodes(all)
   }
 
-  const handleCollapseRostersSql = () => {
-    setDbExpandedNodes((prev) => {
-      const next = new Set<string>()
-      for (const k of prev) {
-        if (!k.startsWith('sec-')) next.add(k)
+  const handleExpandAllMigrationCourses = () => {
+    if (!migrationData) return
+    handleExpandAllMigrationAccounts()
+    const allCourses = new Set<string>()
+    function collect(nodes: MigrationAccountNode[]) {
+      for (const n of nodes) {
+        for (const c of n.courses) allCourses.add(c.courseId)
+        if (n.children) collect(n.children)
       }
-      return next
-    })
+    }
+    collect(migrationData.rootNodes)
+    setMigrationExpandedCourses(allCourses)
   }
 
-  // Controles de plegado para Canvas
-  const handleCollapseAllCanvas = () => {
-    setCanvasExpandedNodes(new Set())
-    setCanvasExpandedCourses(new Set())
-    setCanvasExpandedSections(new Set())
+  const handleCollapseAllMigration = () => {
+    setMigrationExpandedNodes(new Set())
+    setMigrationExpandedCourses(new Set())
+    setMigrationExpandedSections(new Set())
   }
 
+  // Controles masivos para Canvas
   const handleExpandAllCanvasAccounts = () => {
     if (!canvasTree) return
     const all = new Set<number>()
@@ -517,18 +370,295 @@ export function CaseComparisonView({
     setCanvasExpandedNodes(all)
   }
 
-  const handleCollapseCanvasRosters = () => {
+  const handleCollapseAllCanvas = () => {
+    setCanvasExpandedNodes(new Set())
+    setCanvasExpandedCourses(new Set())
     setCanvasExpandedSections(new Set())
   }
 
-  // Renderizador recursivo de cuentas en Canvas
+  // Búsquedas efectivas
+  const effectiveMigSearch = (sharedSearch || migrationSearch).trim().toLowerCase()
+  const effectiveCanvasSearch = (sharedSearch || canvasSearch).trim().toLowerCase()
+
+  // 6. Renderizado de Nodos del Árbol de Migración
+  const renderMigrationAccount = (
+    node: MigrationAccountNode
+  ): React.ReactNode => {
+    const isExpanded =
+      migrationExpandedNodes.has(node.accountId) ||
+      Boolean(effectiveMigSearch && effectiveMigSearch.length > 0)
+    const hasSub = node.children && node.children.length > 0
+
+    // Filtrar cursos según búsqueda
+    let visibleCourses = node.courses || []
+    if (effectiveMigSearch) {
+      const q = effectiveMigSearch
+      visibleCourses = visibleCourses.filter(
+        (c) =>
+          c.courseId.toLowerCase().includes(q) ||
+          c.longName.toLowerCase().includes(q) ||
+          c.shortName.toLowerCase().includes(q) ||
+          c.sections.some(
+            (s) =>
+              s.name.toLowerCase().includes(q) ||
+              s.sectionId.toLowerCase().includes(q) ||
+              s.teachers.some(
+                (t) =>
+                  t.fullName.toLowerCase().includes(q) ||
+                  t.loginId.toLowerCase().includes(q)
+              )
+          )
+      )
+    }
+    const hasCourses = visibleCourses.length > 0
+
+    // Si hay búsqueda y no hay contenido coincidente en este nodo o descendientes, omitir
+    if (
+      effectiveMigSearch &&
+      !hasCourses &&
+      (!hasSub || !hasMatchingMigrationDescendants(node, effectiveMigSearch))
+    ) {
+      return null
+    }
+
+    return (
+      <div key={node.accountId} className="flex flex-col select-none text-xs">
+        <div
+          onClick={() => toggleMigrationAccount(node.accountId)}
+          className={`flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/40 cursor-pointer transition-colors ${
+            node.depth === 0
+              ? 'bg-muted/30 font-semibold border border-border/60 my-0.5'
+              : 'border-b border-border/20'
+          }`}
+          style={{ paddingLeft: `${node.depth * 1.2 + 0.5}rem` }}
+        >
+          <div className="flex items-center gap-1.5 min-w-0">
+            {hasSub || hasCourses ? (
+              isExpanded ? (
+                <ChevronDown className="size-3.5 text-muted-foreground shrink-0" />
+              ) : (
+                <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
+              )
+            ) : (
+              <span className="w-3.5 shrink-0" />
+            )}
+            <Building className="size-3.5 text-blue-600 shrink-0" />
+            <span className="truncate font-medium text-foreground">
+              {node.name}
+            </span>
+            <Badge
+              variant="outline"
+              className="text-[9px] px-1 py-0 h-4 font-mono text-blue-700 dark:text-blue-300 border-blue-500/30"
+            >
+              SIS: {node.accountId}
+            </Badge>
+          </div>
+
+          <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+            {node.courses.length} cursos
+          </span>
+        </div>
+
+        {isExpanded && (
+          <div className="flex flex-col">
+            {hasSub && node.children.map(renderMigrationAccount)}
+
+            {hasCourses && (
+              <div
+                className="flex flex-col space-y-1.5 my-1 pl-2 border-l-2 border-blue-500/30 ml-2"
+                style={{ marginLeft: `${node.depth * 1.2 + 0.7}rem` }}
+              >
+                {visibleCourses.map(renderMigrationCourse)}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  function hasMatchingMigrationDescendants(
+    node: MigrationAccountNode,
+    query: string
+  ): boolean {
+    for (const c of node.courses) {
+      if (
+        c.courseId.toLowerCase().includes(query) ||
+        c.longName.toLowerCase().includes(query) ||
+        c.sections.some((s) => s.name.toLowerCase().includes(query))
+      ) {
+        return true
+      }
+    }
+    for (const child of node.children) {
+      if (hasMatchingMigrationDescendants(child, query)) return true
+    }
+    return false
+  }
+
+  const renderMigrationCourse = (
+    course: MigrationCourseNode
+  ): React.ReactNode => {
+    const isExpanded =
+      migrationExpandedCourses.has(course.courseId) ||
+      Boolean(effectiveMigSearch && effectiveMigSearch.length > 0)
+
+    const totalStudents = course.sections.reduce(
+      (acc, s) => acc + s.students.length,
+      0
+    )
+
+    return (
+      <div
+        key={course.courseId}
+        className="rounded-lg border border-border/70 bg-card overflow-hidden my-1 shadow-2xs"
+      >
+        <div
+          onClick={() => toggleMigrationCourse(course.courseId)}
+          className="flex items-center justify-between p-2 hover:bg-muted/30 cursor-pointer transition-colors bg-muted/10 gap-2"
+        >
+          <div className="flex items-center gap-1.5 min-w-0">
+            {isExpanded ? (
+              <ChevronDown className="size-3.5 text-muted-foreground shrink-0" />
+            ) : (
+              <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
+            )}
+            <BookOpen className="size-3.5 text-blue-600 shrink-0" />
+            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+              <span className="font-mono font-bold text-xs text-foreground">
+                {course.courseId}
+              </span>
+              <span className="text-muted-foreground">•</span>
+              <span className="font-semibold text-xs text-foreground truncate max-w-xs">
+                {course.longName}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0 font-mono text-[10px]">
+            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+              {course.sections.length} sec.
+            </Badge>
+            <Badge
+              variant="secondary"
+              className="text-[9px] px-1.5 py-0 h-4 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+            >
+              {totalStudents} al.
+            </Badge>
+          </div>
+        </div>
+
+        {/* Secciones y Roster de la Migración */}
+        {isExpanded && (
+          <div className="p-2.5 border-t border-border/60 bg-background space-y-2">
+            {course.sections.map((sec) => {
+              const isSecExpanded = migrationExpandedSections.has(sec.sectionId)
+
+              return (
+                <div
+                  key={sec.sectionId}
+                  className="rounded border border-border/60 bg-card/60 p-2 space-y-1 text-xs"
+                >
+                  <div
+                    onClick={() => toggleMigrationSection(sec.sectionId)}
+                    className="flex items-center justify-between cursor-pointer hover:text-foreground transition-colors"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {isSecExpanded ? (
+                        <ChevronDown className="size-3 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="size-3 text-muted-foreground" />
+                      )}
+                      <span className="font-semibold text-foreground">
+                        {sec.name}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        (SEC: {sec.sectionId})
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      {sec.students.length} estudiantes
+                    </span>
+                  </div>
+
+                  {isSecExpanded && (
+                    <div className="pt-2 pl-3 border-l-2 border-blue-500/30 ml-1 space-y-2">
+                      {/* Docentes en Migración */}
+                      <div>
+                        <span className="text-[10px] uppercase font-semibold text-muted-foreground block mb-1">
+                          Docentes ({sec.teachers.length}):
+                        </span>
+                        {sec.teachers.length > 0 ? (
+                          <div className="space-y-1 font-mono text-[11px]">
+                            {sec.teachers.map((d, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center gap-1.5 py-0.5 px-2 rounded bg-amber-500/10 text-amber-800 dark:text-amber-300"
+                              >
+                                <span className="font-bold">
+                                  (D) DNI:{d.loginId || d.userId}
+                                </span>
+                                <span>-</span>
+                                <span className="font-sans font-medium truncate">
+                                  {d.fullName}
+                                </span>
+                                {d.email && (
+                                  <span className="text-[10px] text-muted-foreground truncate max-w-[160px]">
+                                    &lt;{d.email}&gt;
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] italic text-muted-foreground">
+                            (Sin docente asignado)
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Alumnos en Migración */}
+                      <div>
+                        <span className="text-[10px] uppercase font-semibold text-muted-foreground block mb-1">
+                          Alumnos ({sec.students.length}):
+                        </span>
+                        {sec.students.length > 0 ? (
+                          <div className="max-h-40 overflow-y-auto divide-y divide-border/20 border border-border/40 rounded bg-background p-1 font-mono text-[11px]">
+                            {sec.students.map((e, idx) => (
+                              <div
+                                key={idx}
+                                className="py-0.5 px-1.5 flex items-center justify-between gap-1"
+                              >
+                                <span className="text-blue-700 dark:text-blue-400 font-semibold truncate">
+                                  (E) {e.loginId || e.userId} - {e.fullName}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] italic text-muted-foreground">
+                            (Sin alumnos matriculados en esta sección)
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // 7. Renderizado de Nodos del Árbol de Canvas LMS
   const renderCanvasAccount = (node: CanvasAccountTreeNode): React.ReactNode => {
     const isExpanded =
       canvasExpandedNodes.has(node.canvasId) ||
       Boolean(effectiveCanvasSearch && effectiveCanvasSearch.length > 0)
     const hasSub = node.children && node.children.length > 0
 
-    // Filtrar cursos de esta cuenta según búsqueda
     let visibleCourses = node.courses || []
     if (effectiveCanvasSearch) {
       const q = effectiveCanvasSearch
@@ -543,8 +673,11 @@ export function CaseComparisonView({
     }
     const hasCourses = visibleCourses.length > 0
 
-    // Si hay búsqueda y este nodo no tiene cursos que coincidan ni hijos que coincidan, ocultar
-    if (effectiveCanvasSearch && !hasCourses && (!hasSub || !hasMatchingDescendants(node, effectiveCanvasSearch))) {
+    if (
+      effectiveCanvasSearch &&
+      !hasCourses &&
+      (!hasSub || !hasMatchingCanvasDescendants(node, effectiveCanvasSearch))
+    ) {
       return null
     }
 
@@ -588,20 +721,16 @@ export function CaseComparisonView({
           </span>
         </div>
 
-        {/* Hijos de la cuenta */}
         {isExpanded && (
           <div className="flex flex-col">
             {hasSub && node.children.map(renderCanvasAccount)}
 
-            {/* Cursos en esta cuenta */}
             {hasCourses && (
               <div
                 className="flex flex-col space-y-1.5 my-1 pl-2 border-l-2 border-emerald-500/30 ml-2"
                 style={{ marginLeft: `${node.depth * 1.2 + 0.7}rem` }}
               >
-                {visibleCourses.map((course) =>
-                  renderCanvasCourse(course, node.depth + 1)
-                )}
+                {visibleCourses.map((c) => renderCanvasCourse(c))}
               </div>
             )}
           </div>
@@ -610,8 +739,7 @@ export function CaseComparisonView({
     )
   }
 
-  // Verifica si algún nodo descendiente coincide con la búsqueda
-  function hasMatchingDescendants(
+  function hasMatchingCanvasDescendants(
     node: CanvasAccountTreeNode,
     query: string
   ): boolean {
@@ -628,16 +756,14 @@ export function CaseComparisonView({
     }
     if (node.children) {
       for (const child of node.children) {
-        if (hasMatchingDescendants(child, query)) return true
+        if (hasMatchingCanvasDescendants(child, query)) return true
       }
     }
     return false
   }
 
-  // Renderizador de curso individual en Canvas
   const renderCanvasCourse = (
-    course: CanvasCourseTreeNode,
-    _depth?: number
+    course: CanvasCourseTreeNode
   ): React.ReactNode => {
     const isExpanded =
       canvasExpandedCourses.has(course.canvasId) ||
@@ -685,7 +811,7 @@ export function CaseComparisonView({
           </div>
         </div>
 
-        {/* Desglose de Secciones y Roster en Canvas */}
+        {/* Secciones y Roster de Canvas */}
         {isExpanded && (
           <div className="p-2.5 border-t border-border/60 bg-background space-y-2">
             {isLoadingRoster && (
@@ -700,7 +826,6 @@ export function CaseComparisonView({
                 const secKey = `${course.canvasId}-${sec.id}`
                 const isSecExpanded = canvasExpandedSections.has(secKey)
 
-                // Filtrar matriculados de esta sección
                 const secDocentes = roster?.docentes
                   ? roster.docentes.filter(
                       (d) => !d.sectionId || d.sectionId === sec.id
@@ -814,37 +939,39 @@ export function CaseComparisonView({
     )
   }
 
-  const selectedDbCase = dbCases.find((c) => c.id === selectedDbCaseId)
+  const selectedMigration = migrations.find(
+    (m) => m.folderName === selectedMigrationFolder
+  )
   const selectedCanvasCase = canvasCases.find(
     (c) => c.id === selectedCanvasCaseId
   )
 
   return (
     <div className="space-y-4">
-      {/* 1. Barra Superior con Título y Búsqueda Sincronizada */}
+      {/* 1. Encabezado y Búsqueda Sincronizada */}
       <div className="rounded-xl border border-border bg-card p-4 sm:p-5 shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
           <div>
             <h2 className="text-base font-semibold text-foreground tracking-tight flex items-center gap-2">
               <Layers className="size-4 text-primary" />
-              <span>Comparativa de Casos Importados</span>
+              <span>Comparativa: Migraciones vs Canvas LMS (API)</span>
               <Badge variant="outline" className="text-xs font-normal">
                 Inspección Manual Lado a Lado
               </Badge>
             </h2>
             <p className="text-xs text-muted-foreground">
-              Explora y compara visualmente cualquier caso importado de base de datos contra cualquier snapshot de Canvas LMS
+              Coteja visualmente los registros de cualquier paquete de migración exportado contra las cuentas y cursos reales de Canvas LMS
             </p>
           </div>
 
-          {/* Campo de Búsqueda Compartida */}
+          {/* Buscador Sincronizado */}
           <div className="relative w-full sm:w-80">
             <Search className="size-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
             <Input
               type="text"
               value={sharedSearch}
               onChange={(e) => setSharedSearch(e.target.value)}
-              placeholder="Búsqueda sincronizada en ambos árboles..."
+              placeholder="Buscar en ambos árboles..."
               className="text-xs h-8 pl-8 pr-7 bg-background"
             />
             {sharedSearch && (
@@ -868,55 +995,58 @@ export function CaseComparisonView({
         )}
       </div>
 
-      {/* 2. Workspace Dividido Lado a Lado (50% / 50%) */}
+      {/* 2. Workspace Dividido (50% / 50%) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-        {/* ========================================= */}
-        {/* PANEL IZQUIERDO: CASO IMPORTADO (SQL)     */}
-        {/* ========================================= */}
+        {/* ======================================================= */}
+        {/* PANEL IZQUIERDO: REGISTRO DE MIGRACIÓN (EXPORTADO)      */}
+        {/* ======================================================= */}
         <div className="rounded-xl border border-blue-500/30 bg-card p-4 shadow-xs space-y-3">
-          {/* Encabezado y Selector de Versión SQL */}
+          {/* Selector de Migración */}
           <div className="space-y-2 border-b border-border pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Database className="size-4 text-blue-600 dark:text-blue-400" />
+                <PackageCheck className="size-4 text-blue-600 dark:text-blue-400" />
                 <span className="text-xs font-bold text-foreground">
-                  Caso Importado (SQL)
+                  Registros de Migración (Exportados)
                 </span>
               </div>
-              {selectedDbCase && (
-                <span className="text-[10px] font-mono text-muted-foreground">
-                  {selectedDbCase.id}
+              {selectedMigration && (
+                <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[180px]">
+                  {selectedMigration.folderName}
                 </span>
               )}
             </div>
 
             <select
-              value={selectedDbCaseId}
-              onChange={(e) => setSelectedDbCaseId(e.target.value)}
-              disabled={isLoadingCases || isLoadingDb}
+              value={selectedMigrationFolder}
+              onChange={(e) => setSelectedMigrationFolder(e.target.value)}
+              disabled={isLoadingSources || isLoadingMigration}
               className="w-full h-8 text-xs rounded-md border border-input bg-background px-2 py-1 text-foreground focus:outline-none"
             >
-              {dbCases.length === 0 ? (
-                <option value="">No hay casos de importación SQL</option>
+              {migrations.length === 0 ? (
+                <option value="">No hay paquetes de migración en /migraciones</option>
               ) : (
-                dbCases.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({new Date(c.createdAt).toLocaleDateString()} -{' '}
-                    {c.totalRows.toLocaleString()} reg.)
+                migrations.map((m) => (
+                  <option key={m.folderName} value={m.folderName}>
+                    {m.periodName} ({m.createdAt} - {m.coursesCount} cursos, {m.sectionsCount} sec.)
                   </option>
                 ))
               )}
             </select>
 
-            {/* Métricas y Controles de Plegado SQL */}
+            {/* Resumen cuantitativo de la migración y controles */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-muted-foreground">
               <div className="flex items-center gap-2">
                 <span>
-                  <strong>Sedes:</strong> {sqlTree.length}
+                  <strong>Cuentas:</strong> {migrationData?.totalAccounts || 0}
                 </span>
                 <span>•</span>
                 <span>
-                  <strong>Secciones:</strong> {dbItems.length}
+                  <strong>Cursos:</strong> {migrationData?.totalCourses || 0}
+                </span>
+                <span>•</span>
+                <span>
+                  <strong>Secciones:</strong> {migrationData?.totalSections || 0}
                 </span>
               </div>
 
@@ -924,7 +1054,7 @@ export function CaseComparisonView({
                 <Button
                   variant="ghost"
                   size="xs"
-                  onClick={handleExpandCoursesSql}
+                  onClick={handleExpandAllMigrationCourses}
                   className="h-6 text-[10px] px-1.5"
                 >
                   <Maximize2 className="size-3 mr-1" />
@@ -933,306 +1063,59 @@ export function CaseComparisonView({
                 <Button
                   variant="ghost"
                   size="xs"
-                  onClick={handleCollapseAllSql}
+                  onClick={handleCollapseAllMigration}
                   className="h-6 text-[10px] px-1.5"
                 >
                   <FoldVertical className="size-3 mr-1" />
                   Plegar
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={handleCollapseRostersSql}
-                  className="h-6 text-[10px] px-1.5"
-                >
-                  Plegar Alumnos
-                </Button>
               </div>
             </div>
 
-            {/* Buscador Local SQL si no hay búsqueda compartida */}
+            {/* Buscador local de migración */}
             {!sharedSearch && (
               <div className="relative pt-1">
                 <Search className="size-3 absolute left-2 top-3 text-muted-foreground" />
                 <Input
                   type="text"
-                  value={dbSearch}
-                  onChange={(e) => setDbSearch(e.target.value)}
-                  placeholder="Buscar en árbol SQL..."
+                  value={migrationSearch}
+                  onChange={(e) => setMigrationSearch(e.target.value)}
+                  placeholder="Buscar en registros de migración..."
                   className="text-xs h-7 pl-7 bg-background"
                 />
               </div>
             )}
           </div>
 
-          {/* Cuerpo del Árbol SQL */}
+          {/* Contenedor del Árbol de la Migración */}
           <div className="min-h-[400px] max-h-[calc(100vh-18rem)] overflow-y-auto pr-1 space-y-1">
-            {isLoadingDb ? (
+            {isLoadingMigration ? (
               <div className="p-12 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-2">
                 <Loader2 className="size-6 animate-spin text-blue-600" />
-                <span>Cargando jerarquía del caso importado SQL...</span>
+                <span>Cargando estructura de la migración exportada...</span>
               </div>
-            ) : sqlTree.length === 0 ? (
-              <div className="p-8 text-center text-xs text-muted-foreground italic">
-                No se encontraron elementos en este caso de BD para los filtros actuales.
+            ) : !migrationData || migrationData.rootNodes.length === 0 ? (
+              <div className="p-8 text-center text-xs text-muted-foreground space-y-2">
+                <FolderArchive className="size-8 mx-auto text-muted-foreground/40" />
+                <p>No se encontraron registros en la migración seleccionada.</p>
               </div>
             ) : (
-              sqlTree.map((sede) => {
-                const sedeKey = `s-${sede.sedeId}`
-                const isSedeOpen =
-                  dbExpandedNodes.has(sedeKey) ||
-                  Boolean(effectiveDbSearch && effectiveDbSearch.length > 0)
-
-                return (
-                  <div key={sede.sedeId} className="flex flex-col text-xs">
-                    {/* Fila Sede */}
-                    <div
-                      onClick={() => toggleDbNode(sedeKey)}
-                      className="flex items-center justify-between py-1.5 px-2.5 rounded-md bg-muted/40 font-semibold border border-border/60 hover:bg-muted/60 cursor-pointer transition-colors my-0.5"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        {isSedeOpen ? (
-                          <ChevronDown className="size-3.5 text-muted-foreground" />
-                        ) : (
-                          <ChevronRight className="size-3.5 text-muted-foreground" />
-                        )}
-                        <Building className="size-3.5 text-blue-600" />
-                        <span className="text-foreground">{sede.sedeNombre}</span>
-                      </div>
-                      <Badge variant="outline" className="text-[10px] px-1 py-0 font-mono">
-                        {sede.carreras.length} carreras
-                      </Badge>
-                    </div>
-
-                    {/* Carreras de la Sede */}
-                    {isSedeOpen && (
-                      <div className="pl-3 border-l-2 border-blue-500/30 ml-2 space-y-1 my-1">
-                        {sede.carreras.map((car) => {
-                          const carKey = `car-${sede.sedeId}-${car.carreraNombre}`
-                          const isCarOpen =
-                            dbExpandedNodes.has(carKey) ||
-                            Boolean(effectiveDbSearch && effectiveDbSearch.length > 0)
-
-                          return (
-                            <div key={car.carreraNombre} className="space-y-1">
-                              <div
-                                onClick={() => toggleDbNode(carKey)}
-                                className="flex items-center justify-between py-1 px-2 rounded hover:bg-muted/30 cursor-pointer font-medium text-foreground transition-colors"
-                              >
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  {isCarOpen ? (
-                                    <ChevronDown className="size-3 text-muted-foreground" />
-                                  ) : (
-                                    <ChevronRight className="size-3 text-muted-foreground" />
-                                  )}
-                                  <GraduationCap className="size-3.5 text-blue-500 shrink-0" />
-                                  <span className="truncate">{car.carreraNombre}</span>
-                                </div>
-                              </div>
-
-                              {/* Planes y Cursos */}
-                              {isCarOpen && (
-                                <div className="pl-3 border-l border-border/60 ml-2 space-y-1.5">
-                                  {car.planes.map((p) =>
-                                    p.cursos.map((curso) => {
-                                      const curKey = `cur-${sede.sedeId}-${curso.cursoCodigo}`
-                                      const isCurOpen =
-                                        dbExpandedNodes.has(curKey) ||
-                                        Boolean(
-                                          effectiveDbSearch &&
-                                            effectiveDbSearch.length > 0
-                                        )
-
-                                      return (
-                                        <div
-                                          key={curso.cursoCodigo}
-                                          className="rounded-lg border border-border/70 bg-card overflow-hidden shadow-2xs my-1"
-                                        >
-                                          {/* Encabezado del Curso SQL */}
-                                          <div
-                                            onClick={() => toggleDbNode(curKey)}
-                                            className="flex items-center justify-between p-2 hover:bg-muted/30 cursor-pointer transition-colors bg-muted/10 gap-2"
-                                          >
-                                            <div className="flex items-center gap-1.5 min-w-0">
-                                              {isCurOpen ? (
-                                                <ChevronDown className="size-3.5 text-muted-foreground shrink-0" />
-                                              ) : (
-                                                <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
-                                              )}
-                                              <BookOpen className="size-3.5 text-blue-600 shrink-0" />
-                                              <span className="font-mono font-bold text-xs text-foreground">
-                                                {curso.cursoCodigo}
-                                              </span>
-                                              <span className="text-muted-foreground">•</span>
-                                              <span className="font-semibold text-xs text-foreground truncate max-w-xs">
-                                                {curso.cursoNombre}
-                                              </span>
-                                            </div>
-
-                                            <div className="flex items-center gap-1.5 shrink-0 font-mono text-[10px]">
-                                              <Badge
-                                                variant="outline"
-                                                className="text-[9px] px-1 py-0 h-4"
-                                              >
-                                                {curso.secciones.length} sec.
-                                              </Badge>
-                                              <Badge
-                                                variant="secondary"
-                                                className="text-[9px] px-1.5 py-0 h-4 bg-blue-500/10 text-blue-700 dark:text-blue-300"
-                                              >
-                                                {curso.totalStudents} al.
-                                              </Badge>
-                                            </div>
-                                          </div>
-
-                                          {/* Secciones del Curso SQL */}
-                                          {isCurOpen && (
-                                            <div className="p-2.5 border-t border-border/60 bg-background space-y-2">
-                                              {curso.secciones.map((sec) => {
-                                                const secKey = `sec-${sec.id}`
-                                                const isSecOpen =
-                                                  dbExpandedNodes.has(secKey)
-                                                const loadedStudents =
-                                                  dbLoadedStudents[sec.id] || []
-                                                const isLoadingStudents =
-                                                  dbLoadingSections.has(sec.id)
-
-                                                return (
-                                                  <div
-                                                    key={sec.id}
-                                                    className="rounded border border-border/60 bg-card/60 p-2 space-y-1 text-xs"
-                                                  >
-                                                    <div
-                                                      onClick={() => {
-                                                        toggleDbNode(secKey)
-                                                        if (!isSecOpen) {
-                                                          fetchDbSectionStudents(
-                                                            sec.id
-                                                          )
-                                                        }
-                                                      }}
-                                                      className="flex items-center justify-between cursor-pointer hover:text-foreground transition-colors"
-                                                    >
-                                                      <div className="flex items-center gap-1.5">
-                                                        {isSecOpen ? (
-                                                          <ChevronDown className="size-3 text-muted-foreground" />
-                                                        ) : (
-                                                          <ChevronRight className="size-3 text-muted-foreground" />
-                                                        )}
-                                                        <span className="font-semibold text-foreground">
-                                                          {sec.seccionNombre}
-                                                        </span>
-                                                        <Badge
-                                                          variant="outline"
-                                                          className="text-[9px] px-1 py-0 h-4"
-                                                        >
-                                                          {sec.isNoHabilitado
-                                                            ? 'NO HABILITADO'
-                                                            : 'HABILITADO'}
-                                                        </Badge>
-                                                      </div>
-                                                      <span className="text-[10px] text-muted-foreground font-mono">
-                                                        {sec.estudiantesCount} alumnos
-                                                      </span>
-                                                    </div>
-
-                                                    {/* Desglose de Docentes y Alumnos SQL */}
-                                                    {isSecOpen && (
-                                                      <div className="pt-2 pl-3 border-l-2 border-blue-500/30 ml-1 space-y-2">
-                                                        {/* Docentes */}
-                                                        <div>
-                                                          <span className="text-[10px] uppercase font-semibold text-muted-foreground block mb-1">
-                                                            Docentes ({sec.docentes.length}):
-                          </span>
-                                                          {sec.docentes.length > 0 ? (
-                                                            <div className="space-y-1 font-mono text-[11px]">
-                                                              {sec.docentes.map((d, dIdx) => (
-                                                                <div
-                                                                  key={dIdx}
-                                                                  className="flex items-center gap-1.5 py-0.5 px-2 rounded bg-amber-500/10 text-amber-800 dark:text-amber-300"
-                                                                >
-                                                                  <span className="font-bold">
-                                                                    (D) {d.dni ? `DNI:${d.dni}` : 'S/DNI'}
-                                                                  </span>
-                                                                  <span>-</span>
-                                                                  <span className="font-sans font-medium truncate">
-                                                                    {d.fullName}
-                                                                  </span>
-                                                                </div>
-                                                              ))}
-                                                            </div>
-                                                          ) : (
-                                                            <p className="text-[11px] italic text-muted-foreground">
-                                                              (Sin docente asignado)
-                                                            </p>
-                                                          )}
-                                                        </div>
-
-                                                        {/* Alumnos */}
-                                                        <div>
-                                                          <span className="text-[10px] uppercase font-semibold text-muted-foreground block mb-1">
-                                                            Alumnos ({sec.estudiantesCount}):
-                                                          </span>
-                                                          {isLoadingStudents ? (
-                                                            <div className="py-2 text-center text-[11px] text-muted-foreground flex items-center justify-center gap-1.5">
-                                                              <Loader2 className="size-3 animate-spin text-blue-600" />
-                                                              <span>Cargando lista de alumnos...</span>
-                                                            </div>
-                                                          ) : loadedStudents.length > 0 ? (
-                                                            <div className="max-h-40 overflow-y-auto divide-y divide-border/20 border border-border/40 rounded bg-background p-1 font-mono text-[11px]">
-                                                              {loadedStudents.map((e, eIdx) => (
-                                                                <div
-                                                                  key={eIdx}
-                                                                  className="py-0.5 px-1.5 flex items-center justify-between gap-1"
-                                                                >
-                                                                  <span className="text-blue-700 dark:text-blue-400 font-semibold truncate">
-                                                                    (E) {e.codigo} - {e.fullName}
-                                                                  </span>
-                                                                </div>
-                                                              ))}
-                                                            </div>
-                                                          ) : (
-                                                            <p className="text-[11px] italic text-muted-foreground">
-                                                              (Sin alumnos matriculados cargados)
-                                                            </p>
-                                                          )}
-                                                        </div>
-                                                      </div>
-                                                    )}
-                                                  </div>
-                                                )
-                                              })}
-                                            </div>
-                                          )}
-                                        </div>
-                                      )
-                                    })
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )
-              })
+              migrationData.rootNodes.map(renderMigrationAccount)
             )}
           </div>
         </div>
 
-        {/* ================================================= */}
-        {/* PANEL DERECHO: CASO IMPORTADO CANVAS LMS (API)    */}
-        {/* ================================================= */}
+        {/* ======================================================= */}
+        {/* PANEL DERECHO: SNAPSHOT CANVAS LMS (API)               */}
+        {/* ======================================================= */}
         <div className="rounded-xl border border-emerald-500/30 bg-card p-4 shadow-xs space-y-3">
-          {/* Encabezado y Selector de Snapshot Canvas */}
+          {/* Selector de Snapshot Canvas */}
           <div className="space-y-2 border-b border-border pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Globe className="size-4 text-emerald-600 dark:text-emerald-400" />
                 <span className="text-xs font-bold text-foreground">
-                  Caso Importado Canvas LMS (API)
+                  Snapshot Canvas LMS (REST API)
                 </span>
               </div>
               {selectedCanvasCase && (
@@ -1245,7 +1128,7 @@ export function CaseComparisonView({
             <select
               value={selectedCanvasCaseId}
               onChange={(e) => setSelectedCanvasCaseId(e.target.value)}
-              disabled={isLoadingCases || isLoadingCanvas}
+              disabled={isLoadingSources || isLoadingCanvas}
               className="w-full h-8 text-xs rounded-md border border-input bg-background px-2 py-1 text-foreground focus:outline-none"
             >
               {canvasCases.length === 0 ? (
@@ -1260,7 +1143,7 @@ export function CaseComparisonView({
               )}
             </select>
 
-            {/* Métricas y Controles de Plegado Canvas */}
+            {/* Resumen cuantitativo de Canvas y controles */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-muted-foreground">
               <div className="flex items-center gap-2">
                 <span>
@@ -1291,18 +1174,10 @@ export function CaseComparisonView({
                   <FoldVertical className="size-3 mr-1" />
                   Plegar
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={handleCollapseCanvasRosters}
-                  className="h-6 text-[10px] px-1.5"
-                >
-                  Plegar Alumnos
-                </Button>
               </div>
             </div>
 
-            {/* Buscador Local Canvas si no hay búsqueda compartida */}
+            {/* Buscador local de Canvas */}
             {!sharedSearch && (
               <div className="relative pt-1">
                 <Search className="size-3 absolute left-2 top-3 text-muted-foreground" />
@@ -1317,7 +1192,7 @@ export function CaseComparisonView({
             )}
           </div>
 
-          {/* Cuerpo del Árbol Canvas */}
+          {/* Contenedor del Árbol de Canvas */}
           <div className="min-h-[400px] max-h-[calc(100vh-18rem)] overflow-y-auto pr-1 space-y-1">
             {isLoadingCanvas ? (
               <div className="p-12 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-2">
