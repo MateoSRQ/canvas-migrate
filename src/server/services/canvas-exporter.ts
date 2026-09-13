@@ -15,6 +15,7 @@ const execFileAsync = promisify(execFile)
 export interface ExportCanvasInput {
   caseId: string
   selectedSectionIds: number[] // Carga_Academica_Sede_Curso.id
+  rootAccountId?: string // Subcuenta inicial o raíz en Canvas (opcional)
 }
 
 export interface ExportCanvasResult {
@@ -23,6 +24,7 @@ export interface ExportCanvasResult {
   folderName: string
   periodName: string
   timestamp: string
+  rootAccountId?: string
   files: { name: string; sizeBytes: number; rowsCount: number }[]
   stats: {
     accountsCount: number
@@ -141,6 +143,8 @@ export async function exportSelectedToCanvasCsv(
     status: string
   }
 
+  const cleanRootAccountId = input.rootAccountId ? input.rootAccountId.trim() : ''
+
   const accountsMap = new Map<string, AccountRow>()
   const sedesOrder: AccountRow[] = []
   const modalidadesOrder: AccountRow[] = []
@@ -153,7 +157,7 @@ export async function exportSelectedToCanvasCsv(
     if (!accountsMap.has(sedeAccId)) {
       const row: AccountRow = {
         account_id: sedeAccId,
-        parent_account_id: '',
+        parent_account_id: cleanRootAccountId,
         name: it.sedeNombre.trim(),
         status: 'active',
       }
@@ -577,6 +581,9 @@ export async function exportSelectedToCanvasCsv(
     `# =========================================================================`,
     `# ARBOL JERARQUICO DE MIGRACION A CANVAS LMS`,
     `# Periodo: ${primaryPeriodName}`,
+    ...(cleanRootAccountId
+      ? [`# Subcuenta Inicial Canvas (parent_account_id): ${cleanRootAccountId}`]
+      : []),
     `# Fecha de exportación: ${new Date().toLocaleString('es-ES')}`,
     `# Total secciones: ${selectedItems.length} | Cursos: ${coursesList.length}`,
     `# =========================================================================`,
@@ -617,30 +624,34 @@ export async function exportSelectedToCanvasCsv(
 
   for (const [pName, sedesG] of periodoGroup) {
     treeLines.push(`[PERIODO] ${pName}`)
+    if (cleanRootAccountId) {
+      treeLines.push(`\t[SUBCUENTA INICIAL] ${cleanRootAccountId}`)
+    }
+    const rootIndent = cleanRootAccountId ? '\t' : ''
     for (const [sName, modG] of sedesG) {
-      treeLines.push(`\t[CUENTA] ${sName}`)
+      treeLines.push(`\t${rootIndent}[CUENTA] ${sName}`)
       for (const [mName, facG] of modG) {
-        treeLines.push(`\t\t[SUBCUENTA] ${mName}`)
+        treeLines.push(`\t\t${rootIndent}[SUBCUENTA] ${mName}`)
         for (const [fName, carrG] of facG) {
-          treeLines.push(`\t\t\t[SUBCUENTA] ${fName}`)
+          treeLines.push(`\t\t\t${rootIndent}[SUBCUENTA] ${fName}`)
           for (const [cName, planG] of carrG) {
-            treeLines.push(`\t\t\t\t[SUBCUENTA] ${cName}`)
+            treeLines.push(`\t\t\t\t${rootIndent}[SUBCUENTA] ${cName}`)
             for (const [plName, curG] of planG) {
-              treeLines.push(`\t\t\t\t\t[SUBCUENTA PLAN] ${plName}`)
+              treeLines.push(`\t\t\t\t\t${rootIndent}[SUBCUENTA PLAN] ${plName}`)
               for (const [curName, secs] of curG) {
-                treeLines.push(`\t\t\t\t\t\t[CURSO] ${curName}`)
+                treeLines.push(`\t\t\t\t\t\t${rootIndent}[CURSO] ${curName}`)
                 for (const s of secs as HierarchyItem[]) {
                   treeLines.push(
-                    `\t\t\t\t\t\t\t[SECCION] ${s.seccionNombre} (SEC: ${s.seccionId}-${s.cursoCodigo}) - ${s.estudiantes.length} alumnos`
+                    `\t\t\t\t\t\t\t${rootIndent}[SECCION] ${s.seccionNombre} (SEC: ${s.seccionId}-${s.cursoCodigo}) - ${s.estudiantes.length} alumnos`
                   )
                   for (const d of s.docentes) {
                     treeLines.push(
-                      `\t\t\t\t\t\t\t\t(D) [DOCENTE] DNI:${d.dni} - ${d.fullName} <${d.email}>`
+                      `\t\t\t\t\t\t\t\t${rootIndent}(D) [DOCENTE] DNI:${d.dni} - ${d.fullName} <${d.email}>`
                     )
                   }
                   for (const e of s.estudiantes) {
                     treeLines.push(
-                      `\t\t\t\t\t\t\t\t(E) [ESTUDIANTE] COD:${e.codigo} - ${e.fullName} <${e.email}>`
+                      `\t\t\t\t\t\t\t\t${rootIndent}(E) [ESTUDIANTE] COD:${e.codigo} - ${e.fullName} <${e.email}>`
                     )
                   }
                 }
@@ -657,6 +668,7 @@ export async function exportSelectedToCanvasCsv(
   const resumenContent = `# RESUMEN DE MIGRACIÓN A CANVAS LMS
 
 **Periodo Principal:** ${primaryPeriodName}  
+**Subcuenta Inicial (parent_account_id de Sedes):** ${cleanRootAccountId ? `\`${cleanRootAccountId}\`` : '*Ninguna (Raíz institucional de Canvas)*'}  
 **Fecha de Exportación:** ${new Date().toLocaleString('es-ES')}  
 **Directorio:** \`${targetDir}\`  
 **Caso de Origen:** \`${caseId}\`
@@ -761,6 +773,7 @@ export async function exportSelectedToCanvasCsv(
     folderName,
     periodName: primaryPeriodName,
     timestamp: timestampStr,
+    rootAccountId: cleanRootAccountId || undefined,
     files: filesMeta,
     stats: {
       accountsCount: sortedAccounts.length,

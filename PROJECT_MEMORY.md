@@ -63,6 +63,7 @@
   - [x] Teacher identification normalized to official National ID / DNI and student codes.
   - [x] Automatic generation of visual tree `hierarchy.txt`, technical report `RESUMEN.md`, and ZIP archive `canvas_migration.zip`.
   - [x] Export action button and full-featured confirmation & inspection modal in `HierarchySelector`.
+  - [x] Subcuenta inicial / raíz configurable en modal de exportación (asigna `parent_account_id` a nivel de Sedes en `accounts.csv`, o vacío si se deja en blanco).
   - [x] **Arquitectura y Optimización de Deuda Técnica (Completado)**
     - [x] Optimización de base de datos SQLite: Pragmas WAL mode, foreign_keys ON, synchronous NORMAL y 64MB cache en `better-sqlite3`.
     - [x] Eliminación de sobrecarga de red (Overfetching): Lazy loading de alumnos matriculados (`estudiantes: []` y `estudiantesCount: N` en payload inicial, reduciendo transferencia JSON de 5.5MB a ~350KB).
@@ -201,6 +202,8 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - Teacher SIS ID: Normalized to official National ID / DNI (replaces legacy emails and sequential IDs).
   - Subaccount Hierarchy: `Sede` -> `Modalidad` -> `Facultad` -> `Carrera` -> `Plan`.
   - Exclusion filter: Sections with `"NO HABILITADO"` omitted when flag is false.
+  - Course Placement (`courses.csv`): Associated directly with the Curricular Plan subaccount (`account_id: <cod_plan>`).
+  - Root Account Association: Top-level Sedes currently set `parent_account_id: ""` (importing directly under the Canvas target root account). Configurable to point to an existing Canvas subaccount ID or custom organizational root.
 
 ---
 
@@ -231,6 +234,8 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-11T13:28:00` | `ae10003` | Antigravity | Perf/DB | Configuración de pragmas de SQLite en better-sqlite3: WAL mode, foreign_keys ON, synchronous NORMAL y 64MB caché | `src/db/index.ts` |
 | `2026-09-11T13:42:00` | `e2cbb25` | Antigravity | Refactor/Perf | Optimización de payload (lazy loading de alumnos de 5.5MB a 350KB), cache LRU en memoria, modularización de modales y spinning loaders (Loader2) en todas las operaciones asíncronas | `src/server/services/db-helpers.ts`, `src/server/services/hierarchy-service.ts`, `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/*`, `src/components/hierarchy/tree-section-roster.tsx`, `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/cases/case-manager.tsx` |
 | `2026-09-11T16:55:00` | `90cc0c2` | Antigravity | Sec/Audit | Auditoría de seguridad y credenciales: eliminación de contraseñas fallback quemadas en `sql-server.ts`, ofuscación y sanitización de tokens Canvas y passwords de base de datos en documentación y memoria del proyecto | `src/server/services/sql-server.ts`, `docs/CANVAS_REFERENCE.md`, `PROJECT_MEMORY.md` |
+| `2026-09-12T23:42:00` | - | Antigravity | Docs/Architecture | Documentación de arquitectura de ubicación de cursos en Canvas LMS y diseño de cuenta raíz personalizable | `PROJECT_MEMORY.md` |
+| `2026-09-12T23:48:00` | `292e92a` | Antigravity | Feature/Export | Soporte para subcuenta inicial/raíz opcional en exportador Canvas LMS y UI del modal | `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `PROJECT_MEMORY.md` |
 
 ---
 
@@ -304,11 +309,12 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Botón de Exportación en Barra de Selección**: `Exportar para Canvas ({selectedCount})` con acento visual en esmeralda (`bg-emerald-600 hover:bg-emerald-700`), visible de inmediato al seleccionar 1 o más secciones tanto en vista árbol como tabla.
   - **Acceso Cruzado desde Resumen**: Botón de exportación integrado directamente dentro del modal de "Resumen de Selección Activa".
   - **Modal de Exportación Multifase (`Dialog`)**:
-    - **Fase Inicial (Confirmación y Alcance)**: Desglose cuantitativo (secciones, cursos únicos, matrículas totales estimadas, periodo académico), directorio destino objetivo `migraciones/[Periodo] - [YYYYMMDDHHMMSS]/`, y lista de los 6 archivos CSV estándar de Canvas + documentación + ZIP.
+    - **Fase Inicial (Confirmación, Alcance y Configuración de Raíz)**: Desglose cuantitativo (secciones, cursos únicos, matrículas totales estimadas, periodo académico), campo de entrada `Input` para "Subcuenta Inicial / Raíz en Canvas (Opcional)" (`parent_account_id`) con texto explicativo, directorio destino objetivo `migraciones/[Periodo] - [YYYYMMDDHHMMSS]/`, y lista de los 6 archivos CSV estándar de Canvas + documentación + ZIP.
     - **Fase de Procesamiento**: Indicador giratorio con feedback en tiempo real mientras se ensamblan las cuentas, términos, cursos, secciones, usuarios y matrículas y se genera el archivo ZIP.
     - **Fase de Éxito e Inspección**:
       - Banner de éxito con icono de confirmación.
       - Tarjeta de directorio con ruta absoluta copiable en un clic (`navigator.clipboard.writeText`) y badge de confirmación "¡Ruta Copiada!".
+      - Muestra dinámica de la Subcuenta Raíz utilizada (o indicativo de raíz institucional por defecto).
       - Cuadrícula de 6 métricas clave: Cuentas, Periodos, Cursos, Secciones, Usuarios (Docentes D / Estudiantes E), Matrículas Totales.
       - Tabla de archivos generados con nombres, tipos, conteo de filas y tamaño en KB (`accounts.csv`, `terms.csv`, `courses.csv`, `sections.csv`, `users.csv`, `enrollments.csv`, `hierarchy.txt`, `RESUMEN.md`, `canvas_migration.zip`).
       - Guía rápida paso a paso para carga de SIS Import en la consola de administración de Canvas LMS.

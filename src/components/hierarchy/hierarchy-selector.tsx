@@ -184,6 +184,7 @@ export function HierarchySelector({
   // Diálogo y estado de exportación a Canvas LMS (SIS CSV)
   const [isExportModalOpen, setIsExportModalOpen] = React.useState(false)
   const [isExporting, setIsExporting] = React.useState(false)
+  const [exportRootAccountId, setExportRootAccountId] = React.useState('')
   const [exportResult, setExportResult] = React.useState<ExportCanvasResult | null>(null)
   const [exportError, setExportError] = React.useState<string | null>(null)
   const [copiedPath, setCopiedPath] = React.useState(false)
@@ -726,6 +727,7 @@ export function HierarchySelector({
         data: {
           caseId: selectedCaseId,
           selectedSectionIds: selectedIds,
+          rootAccountId: exportRootAccountId.trim() || undefined,
         },
       })
       setExportResult(res)
@@ -1513,6 +1515,8 @@ export function HierarchySelector({
         selectedCount={selectedCount}
         selectionStats={selectionStats}
         selectedPeriodName={selectedPeriodName}
+        rootAccountId={exportRootAccountId}
+        onRootAccountIdChange={setExportRootAccountId}
         onCopyPath={handleCopyPath}
         onResetExport={() => {
           setExportResult(null)

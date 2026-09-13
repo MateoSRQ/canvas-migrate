@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
+import { Input } from '#/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -36,6 +37,8 @@ interface CanvasExportDialogProps {
     studentsTotal: number
   }
   selectedPeriodName: string
+  rootAccountId: string
+  onRootAccountIdChange: (value: string) => void
   onCopyPath: (targetPath: string) => void
   onResetExport: () => void
   onExecuteExport: () => void
@@ -51,6 +54,8 @@ export function CanvasExportDialog({
   selectedCount,
   selectionStats,
   selectedPeriodName,
+  rootAccountId,
+  onRootAccountIdChange,
   onCopyPath,
   onResetExport,
   onExecuteExport,
@@ -142,6 +147,19 @@ export function CanvasExportDialog({
                 <span>•</span>
                 <span>
                   Timestamp: <strong className="text-foreground">{exportResult.timestamp}</strong>
+                </span>
+                <span>•</span>
+                <span>
+                  Subcuenta Raíz:{' '}
+                  {exportResult.rootAccountId ? (
+                    <strong className="text-emerald-600 font-mono">
+                      {exportResult.rootAccountId}
+                    </strong>
+                  ) : (
+                    <strong className="text-muted-foreground italic font-normal">
+                      Raíz institucional por defecto
+                    </strong>
+                  )}
                 </span>
               </div>
             </div>
@@ -307,6 +325,31 @@ export function CanvasExportDialog({
                   <div className="text-[10px] text-muted-foreground">Periodo Académico</div>
                 </div>
               </div>
+            </div>
+
+            {/* Configuración de Subcuenta Inicial / Raíz en Canvas */}
+            <div className="p-3.5 rounded-xl border border-border bg-card space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground flex items-center gap-1.5">
+                  <Layers className="size-4 text-emerald-600" />
+                  <span>Subcuenta Inicial / Raíz en Canvas (Opcional)</span>
+                </span>
+                <span className="text-[10px] font-mono text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                  parent_account_id
+                </span>
+              </div>
+              <p className="text-muted-foreground text-[11px] leading-relaxed">
+                Ingrese el SIS ID de la subcuenta en Canvas donde colgarán las sedes. Si se deja en
+                blanco, las sedes se crearán directamente en la raíz institucional de Canvas.
+              </p>
+              <Input
+                type="text"
+                value={rootAccountId}
+                onChange={(e) => onRootAccountIdChange(e.target.value)}
+                placeholder="Ej: PREGRADO_2026, FACULTAD_CENTRAL (o dejar vacío)"
+                className="font-mono text-xs h-8 bg-background"
+                disabled={isExporting}
+              />
             </div>
 
             <div className="p-3.5 rounded-xl border border-border bg-muted/20 space-y-2 text-xs">
