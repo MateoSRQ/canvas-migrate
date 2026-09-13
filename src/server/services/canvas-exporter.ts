@@ -10,13 +10,16 @@ import {
 
 const execFileAsync = promisify(execFile)
 
+export type SandboxPrefixMode = 'none' | 'accounts' | 'all'
+
 export interface ExportCanvasInput {
   caseId: string
   selectedSectionIds: number[] // Carga_Academica_Sede_Curso.id
   rootAccountId?: string // Subcuenta inicial o raíz en Canvas (opcional)
   createRootAccount?: boolean // Si se debe crear la subcuenta raíz como nueva en accounts.csv
   rootAccountName?: string // Nombre descriptivo para la subcuenta raíz (opcional)
-  isolateAccountPrefix?: boolean // Si se deben prefijar los IDs de cuentas con la subcuenta raíz para aislar pruebas en sandbox
+  isolateAccountPrefix?: boolean // Compatibilidad hacia atrás (equivalente a prefixMode: 'accounts')
+  prefixMode?: SandboxPrefixMode // Modo de prefijo: 'none' | 'accounts' | 'all'
 }
 
 export interface ExportCanvasResult {
@@ -27,7 +30,7 @@ export interface ExportCanvasResult {
   timestamp: string
   rootAccountId?: string
   rootAccountCreated?: boolean
-  isolateAccountPrefix?: boolean
+  prefixMode: SandboxPrefixMode
   accountPrefix?: string
   files: { name: string; sizeBytes: number; rowsCount: number }[]
   stats: {
@@ -150,8 +153,16 @@ export async function exportSelectedToCanvasCsv(
   const cleanRootAccountId = input.rootAccountId ? input.rootAccountId.trim() : ''
   const shouldCreateRootAccount = Boolean(input.createRootAccount && cleanRootAccountId)
   const rootAccountName = input.rootAccountName?.trim() || cleanRootAccountId
-  const shouldIsolate = Boolean(input.isolateAccountPrefix && cleanRootAccountId)
-  const accPrefix = shouldIsolate ? `${cleanRootAccountId}_` : ''
+
+  const prefixMode: SandboxPrefixMode =
+    input.prefixMode ||
+    (input.isolateAccountPrefix ? 'accounts' : 'none')
+  const shouldPrefixAccounts = Boolean(
+    cleanRootAccountId && (prefixMode === 'accounts' || prefixMode === 'all')
+  )
+  const shouldPrefixCourses = Boolean(cleanRootAccountId && prefixMode === 'all')
+  const accPrefix = shouldPrefixAccounts ? `${cleanRootAccountId}_` : ''
+  const coursePrefix = shouldPrefixCourses ? `${cleanRootAccountId}_` : ''
 
   const accountsMap = new Map<string, AccountRow>()
   const rootOrder: AccountRow[] = []
@@ -304,13 +315,14 @@ export async function exportSelectedToCanvasCsv(
 
   const coursesMap = new Map<string, CourseRow>()
   for (const it of selectedItems) {
-    const courseId = it.cursoCodigo.trim()
+    const rawCourseId = it.cursoCodigo.trim()
+    const courseId = coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId
     const rawPlanAccId = it.planCodigo ? it.planCodigo.trim() : `P-${it.planId}`
     const planAccId = accPrefix ? `${accPrefix}${rawPlanAccId}` : rawPlanAccId
     const rawCurso = cursoRawMap.get(it.cursoId)
     const shortName = rawCurso?.abreviatura
       ? String(rawCurso.abreviatura).trim()
-      : courseId
+      : (coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId)
 
     if (!coursesMap.has(courseId)) {
       coursesMap.set(courseId, {
@@ -373,8 +385,10 @@ export async function exportSelectedToCanvasCsv(
 
   const sectionsMap = new Map<string, SectionRow>()
   for (const it of selectedItems) {
-    const courseId = it.cursoCodigo.trim()
-    const sectionId = `${it.seccionId}-${courseId}`
+    const rawCourseId = it.cursoCodigo.trim()
+    const courseId = coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId
+    const rawSectionId = `${it.seccionId}-${rawCourseId}`
+    const sectionId = coursePrefix ? `${coursePrefix}${rawSectionId}` : rawSectionId
     if (!sectionsMap.has(sectionId)) {
       sectionsMap.set(sectionId, {
         section_id: sectionId,
@@ -526,8 +540,10 @@ export async function exportSelectedToCanvasCsv(
   const enrollmentsMap = new Map<string, EnrollmentRow>()
 
   for (const it of selectedItems) {
-    const courseId = it.cursoCodigo.trim()
-    const sectionId = `${it.seccionId}-${courseId}`
+    const rawCourseId = it.cursoCodigo.trim()
+    const courseId = coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId
+    const rawSectionId = `${it.seccionId}-${rawCourseId}`
+    const sectionId = coursePrefix ? `${coursePrefix}${rawSectionId}` : rawSectionId
 
     // Docentes
     for (const doc of it.docentes) {
@@ -612,7 +628,15 @@ export async function exportSelectedToCanvasCsv(
     ...(cleanRootAccountId
       ? [
           `# Subcuenta Inicial Canvas (parent_account_id): ${cleanRootAccountId} (${shouldCreateRootAccount ? `Creada como "${rootAccountName}"` : 'Existente en Canvas'})`,
-          ...(shouldIsolate ? [`# Modo Aislamiento Sandbox: ACTIVO (Prefijo de subcuentas: "${accPrefix}")`] : []),
+          ...(prefixMode !== 'none'
+            ? [
+                `# Modo Aislamiento / Prefijo: ${
+                  prefixMode === 'all'
+                    ? `TOTAL (Cuentas, Cursos y Secciones prefijados con "${coursePrefix}")`
+                    : `CUENTAS (Subcuentas prefijadas con "${accPrefix}")`
+                }`,
+              ]
+            : []),
         ]
       : []),
     `# Fecha de exportación: ${new Date().toLocaleString('es-ES')}`,
@@ -648,7 +672,9 @@ export async function exportSelectedToCanvasCsv(
     if (!planG.has(plKey)) planG.set(plKey, new Map())
     const curG = planG.get(plKey)!
 
-    const curKey = `${it.cursoCodigo} - ${it.cursoNombre}`
+    const rawCurCode = it.cursoCodigo.trim()
+    const curCode = coursePrefix ? `${coursePrefix}${rawCurCode}` : rawCurCode
+    const curKey = `${curCode} - ${it.cursoNombre}`
     if (!curG.has(curKey)) curG.set(curKey, [])
     curG.get(curKey)!.push(it)
   }
@@ -674,8 +700,10 @@ export async function exportSelectedToCanvasCsv(
               for (const [curName, secs] of curG) {
                 treeLines.push(`\t\t\t\t\t\t${rootIndent}[CURSO] ${curName}`)
                 for (const s of secs as HierarchyItem[]) {
+                  const rawSecId = `${s.seccionId}-${s.cursoCodigo}`
+                  const secId = coursePrefix ? `${coursePrefix}${rawSecId}` : rawSecId
                   treeLines.push(
-                    `\t\t\t\t\t\t\t${rootIndent}[SECCION] ${s.seccionNombre} (SEC: ${s.seccionId}-${s.cursoCodigo}) - ${s.estudiantes.length} alumnos`
+                    `\t\t\t\t\t\t\t${rootIndent}[SECCION] ${s.seccionNombre} (SEC: ${secId}) - ${s.estudiantes.length} alumnos`
                   )
                   const seenDocKeys = new Set<string>()
                   for (const d of s.docentes) {
@@ -706,11 +734,18 @@ export async function exportSelectedToCanvasCsv(
   await fs.writeFile(path.join(targetDir, 'hierarchy.txt'), treeLines.join('\n'), 'utf8')
 
   // 10. Generar RESUMEN.md
+  const prefixModeLabel =
+    prefixMode === 'all'
+      ? `Aplicar prefijo a todos (Cuentas, Cursos y Secciones prefijados con \`${coursePrefix}\`)`
+      : prefixMode === 'accounts'
+      ? `Aplicar prefijo a cuentas (Solo subcuentas prefijadas con \`${accPrefix}\`)`
+      : 'Sin prefijo (SIS IDs globales estándar)'
+
   const resumenContent = `# RESUMEN DE MIGRACIÓN A CANVAS LMS
 
 **Periodo Principal:** ${primaryPeriodName}  
 **Subcuenta Inicial (parent_account_id de Sedes):** ${cleanRootAccountId ? `\`${cleanRootAccountId}\`${shouldCreateRootAccount ? ` (Creada en la migración como "${rootAccountName}")` : ' (Subcuenta existente en Canvas)'}` : '*Ninguna (Raíz institucional de Canvas)*'}  
-**Modo Aislamiento Sandbox:** ${shouldIsolate ? `Activo (Prefijo de subcuentas: \`${accPrefix}\`)` : 'Desactivado (SIS IDs globales estándar)'}  
+**Modo de Aislamiento / Prefijo:** ${prefixModeLabel}  
 **Fecha de Exportación:** ${new Date().toLocaleString('es-ES')}  
 **Directorio:** \`${targetDir}\`  
 **Caso de Origen:** \`${caseId}\`
@@ -809,6 +844,8 @@ export async function exportSelectedToCanvasCsv(
     })
   )
 
+  const activePrefix = coursePrefix || accPrefix || undefined
+
   return {
     success: true,
     destinationDir: targetDir,
@@ -817,8 +854,8 @@ export async function exportSelectedToCanvasCsv(
     timestamp: timestampStr,
     rootAccountId: cleanRootAccountId || undefined,
     rootAccountCreated: shouldCreateRootAccount,
-    isolateAccountPrefix: shouldIsolate,
-    accountPrefix: accPrefix || undefined,
+    prefixMode,
+    accountPrefix: activePrefix,
     files: filesMeta,
     stats: {
       accountsCount: sortedAccounts.length,

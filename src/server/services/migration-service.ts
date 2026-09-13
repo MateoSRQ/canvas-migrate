@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import type { SandboxPrefixMode } from './canvas-exporter'
 
 export interface MigrationSummary {
   folderName: string
@@ -8,6 +9,7 @@ export interface MigrationSummary {
   mtime: number
   rootAccount: string
   sandboxIsolated?: boolean
+  sandboxPrefixMode?: SandboxPrefixMode
   sandboxPrefix?: string
   coursesCount: number
   sectionsCount: number
@@ -119,9 +121,26 @@ export async function listMigrationPackages(): Promise<MigrationSummary[]> {
       const periodMatch = resumen.match(/\*\*Periodo Principal:\*\*\s*(.+)/)
       const dateMatch = resumen.match(/\*\*Fecha de Exportación:\*\*\s*(.+)/)
       const rootMatch = resumen.match(/\*\*Subcuenta Inicial[^*]*:\*\*\s*(.+)/)
-      const sandboxMatch = resumen.match(/\*\*Modo Aislamiento Sandbox:\*\*\s*(.+)/)
-      const isSandbox = Boolean(sandboxMatch && sandboxMatch[1].includes('Activo'))
-      const prefixMatch = sandboxMatch ? sandboxMatch[1].match(/`([^`]+)`/) : null
+      const modeMatch = resumen.match(/\*\*(?:Modo de Aislamiento \/ Prefijo|Modo Aislamiento Sandbox):\*\*\s*(.+)/)
+      let sandboxPrefixMode: SandboxPrefixMode = 'none'
+      let isSandbox = false
+      let prefixMatch: RegExpMatchArray | null = null
+
+      if (modeMatch) {
+        const modeText = modeMatch[1]
+        prefixMatch = modeText.match(/`([^`]+)`/)
+        if (modeText.includes('todos') || modeText.includes('Cuentas, Cursos y Secciones')) {
+          sandboxPrefixMode = 'all'
+          isSandbox = true
+        } else if (modeText.includes('cuentas') || modeText.includes('subcuentas') || modeText.includes('Activo')) {
+          sandboxPrefixMode = 'accounts'
+          isSandbox = true
+        } else {
+          sandboxPrefixMode = 'none'
+          isSandbox = false
+        }
+      }
+
       const coursesMatch = resumen.match(/\|\s*\*\*Cursos\*\*\s*\|\s*(\d+)\s*\|/)
       const sectionsMatch = resumen.match(/\|\s*\*\*Secciones\*\*\s*\|\s*(\d+)\s*\|/)
       const usersMatch = resumen.match(/\|\s*\*\*Usuarios Totales\*\*\s*\|\s*(\d+)\s*\|/)
@@ -142,6 +161,7 @@ export async function listMigrationPackages(): Promise<MigrationSummary[]> {
         mtime,
         rootAccount: rootMatch ? rootMatch[1].trim() : '',
         sandboxIsolated: isSandbox,
+        sandboxPrefixMode,
         sandboxPrefix: prefixMatch ? prefixMatch[1] : undefined,
         coursesCount: coursesMatch ? parseInt(coursesMatch[1], 10) : 0,
         sectionsCount: sectionsMatch ? parseInt(sectionsMatch[1], 10) : 0,

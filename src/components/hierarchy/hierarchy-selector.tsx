@@ -66,7 +66,7 @@ import type {
   HierarchyFilterOptions,
   EnrolledStudent,
 } from '#/server/services/hierarchy-service'
-import type { ExportCanvasResult } from '#/server/services/canvas-exporter'
+import type { ExportCanvasResult, SandboxPrefixMode } from '#/server/services/canvas-exporter'
 import type { ImportCase } from '#/db/schema'
 
 interface HierarchySelectorProps {
@@ -178,7 +178,7 @@ export function HierarchySelector({
   const [exportRootAccountId, setExportRootAccountId] = React.useState('')
   const [createRootAccount, setCreateRootAccount] = React.useState(true)
   const [exportRootAccountName, setExportRootAccountName] = React.useState('')
-  const [isolateAccountPrefix, setIsolateAccountPrefix] = React.useState(true)
+  const [exportPrefixMode, setExportPrefixMode] = React.useState<SandboxPrefixMode>('accounts')
   const [exportResult, setExportResult] = React.useState<ExportCanvasResult | null>(null)
   const [exportError, setExportError] = React.useState<string | null>(null)
   const [copiedPath, setCopiedPath] = React.useState(false)
@@ -750,7 +750,7 @@ export function HierarchySelector({
           rootAccountId: exportRootAccountId.trim() || undefined,
           createRootAccount: Boolean(createRootAccount && exportRootAccountId.trim()),
           rootAccountName: exportRootAccountName.trim() || undefined,
-          isolateAccountPrefix: Boolean(isolateAccountPrefix && exportRootAccountId.trim()),
+          prefixMode: exportRootAccountId.trim() ? exportPrefixMode : 'none',
         },
       })
       setExportResult(res)
@@ -1585,8 +1585,8 @@ export function HierarchySelector({
         onCreateRootAccountChange={setCreateRootAccount}
         rootAccountName={exportRootAccountName}
         onRootAccountNameChange={setExportRootAccountName}
-        isolateAccountPrefix={isolateAccountPrefix}
-        onIsolateAccountPrefixChange={setIsolateAccountPrefix}
+        prefixMode={exportPrefixMode}
+        onPrefixModeChange={setExportPrefixMode}
         onCopyPath={handleCopyPath}
         onResetExport={() => {
           setExportResult(null)

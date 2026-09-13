@@ -106,11 +106,14 @@
     - [x] Panel derecho con árbol jerárquico del snapshot de Canvas (Cuentas -> Subcuentas -> Cursos -> Secciones -> Docentes D y Alumnos E bajo demanda).
     - [x] Barra superior con búsqueda sincronizada simultánea en ambos árboles y buscadores locales independientes.
     - [x] Controles de plegado y desplegado masivo por panel (Cursos, Plegar Todo).
-  - [x] **Modo de Aislamiento para Pruebas (Sandbox Prefix) (Completado)**
-    - [x] Prefijado automático de subcuentas con la subcuenta raíz (`${rootAccountId}_`) en `accounts.csv` y vinculación correspondiente en `courses.csv`.
-    - [x] Conmutador interactivo "Aislar estructura de cuentas para prueba (Prefijar con {rootAccountId}_)" en `CanvasExportDialog` con advertencia explicativa y badge "Recomendado en Sandbox".
-    - [x] Prevención efectiva contra la reubicación accidental de la cuenta global `SEDE LIMA (S-001)` y arrastre de facultades o cursos de pregrado no contemplados en la migración.
-    - [x] Detección y visualización del estado de aislamiento sandbox en el resumen técnico `RESUMEN.md`, encabezado `hierarchy.txt` y badge distintivo en el selector de paquetes de `CaseComparisonView`.
+  - [x] **Modo de Aislamiento para Pruebas y Prefijado SIS (3 Opciones Configurables) (Completado)**
+    - [x] Implementación de 3 modos seleccionables:
+      - `Sin prefijo` (`none`): Mantiene los SIS IDs estándar (`S-001`, `CUR006380`, `7115-CUR006380`) para despliegues oficiales o producción.
+      - `Aplicar prefijo a cuentas` (`accounts`): Prefija únicamente las subcuentas con la subcuenta raíz (`${rootAccountId}_S-001`, `${rootAccountId}_P004084`), conservando códigos reales en cursos y secciones. Recomendado en Sandbox.
+      - `Aplicar prefijo a todos` (`all`): Prefija subcuentas, cursos (`${rootAccountId}_CUR006380`), secciones (`${rootAccountId}_7115-CUR006380`) y vincula `enrollments.csv` con los códigos prefijados. Garantiza aislamiento total y colisiones cero en Canvas LMS.
+    - [x] Selector interactivo mediante tarjetas de selección tipo radio card en `CanvasExportDialog` con badges explicativos ("Recomendado en Sandbox", "Aislamiento Total") y descripciones técnicas.
+    - [x] Propagación del modo en `hierarchy-selector.tsx` (`exportPrefixMode`), registro del modo en `RESUMEN.md` y encabezado de `hierarchy.txt`.
+    - [x] Detección retrocompatible y badge diferenciado en `CaseComparisonView`: badge azul `Aislamiento Total ({prefix})` vs badge esmeralda `Aislado Cuentas ({prefix})`.
   - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
   - [ ] Job status polling, import log inspection, and error auditing.
 
@@ -303,6 +306,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-13T12:34:00` | `c57f383` | Antigravity | Refactor/Comparison | Rediseño de Comparativa a inspección manual lado a lado de casos importados (SQL vs Canvas) sin motor de discrepancias | `src/components/comparison/case-comparison-view.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T12:44:00` | `5d24680` | Antigravity | Feature/MigrationComparison | Comparativa lado a lado basada en paquetes de migración exportados (migraciones/) vs Snapshots Canvas LMS con selección de migración | `src/server/services/migration-service.ts`, `src/server/functions/migrations.ts`, `src/components/comparison/case-comparison-view.tsx`, `src/routes/index.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T13:25:00` | `6cbcc7c` | Antigravity | Feature/SandboxIsolation | Modo de aislamiento de pruebas (Sandbox Prefix) en exportador Canvas LMS y visualizador de comparativa | `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `src/server/services/migration-service.ts`, `src/components/comparison/case-comparison-view.tsx`, `PROJECT_MEMORY.md` |
+| `2026-09-13T13:35:00` | pending | Antigravity | Feature/PrefixModes | 3 opciones de prefijado SIS (sin prefijo, aplicar a cuentas, aplicar a todos) en exportador, diálogo y comparativa | `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `src/server/services/migration-service.ts`, `src/components/comparison/case-comparison-view.tsx`, `PROJECT_MEMORY.md` |
 
 ---
 
@@ -466,6 +470,16 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
       - Árbol institucional estructurado: Cuentas -> Subcuentas -> Cursos con ID SIS y Canvas ID -> Secciones.
       - Desglose inline de docentes (D) con DNI y alumnos (E) con código institucional bajo demanda.
       - Botones de acción masiva: `Cuentas`, `Plegar`, `Plegar Alumnos`.
+- **Selector de Aislamiento Sandbox (3 Modos Interactivos en `CanvasExportDialog`)**:
+  - Al ingresar una subcuenta raíz (`parent_account_id`), se ofrece una tarjeta de configuración con 3 opciones tipo radio card:
+    1. **Sin prefijo (Estándar / Producción)**: Mantiene SIS IDs globales (`S-001`, `CUR006380`). Indicado para despliegues oficiales donde las cuentas son compartidas.
+    2. **Aplicar prefijo a cuentas**: Badge verde esmeralda `Recomendado en Sandbox`. Prefija únicamente subcuentas (`TEST-5_S-001`, `TEST-5_P004084`), conservando los códigos originales en cursos y secciones. Evita reubicar la Sede Lima global en Canvas y arrastrar programas de salud no contemplados.
+    3. **Aplicar prefijo a todos (Cuentas, Cursos y Secciones)**: Badge azul `Aislamiento Total`. Prefija cuentas (`TEST-5_S-001`), cursos (`TEST-5_CUR006380`) y secciones (`TEST-5_7115-CUR006380`), asociando los enrolamientos a estos identificadores para garantizar 0 conflictos en Canvas LMS.
+- **Distintivos Visuales en Comparativa Lado a Lado (`CaseComparisonView`)**:
+  - Distinción inmediata del nivel de aislamiento en el paquete de migración seleccionado:
+    - Badge azul font-mono `Aislamiento Total ({prefijo})` cuando el paquete fue exportado con prefijo a todos.
+    - Badge esmeralda font-mono `Aislado Cuentas ({prefijo})` cuando el paquete fue exportado con prefijo exclusivo a cuentas.
+
 
 
 

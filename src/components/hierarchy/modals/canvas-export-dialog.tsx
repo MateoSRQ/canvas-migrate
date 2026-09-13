@@ -21,7 +21,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '#/components/ui/dialog'
-import type { ExportCanvasResult } from '#/server/services/canvas-exporter'
+import type { ExportCanvasResult, SandboxPrefixMode } from '#/server/services/canvas-exporter'
 
 interface CanvasExportDialogProps {
   isOpen: boolean
@@ -43,8 +43,8 @@ interface CanvasExportDialogProps {
   onCreateRootAccountChange: (value: boolean) => void
   rootAccountName: string
   onRootAccountNameChange: (value: string) => void
-  isolateAccountPrefix: boolean
-  onIsolateAccountPrefixChange: (value: boolean) => void
+  prefixMode: SandboxPrefixMode
+  onPrefixModeChange: (mode: SandboxPrefixMode) => void
   onCopyPath: (targetPath: string) => void
   onResetExport: () => void
   onExecuteExport: () => void
@@ -66,8 +66,8 @@ export function CanvasExportDialog({
   onCreateRootAccountChange,
   rootAccountName,
   onRootAccountNameChange,
-  isolateAccountPrefix,
-  onIsolateAccountPrefixChange,
+  prefixMode,
+  onPrefixModeChange,
   onCopyPath,
   onResetExport,
   onExecuteExport,
@@ -114,10 +114,17 @@ export function CanvasExportDialog({
                   <code className="font-semibold font-mono">canvas_migration.zip</code> listo para importar en
                   Canvas.
                 </p>
-                {exportResult.isolateAccountPrefix && (
-                  <div className="mt-2 flex items-center gap-2 text-[11px] font-mono text-emerald-950 dark:text-emerald-100 bg-emerald-600/15 border border-emerald-600/25 px-2.5 py-1 rounded-md">
-                    <span className="font-bold">Sandbox Aislado:</span>
-                    <span>Prefijo aplicado a subcuentas: <strong>{exportResult.accountPrefix}</strong></span>
+                {exportResult.prefixMode !== 'none' && (
+                  <div className="mt-2 flex items-center gap-2 text-[11px] font-mono text-emerald-950 dark:text-emerald-100 bg-emerald-600/15 border border-emerald-600/25 px-2.5 py-1.5 rounded-md flex-wrap">
+                    <span className="font-bold">
+                      {exportResult.prefixMode === 'all'
+                        ? 'Aislamiento Total Activo:'
+                        : 'Aislamiento de Cuentas Activo:'}
+                    </span>
+                    <span>
+                      Prefijo ({exportResult.prefixMode === 'all' ? 'cuentas, cursos y secciones' : 'solo subcuentas'}):{' '}
+                      <strong>{exportResult.accountPrefix}</strong>
+                    </span>
                   </div>
                 )}
               </div>
@@ -422,30 +429,119 @@ export function CanvasExportDialog({
                     </div>
                   )}
 
-                  {/* Opción de Aislamiento Sandbox (Recomendación 1) */}
-                  <div className="pt-2 border-t border-border/40 flex items-start gap-2.5">
-                    <Checkbox
-                      id="isolate-account-prefix"
-                      checked={isolateAccountPrefix}
-                      onCheckedChange={(checked) => onIsolateAccountPrefixChange(Boolean(checked))}
-                      disabled={isExporting}
-                      className="mt-0.5"
-                    />
-                    <div className="space-y-1">
-                      <label
-                        htmlFor="isolate-account-prefix"
-                        className="text-xs font-medium text-foreground cursor-pointer select-none flex items-center gap-1.5 flex-wrap"
-                      >
-                        <span>Aislar estructura de cuentas para prueba (Prefijar con <code className="font-semibold text-foreground">{rootAccountId.trim()}_</code>)</span>
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-emerald-500/40 text-emerald-600 bg-emerald-500/10">
-                          Recomendado en Sandbox
-                        </Badge>
+                  {/* Opción de Aislamiento Sandbox: 3 Modos (sin prefijo, cuentas, todos) */}
+                  <div className="pt-2.5 border-t border-border/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <span>Aislamiento Sandbox / Prefijo SIS:</span>
                       </label>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        {isolateAccountPrefix
-                          ? `Las subcuentas se exportarán con identificadores únicos aislados (ej: ${rootAccountId.trim()}_S-001, ${rootAccountId.trim()}_M-..., etc.). Esto garantiza que Canvas LMS cree una estructura limpia e independiente sin alterar la SEDE LIMA real ni arrastrar carreras o cursos de pregrado preexistentes.`
-                          : 'Se utilizarán los SIS IDs globales estándar (ej: S-001). Tenga en cuenta que si la cuenta ya existe en Canvas, Canvas la reubicará bajo esta subcuenta junto con todas sus ramas y cursos preexistentes.'}
-                      </p>
+                      <span className="text-[10px] font-mono text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                        Prefijo: {rootAccountId.trim()}_
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {/* 1. Sin prefijo */}
+                      <div
+                        onClick={() => !isExporting && onPrefixModeChange('none')}
+                        className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-start gap-2.5 ${
+                          prefixMode === 'none'
+                            ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/20'
+                            : 'border-border bg-card/50 hover:bg-muted/30'
+                        }`}
+                      >
+                        <div
+                          className={`size-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 ${
+                            prefixMode === 'none'
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-muted-foreground/50'
+                          }`}
+                        >
+                          {prefixMode === 'none' && (
+                            <div className="size-1.5 rounded-full bg-background" />
+                          )}
+                        </div>
+                        <div className="space-y-0.5 text-left">
+                          <div className="text-xs font-medium text-foreground">
+                            Sin prefijo (Estándar / Producción)
+                          </div>
+                          <p className="text-[11px] text-muted-foreground leading-relaxed">
+                            Mantiene los SIS IDs globales (<code className="text-foreground">S-001</code>, <code className="text-foreground">CUR006380</code>). Si la sede ya existe en Canvas, Canvas la reubicará bajo esta subcuenta arrastrando todas sus ramas y cursos preexistentes.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* 2. Aplicar prefijo a cuentas */}
+                      <div
+                        onClick={() => !isExporting && onPrefixModeChange('accounts')}
+                        className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-start gap-2.5 ${
+                          prefixMode === 'accounts'
+                            ? 'border-emerald-600/60 bg-emerald-500/10 ring-1 ring-emerald-500/20'
+                            : 'border-border bg-card/50 hover:bg-muted/30'
+                        }`}
+                      >
+                        <div
+                          className={`size-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 ${
+                            prefixMode === 'accounts'
+                              ? 'border-emerald-600 bg-emerald-600 text-white'
+                              : 'border-muted-foreground/50'
+                          }`}
+                        >
+                          {prefixMode === 'accounts' && (
+                            <div className="size-1.5 rounded-full bg-white" />
+                          )}
+                        </div>
+                        <div className="space-y-0.5 text-left">
+                          <div className="text-xs font-medium text-foreground flex items-center gap-1.5 flex-wrap">
+                            <span>Aplicar prefijo a cuentas</span>
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] px-1.5 py-0 h-4 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 font-normal"
+                            >
+                              Recomendado en Sandbox
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground leading-relaxed">
+                            Prefija únicamente la estructura de subcuentas (<code className="text-foreground">{rootAccountId.trim()}_S-001</code>, <code className="text-foreground">{rootAccountId.trim()}_P004084</code>). Los cursos conservan su código oficial (<code className="text-foreground">CUR006380</code>). Evita mover la Sede Lima real ni arrastrar carreras de salud.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* 3. Aplicar prefijo a todos */}
+                      <div
+                        onClick={() => !isExporting && onPrefixModeChange('all')}
+                        className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-start gap-2.5 ${
+                          prefixMode === 'all'
+                            ? 'border-blue-600/60 bg-blue-500/10 ring-1 ring-blue-500/20'
+                            : 'border-border bg-card/50 hover:bg-muted/30'
+                        }`}
+                      >
+                        <div
+                          className={`size-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 ${
+                            prefixMode === 'all'
+                              ? 'border-blue-600 bg-blue-600 text-white'
+                              : 'border-muted-foreground/50'
+                          }`}
+                        >
+                          {prefixMode === 'all' && (
+                            <div className="size-1.5 rounded-full bg-white" />
+                          )}
+                        </div>
+                        <div className="space-y-0.5 text-left">
+                          <div className="text-xs font-medium text-foreground flex items-center gap-1.5 flex-wrap">
+                            <span>Aplicar prefijo a todos (Cuentas, Cursos y Secciones)</span>
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] px-1.5 py-0 h-4 border-blue-500/40 text-blue-700 dark:text-blue-300 bg-blue-500/10 font-normal"
+                            >
+                              Aislamiento Total
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground leading-relaxed">
+                            Prefija cuentas (<code className="text-foreground">{rootAccountId.trim()}_S-001</code>), cursos (<code className="text-foreground">{rootAccountId.trim()}_CUR006380</code>) y secciones (<code className="text-foreground">{rootAccountId.trim()}_7115-CUR006380</code>). Genera un entorno de prueba 100% aislado sin afectar ni colisionar con ningún curso real en Canvas.
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

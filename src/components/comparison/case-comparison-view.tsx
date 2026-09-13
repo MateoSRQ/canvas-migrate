@@ -1051,9 +1051,16 @@ export function CaseComparisonView({
                 {selectedMigration?.sandboxIsolated && (
                   <Badge
                     variant="outline"
-                    className="text-[9px] px-1.5 py-0 h-4 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-mono"
+                    className={`text-[9px] px-1.5 py-0 h-4 font-mono ${
+                      selectedMigration.sandboxPrefixMode === 'all'
+                        ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30'
+                        : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                    }`}
                   >
-                    Aislado ({selectedMigration.sandboxPrefix || 'Sandbox'})
+                    {selectedMigration.sandboxPrefixMode === 'all'
+                      ? 'Aislamiento Total'
+                      : 'Aislado Cuentas'}{' '}
+                    ({selectedMigration.sandboxPrefix || 'Sandbox'})
                   </Badge>
                 )}
               </div>
