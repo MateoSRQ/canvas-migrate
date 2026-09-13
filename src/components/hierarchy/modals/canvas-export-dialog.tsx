@@ -708,6 +708,13 @@ export function CanvasExportDialog({
                   <div className="text-[10px] text-muted-foreground">Periodo Académico</div>
                 </div>
               </div>
+
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pt-0.5">
+                <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
+                <span>
+                  Filtro de exclusión activo: Las secciones <strong>«NO HABILITADO»</strong> han sido automáticamente omitidas de este alcance.
+                </span>
+              </div>
             </div>
 
             {/* Configuración de Subcuenta Inicial / Raíz en Canvas */}

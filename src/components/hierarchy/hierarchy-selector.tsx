@@ -862,13 +862,27 @@ export function HierarchySelector({
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <label
+              className={`flex items-center gap-2 cursor-pointer select-none text-xs px-2.5 py-1 rounded-md border transition-all ${
+                excludeNoHabilitado
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300 font-medium'
+                  : 'bg-muted/40 border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
               <Checkbox
                 checked={excludeNoHabilitado}
                 onCheckedChange={(checked) => setExcludeNoHabilitado(!!checked)}
               />
               <span>Excluir secciones «NO HABILITADO»</span>
+              {excludeNoHabilitado && (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] px-1 py-0 h-3.5 bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 font-mono"
+                >
+                  Activo
+                </Badge>
+              )}
             </label>
 
             <Button
