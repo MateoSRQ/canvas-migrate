@@ -3,8 +3,9 @@ import {
   canvasImportCases,
   canvasCaseRawEntities,
   canvasCaseAccounts,
+  canvasCaseCourses,
+  canvasCaseEnrollments,
   type CanvasImportCase,
-  type CanvasCaseAccount,
 } from '#/db/schema'
 import { eq, desc, and } from 'drizzle-orm'
 
@@ -37,6 +38,28 @@ export interface CanvasApiCourse {
   enrollment_term_id?: number
   workflow_state?: string
   total_students?: number
+  teachers?: { id: number; display_name?: string; sis_user_id?: string | null; email?: string | null }[]
+  sections?: { id: number; name: string; sis_section_id?: string | null; total_students?: number }[]
+}
+
+export interface CanvasCourseSectionNode {
+  id: number
+  name: string
+  sisSectionId: string | null
+  totalStudents: number
+  docentes: { id: number; dni: string; fullName: string; email: string }[]
+  estudiantes: { id: number; codigo: string; fullName: string; email: string }[]
+  estudiantesCount: number
+}
+
+export interface CanvasCourseTreeNode {
+  canvasId: number
+  name: string
+  courseCode: string | null
+  sisCourseId: string | null
+  accountId: number
+  totalStudents: number
+  sections: CanvasCourseSectionNode[]
 }
 
 export interface CanvasAccountTreeNode {
@@ -49,6 +72,7 @@ export interface CanvasAccountTreeNode {
   coursesCount: number
   depth: number
   children: CanvasAccountTreeNode[]
+  courses: CanvasCourseTreeNode[]
 }
 
 export interface CanvasImportCaseOptions {
@@ -141,7 +165,7 @@ async function fetchCanvasPaginated<T>(
 
     results = results.concat(data)
 
-    // Analizar Link header
+    // Analizar Link header para paginación
     const linkHeader = res.headers.get('link') || res.headers.get('Link')
     nextUrl = null
 
@@ -278,14 +302,14 @@ export async function executeCanvasImportCase(
       durationMs: Date.now() - t1,
     }
 
-    // 4. Extraer Cursos (opcional, activado por defecto)
+    // 4. Extraer Cursos con secciones y docentes (activo por defecto)
     let courses: CanvasApiCourse[] = []
     if (options.includeCourses !== false) {
       const t2 = Date.now()
       courses = await fetchCanvasPaginated<CanvasApiCourse>(
         baseUrl,
         token,
-        `/accounts/${rootId}/courses`,
+        `/accounts/${rootId}/courses?include[]=sections&include[]=teachers&include[]=term&include[]=total_students`,
         { per_page: 100 }
       )
       entityStatsMap['courses'] = {
@@ -339,9 +363,37 @@ export async function executeCanvasImportCase(
       await db.insert(canvasCaseAccounts).values(chunk)
     }
 
+    // 7. Insertar cursos normalizados en canvas_case_courses
+    if (courses.length > 0) {
+      const normalizedCourses = courses.map((c) => ({
+        caseId,
+        canvasId: c.id,
+        name: c.name || `Curso ${c.id}`,
+        courseCode: c.course_code || null,
+        sisCourseId: c.sis_course_id ? String(c.sis_course_id).trim() : null,
+        accountId: c.account_id,
+        enrollmentTermId: c.enrollment_term_id ?? null,
+        workflowState: c.workflow_state ?? 'active',
+        totalStudents: c.total_students ?? 0,
+        sectionsJson: JSON.stringify(
+          (c.sections || []).map((s) => ({
+            id: s.id,
+            name: s.name,
+            sisSectionId: s.sis_section_id ? String(s.sis_section_id).trim() : null,
+            totalStudents: s.total_students ?? 0,
+          }))
+        ),
+      }))
+
+      const courseChunks = chunkArray(normalizedCourses, 100)
+      for (const chunk of courseChunks) {
+        await db.insert(canvasCaseCourses).values(chunk)
+      }
+    }
+
     const totalRows = allAccounts.length + terms.length + courses.length
 
-    // 7. Marcar caso como completado
+    // 8. Marcar caso como completado
     await db
       .update(canvasImportCases)
       .set({
@@ -409,11 +461,10 @@ export async function getCanvasCaseById(caseId: string) {
 }
 
 export async function getCanvasCaseAccountsTree(caseId: string) {
-  const accounts = await db
-    .select()
-    .from(canvasCaseAccounts)
-    .where(eq(canvasCaseAccounts.caseId, caseId))
-    .all()
+  const [accounts, courses] = await Promise.all([
+    db.select().from(canvasCaseAccounts).where(eq(canvasCaseAccounts.caseId, caseId)).all(),
+    db.select().from(canvasCaseCourses).where(eq(canvasCaseCourses.caseId, caseId)).all(),
+  ])
 
   if (!accounts || accounts.length === 0) {
     return {
@@ -427,11 +478,59 @@ export async function getCanvasCaseAccountsTree(caseId: string) {
 
   const withSisCount = accounts.filter((a) => a.sisAccountId).length
   const withoutSisCount = accounts.length - withSisCount
-  const totalCourses = accounts.reduce((acc, cur) => acc + (cur.coursesCount || 0), 0)
+  const totalCourses = courses.length || accounts.reduce((acc, cur) => acc + (cur.coursesCount || 0), 0)
+
+  // Mapear cursos por cuenta
+  const coursesByAccount = new Map<number, CanvasCourseTreeNode[]>()
+  for (const c of courses) {
+    if (!coursesByAccount.has(c.accountId)) {
+      coursesByAccount.set(c.accountId, [])
+    }
+
+    let parsedSections: any[] = []
+    try {
+      if (c.sectionsJson) parsedSections = JSON.parse(c.sectionsJson)
+    } catch {}
+
+    const sections: CanvasCourseSectionNode[] = (
+      parsedSections.length > 0
+        ? parsedSections
+        : [
+            {
+              id: c.canvasId,
+              name: 'Sección Principal',
+              sisSectionId: c.sisCourseId,
+              totalStudents: c.totalStudents,
+            },
+          ]
+    ).map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      sisSectionId: s.sisSectionId || s.sis_section_id || null,
+      totalStudents: s.totalStudents ?? s.total_students ?? 0,
+      docentes: [],
+      estudiantes: [],
+      estudiantesCount: s.totalStudents ?? s.total_students ?? 0,
+    }))
+
+    coursesByAccount.get(c.accountId)!.push({
+      canvasId: c.canvasId,
+      name: c.name,
+      courseCode: c.courseCode,
+      sisCourseId: c.sisCourseId,
+      accountId: c.accountId,
+      totalStudents: c.totalStudents,
+      sections,
+    })
+  }
 
   // Armar mapa de cuentas por canvasId
   const nodeMap = new Map<number, CanvasAccountTreeNode>()
   for (const a of accounts) {
+    const accCourses = (coursesByAccount.get(a.canvasId) || []).sort((x, y) =>
+      x.name.localeCompare(y.name)
+    )
+
     nodeMap.set(a.canvasId, {
       canvasId: a.canvasId,
       name: a.name,
@@ -439,9 +538,10 @@ export async function getCanvasCaseAccountsTree(caseId: string) {
       parentAccountId: a.parentAccountId,
       rootAccountId: a.rootAccountId,
       workflowState: a.workflowState,
-      coursesCount: a.coursesCount,
+      coursesCount: accCourses.length || a.coursesCount,
       depth: 0,
       children: [],
+      courses: accCourses,
     })
   }
 
@@ -477,6 +577,112 @@ export async function getCanvasCaseAccountsTree(caseId: string) {
     withoutSisCount,
     totalCourses,
   }
+}
+
+export async function getCanvasCourseEnrollments(caseId: string, courseId: number) {
+  // 1. Revisar si ya están en base de datos SQLite
+  const cached = await db
+    .select()
+    .from(canvasCaseEnrollments)
+    .where(
+      and(
+        eq(canvasCaseEnrollments.caseId, caseId),
+        eq(canvasCaseEnrollments.courseId, courseId)
+      )
+    )
+    .all()
+
+  if (cached.length > 0) {
+    const docentes = cached
+      .filter((r) => r.role === 'teacher')
+      .map((r) => ({
+        id: r.userId,
+        sectionId: r.sectionId,
+        dni: r.sisUserId || '',
+        fullName: r.fullName,
+        email: r.email || '',
+      }))
+
+    const estudiantes = cached
+      .filter((r) => r.role === 'student')
+      .map((r) => ({
+        id: r.userId,
+        sectionId: r.sectionId,
+        codigo: r.sisUserId || '',
+        fullName: r.fullName,
+        email: r.email || '',
+      }))
+
+    return { docentes, estudiantes }
+  }
+
+  // 2. Extraer desde Canvas API en vivo
+  const { baseUrl, token } = getCanvasConfig()
+  const enrollments = await fetchCanvasPaginated<any>(
+    baseUrl,
+    token,
+    `/courses/${courseId}/enrollments?include[]=user`,
+    { per_page: 100 }
+  )
+
+  const toInsert: (typeof canvasCaseEnrollments.$inferInsert)[] = []
+  const seenKeys = new Set<string>()
+
+  for (const e of enrollments) {
+    if (!e.user) continue
+    const isTeacher = e.type === 'TeacherEnrollment' || e.role === 'TeacherEnrollment'
+    const isStudent = e.type === 'StudentEnrollment' || e.role === 'StudentEnrollment'
+    if (!isTeacher && !isStudent) continue
+
+    const role = isTeacher ? ('teacher' as const) : ('student' as const)
+    const key = `${e.user.id}-${e.course_section_id}-${role}`
+    if (seenKeys.has(key)) continue
+    seenKeys.add(key)
+
+    toInsert.push({
+      caseId,
+      courseId,
+      sectionId: e.course_section_id ?? null,
+      userId: e.user.id,
+      sisUserId: e.user.sis_user_id ? String(e.user.sis_user_id).trim() : null,
+      fullName: e.user.name ? String(e.user.name).trim() : `Usuario ${e.user.id}`,
+      email: e.user.email
+        ? String(e.user.email).trim()
+        : e.user.login_id
+          ? String(e.user.login_id).trim()
+          : null,
+      role,
+    })
+  }
+
+  if (toInsert.length > 0) {
+    const chunks = chunkArray(toInsert, 100)
+    for (const chunk of chunks) {
+      await db.insert(canvasCaseEnrollments).values(chunk)
+    }
+  }
+
+  const docentes = toInsert
+    .filter((r) => r.role === 'teacher')
+    .map((r) => ({
+      id: r.userId,
+      sectionId: r.sectionId,
+      dni: r.sisUserId || '',
+      fullName: r.fullName,
+      email: r.email || '',
+    }))
+
+  const estudiantes = toInsert
+    .filter((r) => r.role === 'student')
+    .map((r) => ({
+      id: r.userId,
+      sectionId: r.sectionId,
+      codigo: r.sisUserId || '',
+      fullName: r.fullName,
+      email: r.email || '',
+    }))
+
+  return { docentes, estudiantes }
 }
 
 export async function getCanvasRawEntitySample(caseId: string, entityType: string): Promise<any[]> {

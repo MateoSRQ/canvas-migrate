@@ -234,6 +234,56 @@ export const canvasCaseAccounts = sqliteTable(
   ]
 )
 
+// 11. Canvas Case Normalized Courses
+export const canvasCaseCourses = sqliteTable(
+  'canvas_case_courses',
+  {
+    id: integer('id', { mode: 'number' }).primaryKey({ autoIncrement: true }),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => canvasImportCases.id, { onDelete: 'cascade' }),
+    canvasId: integer('canvas_id').notNull(),
+    name: text('name').notNull(),
+    courseCode: text('course_code'),
+    sisCourseId: text('sis_course_id'),
+    accountId: integer('account_id').notNull(),
+    enrollmentTermId: integer('enrollment_term_id'),
+    workflowState: text('workflow_state'),
+    totalStudents: integer('total_students').default(0).notNull(),
+    sectionsJson: text('sections_json'), // JSON array of [{ id, name, sis_section_id, total_students }]
+  },
+  (table) => [
+    index('idx_canvas_case_courses_case_id').on(table.caseId),
+    index('idx_canvas_case_courses_account_id').on(table.accountId),
+    index('idx_canvas_case_courses_canvas_id').on(table.canvasId),
+    index('idx_canvas_case_courses_sis_id').on(table.sisCourseId),
+  ]
+)
+
+// 12. Canvas Case Normalized Enrollments (Teachers & Students)
+export const canvasCaseEnrollments = sqliteTable(
+  'canvas_case_enrollments',
+  {
+    id: integer('id', { mode: 'number' }).primaryKey({ autoIncrement: true }),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => canvasImportCases.id, { onDelete: 'cascade' }),
+    courseId: integer('course_id').notNull(),
+    sectionId: integer('section_id'),
+    userId: integer('user_id').notNull(),
+    sisUserId: text('sis_user_id'),
+    fullName: text('full_name').notNull(),
+    email: text('email'),
+    role: text('role').notNull(), // 'teacher' | 'student'
+  },
+  (table) => [
+    index('idx_canvas_case_enr_case_id').on(table.caseId),
+    index('idx_canvas_case_enr_course_id').on(table.courseId),
+    index('idx_canvas_case_enr_section_id').on(table.sectionId),
+    index('idx_canvas_case_enr_role').on(table.role),
+  ]
+)
+
 export type ImportCase = typeof importCases.$inferSelect
 export type NewImportCase = typeof importCases.$inferInsert
 export type CaseRawTable = typeof caseRawTables.$inferSelect
@@ -246,3 +296,5 @@ export type CanvasImportCase = typeof canvasImportCases.$inferSelect
 export type NewCanvasImportCase = typeof canvasImportCases.$inferInsert
 export type CanvasCaseRawEntity = typeof canvasCaseRawEntities.$inferSelect
 export type CanvasCaseAccount = typeof canvasCaseAccounts.$inferSelect
+export type CanvasCaseCourse = typeof canvasCaseCourses.$inferSelect
+export type CanvasCaseEnrollment = typeof canvasCaseEnrollments.$inferSelect

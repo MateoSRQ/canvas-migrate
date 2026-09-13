@@ -77,10 +77,11 @@
     - [x] Verificación de aislamiento en bundles Vite/cliente (`dist/client/` libre de variables privadas) y verificación de exclusión en `.gitignore`.
   - [ ] Implement differential engine comparing Case A against Case B (`_added`, `_updated`, `_deleted`, `_concluded`).
 - [x] **Phase 5: Canvas LMS API Synchronization & Live State Extraction (Completado)**
-  - [x] Esquema relacional segregado en SQLite para casos Canvas (`canvas_import_cases`, `canvas_case_raw_entities`, `canvas_case_accounts`).
-  - [x] Servicio cliente Canvas REST API (`src/server/services/canvas-importer.ts`) con paginación Link header, reintentos exponenciales y extracción de cuentas, términos y cursos.
-  - [x] TanStack Start server functions (`getCanvasCasesFn`, `getCanvasCaseDetailFn`, `getCanvasCaseAccountsTreeFn`, `runCanvasImportCaseFn`, `deleteCanvasCaseFn`, `getCanvasEntitySampleFn`, `testCanvasConnectionFn`).
-  - [x] Componente `CanvasCaseManager` (`src/components/canvas/canvas-case-manager.tsx`) con visualizador jerárquico interactivo de cuentas, buscador en tiempo real, conteos de cursos y badges de SIS ID vs no-SIS.
+  - [x] Esquema relacional segregado en SQLite para casos Canvas (`canvas_import_cases`, `canvas_case_raw_entities`, `canvas_case_accounts`, `canvas_case_courses`, `canvas_case_enrollments`).
+  - [x] Servicio cliente Canvas REST API (`src/server/services/canvas-importer.ts`) con paginación Link header, reintentos exponenciales y extracción de cuentas, términos y cursos completos con secciones y docentes.
+  - [x] TanStack Start server functions (`getCanvasCasesFn`, `getCanvasCaseDetailFn`, `getCanvasCaseAccountsTreeFn`, `runCanvasImportCaseFn`, `deleteCanvasCaseFn`, `getCanvasEntitySampleFn`, `testCanvasConnectionFn`, `getCanvasCourseEnrollmentsFn`).
+  - [x] Visualizador jerárquico completo en `CanvasCaseManager` análogo al árbol de base de datos: Cuenta/Subcuenta -> Curso -> Sección -> Docentes (D) con DNI y Estudiantes (E) con código institucional.
+  - [x] Carga bajo demanda reactiva (Lazy Loading) de docentes y alumnos por curso con feedback `Loader2`, almacenamiento en caché persistente en SQLite y botón de plegado masivo de matrículas.
   - [x] Pestaña de navegación en el shell superior `Casos Canvas LMS (API)` y enlace en el drawer menú lateral (`AppLayout`).
   - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
   - [ ] Job status polling, import log inspection, and error auditing.
@@ -188,6 +189,16 @@ canvas-migrate/
   - `case_users`: Normalized teachers and students with official National ID / DNI (`user_id`, `full_name`, `email`, `user_type`).
   - `case_enrollments`: Normalized enrollment records linking users to courses and sections with roles (`student`, `teacher`).
 - **Cascade Deletion**: All `case_*` rows reference `import_cases.id` with `onDelete: 'cascade'`, ensuring clean atomic case removals without orphaned records.
+
+### Canvas LMS Live Snapshot & Hierarchical Database Architecture
+- **Provider**: SQLite via `better-sqlite3` (`dev.db`).
+- **Canvas Live Case Tables**:
+  - `canvas_import_cases`: Metadata de la extracción de Canvas API (`endpoint`, `status`, `totalAccounts`, `totalTerms`, `totalCourses`, `totalRows`, `entityStats`).
+  - `canvas_case_raw_entities`: Snapshots crudos JSON por tipo de entidad (`accounts`, `terms`, `courses`).
+  - `canvas_case_accounts`: Cuentas y subcuentas normalizadas (`canvasId`, `name`, `sisAccountId`, `parentAccountId`, `rootAccountId`, `coursesCount`).
+  - `canvas_case_courses`: Cursos normalizados extraídos de Canvas (`canvasId`, `name`, `courseCode`, `sisCourseId`, `accountId`, `totalStudents`, `sectionsJson`).
+  - `canvas_case_enrollments`: Docentes (`teacher`) y alumnos (`student`) matriculados, resueltos bajo demanda e indexados por `(case_id, course_id, section_id, role)` con almacenamiento persistente en SQLite.
+- **Cascade Purge**: Todas las tablas `canvas_case_*` eliminan atómicamente sus registros cuando se purga un caso (`onDelete: 'cascade'`).
 - **Scripts**:
   - `npm run db:push` - push schema changes directly to SQLite database.
   - `npm run db:generate` - generate Drizzle migrations.
@@ -242,6 +253,8 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-12T23:42:00` | - | Antigravity | Docs/Architecture | Documentación de arquitectura de ubicación de cursos en Canvas LMS y diseño de cuenta raíz personalizable | `PROJECT_MEMORY.md` |
 | `2026-09-12T23:48:00` | `292e92a` | Antigravity | Feature/Export | Soporte para subcuenta inicial/raíz opcional en exportador Canvas LMS y UI del modal | `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T00:00:00` | `46bd26a` | Antigravity | Feature/CanvasAPI | Importador de casos Canvas LMS vía REST API y visualizador jerárquico de cuentas con buscador y métricas | `src/db/schema.ts`, `src/server/services/canvas-importer.ts`, `src/server/functions/canvas.ts`, `src/components/canvas/canvas-case-manager.tsx`, `src/routes/index.tsx`, `src/components/layout/app-layout.tsx`, `PROJECT_MEMORY.md` |
+| `2026-09-13T00:18:00` | - | Antigravity | Feature/CanvasHierarchy | Visualización análoga de Cursos, Secciones, Docentes (D) con DNI y Estudiantes (E) en el árbol Canvas LMS con lazy loading y caché SQLite | `src/db/schema.ts`, `src/server/services/canvas-importer.ts`, `src/server/functions/canvas.ts`, `src/components/canvas/canvas-case-manager.tsx`, `PROJECT_MEMORY.md` |
+
 
 ---
 
@@ -334,11 +347,16 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Pestaña Global & Menú**: Acceso directo desde la barra de navegación superior con icono `Globe` (`Casos Canvas LMS (API)`) y en el menú drawer lateral (`/#canvas`).
   - **Directorio de Casos en Vivo**: Panel lateral izquierdo con listado cronológico de instantáneas de Canvas, badges de estado (`Completado`, `En Progreso`, `Fallido`), endpoint objetivo, métricas rápidas de cuentas y cursos, y botón de eliminación atómica con confirmación.
   - **Modal de Creación con Test de Conexión**: Permite ingresar nombre, descripción, alternar la descarga de cursos oficiales, y botón "Probar Conexión" que consulta en vivo la cuenta raíz de Canvas LMS con retroalimentación inmediata.
-  - **Visualizador Jerárquico de Cuentas (Árbol Canvas)**:
-    - Reconstrucción recursiva de la estructura de cuentas y subcuentas cargadas en Canvas LMS.
-    - Indentación por niveles de profundidad con chevrons plegables y atajos de "Desplegar Todo" / "Plegar Todo".
-    - Badges distintivos: SIS ID (`SIS: S-001`) con borde esmeralda vs `Sin SIS ID` en borde punteado, ID numérico de Canvas, y contador de cursos asociados (`N cursos`).
-    - Búsqueda en tiempo real que filtra el árbol por coincidencia de nombre, SIS ID o ID de Canvas manteniendo las ramas padre visibles.
+  - **Visualizador Jerárquico de Cuentas, Cursos y Secciones (Árbol Canvas)**:
+    - Reconstrucción recursiva de la estructura completa: `[CUENTA/SUBCUENTA]` -> `[CURSO]` -> `[SECCIÓN]` -> `(D) [DOCENTE]` / `(E) [ESTUDIANTE]`.
+    - Indentación por niveles de profundidad con chevrons plegables y controles masivos: "Desplegar Todo", "Plegar Todo", "Plegar Matriculados", y botones por cuenta "Desplegar Cursos" / "Plegar Cursos".
+    - Badges distintivos: SIS ID (`SIS: S-001`, `SIS: CUR006380`, `SIS: 7115-CUR006380`) con borde esmeralda vs `Sin SIS ID` en borde punteado, ID numérico de Canvas, conteo de cursos y conteo de alumnos.
+    - Búsqueda en tiempo real que filtra recursivamente cuentas, subcuentas, nombres de curso, códigos SIS y secciones manteniendo los nodos ascendentes visibles.
+    - **Desglose Análogo de Matriculados por Sección**:
+      - `(D) [DOCENTE]`: Badge ámbar, DNI normalizado (ej: `DNI:09375116`), nombre completo y correo corporativo.
+      - `(E) [ESTUDIANTE]`: Roster numerado con badge esmeralda, código institucional (ej: `COD:msanroman@...`), nombre completo y correo electrónico.
+      - **Carga Bajo Demanda (Lazy Loading)**: Consulta instantánea al endpoint de Canvas API `/courses/:id/enrollments` únicamente cuando el usuario expande el curso o sección, almacenando en caché SQLite (`canvas_case_enrollments`) para reaperturas inmediatas en 0 ms con spinner `Loader2` no bloqueante.
   - **Inspector de Entidades Raw**: Vista alternativa en tabla con conteo de registros para `accounts`, `terms` y `courses`, con visor modal monospace de los primeros 50 registros crudos devueltos por la API.
+
 
 

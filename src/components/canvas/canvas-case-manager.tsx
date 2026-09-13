@@ -19,6 +19,8 @@ import {
   Calendar,
   ExternalLink,
   SlidersHorizontal,
+  Users,
+  GraduationCap,
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
@@ -41,7 +43,11 @@ import {
   DialogTrigger,
 } from '#/components/ui/dialog'
 import type { CanvasImportCase } from '#/db/schema'
-import type { CanvasAccountTreeNode } from '#/server/services/canvas-importer'
+import type {
+  CanvasAccountTreeNode,
+  CanvasCourseTreeNode,
+  CanvasCourseSectionNode,
+} from '#/server/services/canvas-importer'
 import {
   getCanvasCasesFn,
   getCanvasCaseDetailFn,
@@ -50,6 +56,7 @@ import {
   deleteCanvasCaseFn,
   getCanvasEntitySampleFn,
   testCanvasConnectionFn,
+  getCanvasCourseEnrollmentsFn,
 } from '#/server/functions/canvas'
 
 export function CanvasCaseManager() {
@@ -79,6 +86,18 @@ export function CanvasCaseManager() {
   // Tree filter and collapse states
   const [searchQuery, setSearchQuery] = React.useState('')
   const [expandedNodes, setExpandedNodes] = React.useState<Set<number>>(new Set())
+  const [expandedCourses, setExpandedCourses] = React.useState<Set<number>>(new Set())
+  const [expandedSections, setExpandedSections] = React.useState<Set<string>>(new Set())
+  const [courseRosters, setCourseRosters] = React.useState<
+    Record<
+      number,
+      {
+        docentes: { id: number; sectionId: number | null; dni: string; fullName: string; email: string }[]
+        estudiantes: { id: number; sectionId: number | null; codigo: string; fullName: string; email: string }[]
+      }
+    >
+  >({})
+  const [loadingCourseRosters, setLoadingCourseRosters] = React.useState<Set<number>>(new Set())
 
   // New Case Dialog states
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
@@ -115,6 +134,10 @@ export function CanvasCaseManager() {
     setSelectedCaseId(id)
     setSelectedEntity(null)
     setEntitySample(null)
+    setExpandedCourses(new Set())
+    setExpandedSections(new Set())
+    setCourseRosters({})
+    setLoadingCourseRosters(new Set())
     setIsLoadingDetail(true)
     try {
       const [detail, tree] = await Promise.all([
@@ -154,6 +177,111 @@ export function CanvasCaseManager() {
     })
   }
 
+  const loadCourseEnrollments = React.useCallback(
+    async (courseId: number) => {
+      if (!selectedCaseId) return null
+      if (courseRosters[courseId]) return courseRosters[courseId]
+
+      setLoadingCourseRosters((prev) => new Set(prev).add(courseId))
+      try {
+        const result = await getCanvasCourseEnrollmentsFn({
+          data: { caseId: selectedCaseId, courseId },
+        })
+        setCourseRosters((prev) => ({
+          ...prev,
+          [courseId]: result,
+        }))
+        return result
+      } catch (err) {
+        console.error(`Error al cargar matriculados para el curso ${courseId}:`, err)
+        return null
+      } finally {
+        setLoadingCourseRosters((prev) => {
+          const next = new Set(prev)
+          next.delete(courseId)
+          return next
+        })
+      }
+    },
+    [selectedCaseId, courseRosters]
+  )
+
+  const handleToggleCourse = (courseId: number) => {
+    setExpandedCourses((prev) => {
+      const next = new Set(prev)
+      if (next.has(courseId)) {
+        next.delete(courseId)
+      } else {
+        next.add(courseId)
+      }
+      return next
+    })
+  }
+
+  const handleToggleSection = async (secKey: string, courseId: number) => {
+    const isOpening = !expandedSections.has(secKey)
+    setExpandedSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(secKey)) {
+        next.delete(secKey)
+      } else {
+        next.add(secKey)
+      }
+      return next
+    })
+
+    if (isOpening && !courseRosters[courseId]) {
+      await loadCourseEnrollments(courseId)
+    }
+  }
+
+  const handleToggleCourseWithRoster = async (course: CanvasCourseTreeNode) => {
+    const isCourseExpanded = expandedCourses.has(course.canvasId)
+    const secKeys = (course.sections || []).map((s) => `sec-${course.canvasId}-${s.id}`)
+
+    if (isCourseExpanded) {
+      setExpandedCourses((prev) => {
+        const next = new Set(prev)
+        next.delete(course.canvasId)
+        return next
+      })
+      setExpandedSections((prev) => {
+        const next = new Set(prev)
+        for (const k of secKeys) next.delete(k)
+        return next
+      })
+    } else {
+      setExpandedCourses((prev) => new Set(prev).add(course.canvasId))
+      setExpandedSections((prev) => {
+        const next = new Set(prev)
+        for (const k of secKeys) next.add(k)
+        return next
+      })
+      if (!courseRosters[course.canvasId]) {
+        await loadCourseEnrollments(course.canvasId)
+      }
+    }
+  }
+
+  const handleToggleAllCoursesInAccount = (courses: CanvasCourseTreeNode[]) => {
+    const allExpanded = courses.every((c) => expandedCourses.has(c.canvasId))
+    setExpandedCourses((prev) => {
+      const next = new Set(prev)
+      for (const c of courses) {
+        if (allExpanded) {
+          next.delete(c.canvasId)
+        } else {
+          next.add(c.canvasId)
+        }
+      }
+      return next
+    })
+  }
+
+  const handleCollapseAllRosters = () => {
+    setExpandedSections(new Set())
+  }
+
   const handleExpandAll = () => {
     if (!treeData) return
     const all = new Set<number>()
@@ -169,6 +297,8 @@ export function CanvasCaseManager() {
 
   const handleCollapseAll = () => {
     setExpandedNodes(new Set())
+    setExpandedCourses(new Set())
+    setExpandedSections(new Set())
   }
 
   const handleSelectEntity = async (entityType: string) => {
@@ -261,7 +391,7 @@ export function CanvasCaseManager() {
   const filterTreeNodes = React.useCallback(
     (nodes: CanvasAccountTreeNode[], query: string): CanvasAccountTreeNode[] => {
       if (!query) return nodes
-      const q = query.toLowerCase()
+      const q = query.toLowerCase().trim()
 
       return nodes
         .map((node) => {
@@ -270,11 +400,28 @@ export function CanvasCaseManager() {
             (node.sisAccountId && node.sisAccountId.toLowerCase().includes(q)) ||
             String(node.canvasId).includes(q)
 
+          // Cursos que coincidan con la búsqueda
+          const matchingCourses = (node.courses || []).filter((c) => {
+            return (
+              c.name.toLowerCase().includes(q) ||
+              (c.sisCourseId && c.sisCourseId.toLowerCase().includes(q)) ||
+              (c.courseCode && c.courseCode.toLowerCase().includes(q)) ||
+              String(c.canvasId).includes(q) ||
+              c.sections.some(
+                (s) =>
+                  s.name.toLowerCase().includes(q) ||
+                  (s.sisSectionId && s.sisSectionId.toLowerCase().includes(q)) ||
+                  String(s.id).includes(q)
+              )
+            )
+          })
+
           const filteredChildren = filterTreeNodes(node.children, query)
 
-          if (matchSelf || filteredChildren.length > 0) {
+          if (matchSelf || matchingCourses.length > 0 || filteredChildren.length > 0) {
             return {
               ...node,
+              courses: matchSelf ? node.courses : matchingCourses,
               children: filteredChildren,
             }
           }
@@ -290,10 +437,339 @@ export function CanvasCaseManager() {
     return filterTreeNodes(treeData.rootNodes, searchQuery)
   }, [treeData, searchQuery, filterTreeNodes])
 
+  // Renderizador de un Curso de Canvas
+  const renderCourseNode = (course: CanvasCourseTreeNode, depth: number) => {
+    const isCourseExpanded = expandedCourses.has(course.canvasId) || searchQuery.trim().length > 0
+    const roster = courseRosters[course.canvasId]
+    const isLoadingRoster = loadingCourseRosters.has(course.canvasId)
+    const hasSections = course.sections && course.sections.length > 0
+
+    return (
+      <div
+        key={`course-${course.canvasId}`}
+        className="flex flex-col border border-border/60 rounded-lg bg-card overflow-hidden my-1 shadow-2xs"
+      >
+        {/* Encabezado del Curso */}
+        <div
+          className="flex items-center justify-between py-1.5 px-3 bg-muted/20 hover:bg-muted/35 transition-colors border-b border-border/40 gap-3"
+          style={{ paddingLeft: `${depth * 1.3 + 0.6}rem` }}
+        >
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <button
+              onClick={() => handleToggleCourse(course.canvasId)}
+              className="p-0.5 hover:bg-muted rounded text-muted-foreground transition-transform shrink-0"
+              title={isCourseExpanded ? 'Plegar curso' : 'Desplegar secciones'}
+            >
+              {isCourseExpanded ? (
+                <ChevronDown className="size-3.5" />
+              ) : (
+                <ChevronRight className="size-3.5" />
+              )}
+            </button>
+
+            <Badge
+              variant="secondary"
+              className="font-mono text-[9px] px-1.5 py-0 h-4 bg-primary/10 text-primary border-primary/20 shrink-0"
+            >
+              [CURSO]
+            </Badge>
+
+            <span className="font-mono text-primary font-bold text-xs shrink-0">
+              {course.sisCourseId || course.courseCode || `CUR-${course.canvasId}`}
+            </span>
+
+            <span className="text-muted-foreground shrink-0">-</span>
+
+            <span
+              className="truncate font-semibold text-xs text-foreground"
+              title={course.name}
+            >
+              {course.name}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {course.sisCourseId ? (
+              <Badge
+                variant="outline"
+                className="font-mono text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+              >
+                SIS: {course.sisCourseId}
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="font-mono text-[10px] text-muted-foreground/60 border-dashed"
+              >
+                Sin SIS ID
+              </Badge>
+            )}
+
+            <span className="font-mono text-[10px] text-muted-foreground">
+              ID: {course.canvasId}
+            </span>
+
+            <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground">
+              {course.sections.length} secc.
+            </Badge>
+
+            <Badge
+              variant="outline"
+              className="font-mono text-[10px] bg-primary/5 text-primary"
+            >
+              {course.totalStudents} alumnos
+            </Badge>
+
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => handleToggleCourseWithRoster(course)}
+              className="h-6 text-[10px] gap-1 px-2 text-muted-foreground hover:text-foreground"
+              title="Ver o plegar lista de docentes y alumnos del curso"
+            >
+              {isLoadingRoster ? (
+                <>
+                  <Loader2 className="size-2.5 animate-spin text-primary" />
+                  <span>Cargando...</span>
+                </>
+              ) : (
+                <>
+                  <Users className="size-2.5 text-primary" />
+                  <span>{isCourseExpanded ? 'Plegar' : 'Ver Matriculados'}</span>
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {/* Secciones y Roster del Curso */}
+        {isCourseExpanded && (
+          <div className="p-2 space-y-2 bg-muted/5">
+            {!hasSections ? (
+              <div className="p-2.5 text-center text-xs italic text-muted-foreground">
+                (Sin secciones registradas para este curso en Canvas)
+              </div>
+            ) : (
+              course.sections.map((sec, secIdx) => {
+                const secKey = `sec-${course.canvasId}-${sec.id}`
+                const isSecExpanded = expandedSections.has(secKey) || searchQuery.trim().length > 0
+
+                const isOnlySection = course.sections.length <= 1
+                const secDocentes = (roster?.docentes || []).filter(
+                  (d) => d.sectionId === sec.id || isOnlySection || (!d.sectionId && secIdx === 0)
+                )
+                const secEstudiantes = (roster?.estudiantes || []).filter(
+                  (e) => e.sectionId === sec.id || isOnlySection || (!e.sectionId && secIdx === 0)
+                )
+
+                return (
+                  <div
+                    key={secKey}
+                    className="border border-border/50 rounded-md bg-background overflow-hidden"
+                  >
+                    {/* Fila de la Sección */}
+                    <div className="flex items-center justify-between py-1.5 px-3 bg-muted/15 border-b border-border/30 text-xs">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <button
+                          onClick={() => handleToggleSection(secKey, course.canvasId)}
+                          className="p-0.5 hover:bg-muted rounded text-muted-foreground transition-transform shrink-0"
+                        >
+                          {isSecExpanded ? (
+                            <ChevronDown className="size-3" />
+                          ) : (
+                            <ChevronRight className="size-3" />
+                          )}
+                        </button>
+
+                        <Badge
+                          variant="outline"
+                          className="font-mono text-[9px] px-1 py-0 h-4 bg-muted text-muted-foreground"
+                        >
+                          [SECCIÓN]
+                        </Badge>
+
+                        <span className="font-mono font-medium text-foreground text-xs truncate">
+                          {sec.name}
+                        </span>
+
+                        {sec.sisSectionId && (
+                          <Badge
+                            variant="outline"
+                            className="font-mono text-[9px] text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+                          >
+                            SIS: {sec.sisSectionId}
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-mono text-[10px] text-muted-foreground">
+                          ID: {sec.id}
+                        </span>
+
+                        <Button
+                          variant="outline"
+                          size="xs"
+                          onClick={() => handleToggleSection(secKey, course.canvasId)}
+                          className="h-5 text-[10px] gap-1 px-2 text-muted-foreground hover:text-foreground"
+                        >
+                          {isLoadingRoster ? (
+                            <>
+                              <Loader2 className="size-2.5 animate-spin" />
+                              <span>Cargando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Users className="size-2.5 text-primary" />
+                              <span>
+                                {isSecExpanded ? 'Ocultar' : 'Matriculados'}
+                                {roster
+                                  ? ` (${secDocentes.length} D / ${secEstudiantes.length} E)`
+                                  : ` (${sec.totalStudents} E)`}
+                              </span>
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Desglose Inline de Matriculados (D) y (E) */}
+                    {isSecExpanded && (
+                      <div className="p-3 space-y-3 bg-card/60">
+                        {isLoadingRoster ? (
+                          <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
+                            <Loader2 className="size-4 animate-spin text-primary" />
+                            <span>Consultando docentes y estudiantes desde Canvas API...</span>
+                          </div>
+                        ) : !roster ? (
+                          <div className="flex items-center justify-between py-2 px-3 rounded bg-muted/20 text-xs">
+                            <span className="text-muted-foreground">
+                              Matrículas aún no sincronizadas para este curso.
+                            </span>
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              onClick={() => loadCourseEnrollments(course.canvasId)}
+                              className="h-6 text-[10px] gap-1"
+                            >
+                              <RefreshCw className="size-2.5" />
+                              <span>Consultar en Vivo</span>
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {/* 1. Docentes asignados (D) */}
+                            <div className="space-y-1.5">
+                              <div className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider flex items-center gap-1.5">
+                                <span>Docentes Asignados ({secDocentes.length}):</span>
+                              </div>
+
+                              {secDocentes.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                                  {secDocentes.map((doc, dIdx) => (
+                                    <div
+                                      key={`doc-${sec.id}-${doc.id}-${dIdx}`}
+                                      className="flex items-center gap-2 py-1 px-2.5 rounded bg-background border border-border/60 text-xs shadow-2xs"
+                                    >
+                                      <Badge
+                                        variant="default"
+                                        className="text-[9px] px-1.5 py-0 h-4 font-mono font-bold tracking-tight bg-amber-600 hover:bg-amber-600 text-white"
+                                      >
+                                        (D) [DOCENTE]
+                                      </Badge>
+                                      <span className="font-mono font-bold text-amber-700 dark:text-amber-400 text-[11px]">
+                                        {doc.dni ? `DNI:${doc.dni}` : 'S/DNI'}
+                                      </span>
+                                      <span className="text-muted-foreground">-</span>
+                                      <span className="font-sans font-medium text-foreground truncate flex-1">
+                                        {doc.fullName}
+                                      </span>
+                                      {doc.email && (
+                                        <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[170px]">
+                                          &lt;{doc.email}&gt;
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-[11px] italic text-muted-foreground pl-2 py-0.5">
+                                  (Sin docente asignado en esta sección)
+                                </div>
+                              )}
+                            </div>
+
+                            {/* 2. Estudiantes Matriculados (E) */}
+                            <div className="space-y-1.5 pt-1">
+                              <div className="text-[10px] uppercase font-semibold text-muted-foreground flex items-center justify-between tracking-wider">
+                                <span>Alumnos Matriculados ({secEstudiantes.length}):</span>
+                                <span className="text-[10px] text-muted-foreground font-normal font-sans">
+                                  Rol: StudentEnrollment • Canvas LMS
+                                </span>
+                              </div>
+
+                              {secEstudiantes.length > 0 ? (
+                                <div className="max-h-60 overflow-y-auto divide-y divide-border/20 border border-border/50 rounded bg-background p-1">
+                                  {secEstudiantes.slice(0, 50).map((est, eIdx) => (
+                                    <div
+                                      key={`est-${sec.id}-${est.id}-${eIdx}`}
+                                      className="flex items-center gap-2 py-1 px-2 hover:bg-muted/50 rounded text-xs transition-colors"
+                                    >
+                                      <span className="text-[10px] text-muted-foreground w-6 text-right font-mono">
+                                        {eIdx + 1}.
+                                      </span>
+                                      <Badge
+                                        variant="secondary"
+                                        className="text-[9px] px-1 py-0 h-4 font-mono bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20"
+                                      >
+                                        (E) [ESTUDIANTE]
+                                      </Badge>
+                                      <span className="font-semibold text-primary font-mono text-[11px]">
+                                        {est.codigo ? `COD:${est.codigo}` : `ID:${est.id}`}
+                                      </span>
+                                      <span className="text-muted-foreground">-</span>
+                                      <span className="text-foreground flex-1 truncate font-sans">
+                                        {est.fullName}
+                                      </span>
+                                      {est.email && (
+                                        <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline truncate max-w-[200px]">
+                                          &lt;{est.email}&gt;
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {secEstudiantes.length > 50 && (
+                                    <div className="p-1.5 text-center text-[10px] text-muted-foreground bg-muted/20">
+                                      Mostrando los primeros 50 alumnos de {secEstudiantes.length} matriculados.
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="text-[11px] italic text-muted-foreground pl-2 py-0.5">
+                                  (Sin alumnos matriculados en esta sección)
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   // Componente recursivo para renderizar nodos del árbol
   const renderAccountNode = (node: CanvasAccountTreeNode) => {
     const isExpanded = expandedNodes.has(node.canvasId) || searchQuery.trim().length > 0
-    const hasChildren = node.children.length > 0
+    const hasSubaccounts = node.children && node.children.length > 0
+    const hasCourses = Boolean(node.courses && node.courses.length > 0)
+    const hasExpandableContent = hasSubaccounts || hasCourses
 
     return (
       <div key={node.canvasId} className="flex flex-col select-none">
@@ -306,7 +782,7 @@ export function CanvasCaseManager() {
           style={{ paddingLeft: `${node.depth * 1.5 + 0.6}rem` }}
         >
           <div className="flex items-center gap-2 min-w-0">
-            {hasChildren ? (
+            {hasExpandableContent ? (
               <button
                 onClick={() => handleToggleNode(node.canvasId)}
                 className="p-0.5 hover:bg-muted rounded text-muted-foreground transition-transform shrink-0"
@@ -325,7 +801,7 @@ export function CanvasCaseManager() {
 
             {node.depth === 0 ? (
               <Building className="size-4 text-emerald-600 shrink-0" />
-            ) : hasChildren ? (
+            ) : hasSubaccounts ? (
               <Layers className="size-3.5 text-primary shrink-0" />
             ) : (
               <FolderTree className="size-3.5 text-muted-foreground shrink-0" />
@@ -363,14 +839,41 @@ export function CanvasCaseManager() {
                 className="font-mono text-[10px] gap-1 bg-primary/10 text-primary"
               >
                 <BookOpen className="size-3" />
-                <span>{node.coursesCount}</span>
+                <span>{node.coursesCount} {node.coursesCount === 1 ? 'curso' : 'cursos'}</span>
               </Badge>
             )}
           </div>
         </div>
 
-        {hasChildren && isExpanded && (
-          <div className="flex flex-col">{node.children.map(renderAccountNode)}</div>
+        {/* Contenido expandido: subcuentas y/o cursos */}
+        {isExpanded && (
+          <div className="flex flex-col">
+            {hasSubaccounts && node.children.map(renderAccountNode)}
+            {hasCourses && (
+              <div
+                className="flex flex-col space-y-1.5 my-1.5 pl-2 border-l-2 border-primary/25 ml-4"
+                style={{ marginLeft: `${node.depth * 1.5 + 1.2}rem` }}
+              >
+                <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground pb-0.5 pr-2">
+                  <span className="flex items-center gap-1.5">
+                    <BookOpen className="size-3.5 text-primary" />
+                    <span>Cursos en esta cuenta ({node.courses.length})</span>
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => handleToggleAllCoursesInAccount(node.courses)}
+                    className="h-5 text-[10px] px-1.5 text-muted-foreground hover:text-foreground"
+                  >
+                    {node.courses.every((c) => expandedCourses.has(c.canvasId))
+                      ? 'Plegar Cursos'
+                      : 'Desplegar Cursos'}
+                  </Button>
+                </div>
+                {node.courses.map((course) => renderCourseNode(course, node.depth + 1))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     )
@@ -597,6 +1100,15 @@ export function CanvasCaseManager() {
                     className="text-[11px] h-7 px-2"
                   >
                     Desplegar Todo
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={handleCollapseAllRosters}
+                    className="text-[11px] h-7 px-2 text-muted-foreground hover:text-foreground"
+                    title="Plegar todas las listas de docentes y alumnos abiertas"
+                  >
+                    Plegar Matriculados
                   </Button>
                   <Button
                     variant="outline"

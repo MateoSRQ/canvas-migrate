@@ -7,6 +7,7 @@ import {
   deleteCanvasCase,
   getCanvasRawEntitySample,
   testCanvasApiConnection,
+  getCanvasCourseEnrollments,
   type CanvasImportCaseOptions,
 } from '#/server/services/canvas-importer'
 
@@ -49,3 +50,10 @@ export const testCanvasConnectionFn = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     return await testCanvasApiConnection(data?.endpoint, data?.apiKey)
   })
+
+export const getCanvasCourseEnrollmentsFn = createServerFn({ method: 'GET' })
+  .validator((payload: { caseId: string; courseId: number }) => payload)
+  .handler(async ({ data }) => {
+    return await getCanvasCourseEnrollments(data.caseId, data.courseId)
+  })
+
