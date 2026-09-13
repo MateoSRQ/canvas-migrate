@@ -19,12 +19,15 @@ export interface HierarchyItem {
   periodoNombre: string
   periodoSufijo: string
   sedeId: number
+  sedeCodigo: string
   sedeNombre: string
   modalidadId: number
   modalidadNombre: string
   facultadId: number
+  facultadCodigo: string
   facultadNombre: string
   carreraId: number
+  carreraCodigo: string
   carreraNombre: string
   planId: number
   planNombre: string
@@ -259,10 +262,13 @@ export function getCaseHierarchyData(
     const primaryTeacher = sectionTeachers[0] || null
 
     const sedeId = sede?.id ?? 0
+    const sedeCodigo = sede?.cod_sede ? String(sede.cod_sede).trim() : `S-${sedeId}`
     const sedeNombre = sede?.nombre || 'Sin Sede'
     const facultadId = facultad?.id ?? 0
+    const facultadCodigo = facultad?.cod_facultad ? String(facultad.cod_facultad).trim() : `F-${facultadId}`
     const facultadNombre = facultad?.nombre || 'Sin Facultad'
     const carreraId = carrera?.id ?? 0
+    const carreraCodigo = carrera?.cod_carrera ? String(carrera.cod_carrera).trim() : `C-${carreraId}`
     const carreraNombre = carrera?.nombre || 'Sin Carrera'
     const planId = plan?.id ?? 0
     const planNombre = plan?.nombre || plan?.cod_plan || 'Sin Plan'
@@ -289,12 +295,15 @@ export function getCaseHierarchyData(
       periodoNombre: periodo.nombre,
       periodoSufijo: periodo.sufijo || '',
       sedeId,
+      sedeCodigo,
       sedeNombre,
       modalidadId: sc.cat_modalidad_id,
       modalidadNombre: modalidad,
       facultadId,
+      facultadCodigo,
       facultadNombre,
       carreraId,
+      carreraCodigo,
       carreraNombre,
       planId,
       planNombre,

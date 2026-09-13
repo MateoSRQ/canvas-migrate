@@ -153,7 +153,7 @@ export async function exportSelectedToCanvasCsv(
   const planesOrder: AccountRow[] = []
 
   for (const it of selectedItems) {
-    const sedeAccId = sedeCodeMap.get(it.sedeId) || `S-${it.sedeId}`
+    const sedeAccId = it.sedeCodigo || sedeCodeMap.get(it.sedeId) || `S-${it.sedeId}`
     if (!accountsMap.has(sedeAccId)) {
       const row: AccountRow = {
         account_id: sedeAccId,
@@ -177,7 +177,7 @@ export async function exportSelectedToCanvasCsv(
       modalidadesOrder.push(row)
     }
 
-    const facCode = facultadCodeMap.get(it.facultadId) || `F-${it.facultadId}`
+    const facCode = it.facultadCodigo || facultadCodeMap.get(it.facultadId) || `F-${it.facultadId}`
     const facAccId = facCode.startsWith('F-') ? facCode : `F-${facCode}`
     if (!accountsMap.has(facAccId)) {
       const row: AccountRow = {
@@ -190,7 +190,7 @@ export async function exportSelectedToCanvasCsv(
       facultadesOrder.push(row)
     }
 
-    const carrCode = carreraCodeMap.get(it.carreraId) || `C-${it.carreraId}`
+    const carrCode = it.carreraCodigo || carreraCodeMap.get(it.carreraId) || `C-${it.carreraId}`
     const carrAccId = carrCode.startsWith('C-') ? carrCode : `C-${carrCode}`
     if (!accountsMap.has(carrAccId)) {
       const row: AccountRow = {

@@ -339,14 +339,15 @@ export function CanvasExportDialog({
                 </span>
               </div>
               <p className="text-muted-foreground text-[11px] leading-relaxed">
-                Ingrese el SIS ID de la subcuenta en Canvas donde colgarán las sedes. Si se deja en
-                blanco, las sedes se crearán directamente en la raíz institucional de Canvas.
+                Ingrese el SIS ID o ID numérico de una subcuenta <strong>que ya exista en Canvas LMS</strong>{' '}
+                donde colgarán las sedes. Si la subcuenta no existe previamente o desea colgarlas directamente
+                de la raíz institucional de Canvas, <strong>déjelo en blanco</strong>.
               </p>
               <Input
                 type="text"
                 value={rootAccountId}
                 onChange={(e) => onRootAccountIdChange(e.target.value)}
-                placeholder="Ej: PREGRADO_2026, FACULTAD_CENTRAL (o dejar vacío)"
+                placeholder="Dejar en blanco para raíz principal, o SIS ID existente (ej: S-001)"
                 className="font-mono text-xs h-8 bg-background"
                 disabled={isExporting}
               />
