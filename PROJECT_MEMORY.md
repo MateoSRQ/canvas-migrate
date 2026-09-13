@@ -84,6 +84,8 @@
   - [x] Visualizador jerárquico completo en `CanvasCaseManager` análogo al árbol de base de datos: Cuenta/Subcuenta -> Curso -> Sección -> Docentes (D) con DNI y Estudiantes (E) con código institucional.
   - [x] Carga bajo demanda reactiva (Lazy Loading) de docentes y alumnos por curso con feedback `Loader2`, almacenamiento en caché persistente en SQLite y botón de plegado masivo de matrículas.
   - [x] Pestaña de navegación en el shell superior `Casos Canvas LMS (API)` y enlace en el drawer menú lateral (`AppLayout`).
+  - [x] Identación visual jerárquica de Secciones, Alumnos y Docentes con líneas guía vertical en Vista Jerárquica (Tree Table) y Árbol de Casos Canvas LMS (API).
+  - [x] Deduplicación y resolución precisa de docentes y alumnos en vistas anidadas (corrección de nombres duplicados en CUR006383 - CULTURA CIENTÍFICA I y sincronización de secciones reales en API de Canvas).
   - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
   - [ ] Job status polling, import log inspection, and error auditing.
 
@@ -257,6 +259,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-13T00:18:00` | `ab929d7` | Antigravity | Feature/CanvasHierarchy | Visualización análoga de Cursos, Secciones, Docentes (D) con DNI y Estudiantes (E) en el árbol Canvas LMS con lazy loading y caché SQLite | `src/db/schema.ts`, `src/server/services/canvas-importer.ts`, `src/server/functions/canvas.ts`, `src/components/canvas/canvas-case-manager.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T10:30:00` | `fc7fcf7` | Antigravity | Fix/SISExport | Corrección de resolución de códigos de Sede (S-001 vs S-174) y clarificación de parent_account_id en exportador Canvas | `src/server/services/hierarchy-service.ts`, `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T10:45:00` | `f0e3571` | Antigravity | Feature/SISExport | Creación automática de subcuenta padre en accounts.csv para SIS import y campos de control en modal de exportación | `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `PROJECT_MEMORY.md` |
+| `2026-09-13T11:28:00` | - | Antigravity | Fix/UI | Identación visual de secciones, docentes y alumnos, y deduplicación de docentes en CUR006383 y árbol Canvas | `src/components/canvas/canvas-case-manager.tsx`, `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/tree-section-roster.tsx`, `src/server/services/canvas-exporter.ts`, `src/server/services/canvas-importer.ts`, `PROJECT_MEMORY.md` |
 
 
 
@@ -359,6 +362,9 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
     - **Desglose Análogo de Matriculados por Sección**:
       - `(D) [DOCENTE]`: Badge ámbar, DNI normalizado (ej: `DNI:09375116`), nombre completo y correo corporativo.
       - `(E) [ESTUDIANTE]`: Roster numerado con badge esmeralda, código institucional (ej: `COD:msanroman@...`), nombre completo y correo electrónico.
+      - **Identación Jerárquica Guiada**: Secciones anidadas con sangría visual y guía vertical (`border-l-2 border-primary/25 ml-4 sm:ml-8 pl-3 sm:pl-4`). Desglose inline de docentes y alumnos con guía esmeralda (`border-l-2 border-emerald-600/30`), docentes con guía ámbar (`border-l-2 border-amber-500/40`) y estudiantes con guía verde (`border-l-2 border-emerald-500/40`).
+      - **Deduplicación Robusta de Docentes y Estudiantes**: Filtrado estricto por DNI/ID único en memoria por sección y curso, previniendo duplicados cuando un docente imparte múltiples secciones en un mismo curso (ej: `CUR006383 - CULTURA CIENTÍFICA I`).
+      - **Sincronización Automática de Secciones Reales**: Detección y descarga en vivo de `/courses/:id/sections` al solicitar matriculados si el curso no poseía secciones registradas.
       - **Carga Bajo Demanda (Lazy Loading)**: Consulta instantánea al endpoint de Canvas API `/courses/:id/enrollments` únicamente cuando el usuario expande el curso o sección, almacenando en caché SQLite (`canvas_case_enrollments`) para reaperturas inmediatas en 0 ms con spinner `Loader2` no bloqueante.
   - **Inspector de Entidades Raw**: Vista alternativa en tabla con conteo de registros para `accounts`, `terms` y `courses`, con visor modal monospace de los primeros 50 registros crudos devueltos por la API.
 

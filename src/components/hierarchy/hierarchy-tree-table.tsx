@@ -1379,7 +1379,7 @@ export function HierarchyTreeTable({
 
                                                                               {/* Tabla Anidada de Secciones del Curso */}
                                                                               {isCurExpanded && (
-                                                                                <div className="p-0 overflow-x-auto">
+                                                                                <div className="p-2 pl-4 sm:pl-6 bg-muted/5 border-t border-border/40 border-l-2 border-primary/30 ml-2 sm:ml-4 my-1 rounded-r-lg overflow-x-auto">
                                                                                   <Table>
                                                                                     <TableHeader>
                                                                                       <TableRow className="bg-muted/10 hover:bg-muted/10 text-[11px]">

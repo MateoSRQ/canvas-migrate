@@ -662,6 +662,56 @@ export async function getCanvasCourseEnrollments(caseId: string, courseId: numbe
     }
   }
 
+  // 3. Sincronizar secciones del curso si no existen o estaban vacías
+  try {
+    const courseRecord = await db
+      .select()
+      .from(canvasCaseCourses)
+      .where(
+        and(
+          eq(canvasCaseCourses.caseId, caseId),
+          eq(canvasCaseCourses.canvasId, courseId)
+        )
+      )
+      .get()
+
+    let hasValidSections = false
+    if (courseRecord?.sectionsJson) {
+      try {
+        const parsed = JSON.parse(courseRecord.sectionsJson)
+        if (Array.isArray(parsed) && parsed.length > 0) hasValidSections = true
+      } catch {}
+    }
+
+    if (!hasValidSections) {
+      const apiSections = await fetchCanvasPaginated<any>(
+        baseUrl,
+        token,
+        `/courses/${courseId}/sections`,
+        { per_page: 100 }
+      )
+      if (apiSections.length > 0) {
+        const mapped = apiSections.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          sisSectionId: s.sis_section_id ? String(s.sis_section_id).trim() : null,
+          totalStudents: s.total_students ?? 0,
+        }))
+        await db
+          .update(canvasCaseCourses)
+          .set({ sectionsJson: JSON.stringify(mapped) })
+          .where(
+            and(
+              eq(canvasCaseCourses.caseId, caseId),
+              eq(canvasCaseCourses.canvasId, courseId)
+            )
+          )
+      }
+    }
+  } catch (secErr) {
+    console.warn(`No se pudieron sincronizar secciones para el curso ${courseId}:`, secErr)
+  }
+
   const docentes = toInsert
     .filter((r) => r.role === 'teacher')
     .map((r) => ({

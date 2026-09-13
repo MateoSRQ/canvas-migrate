@@ -51,6 +51,16 @@ export function TreeSectionRoster({
   const students = loadedStudents || sec.estudiantes || []
   const displayCount = isLoading ? sec.estudiantesCount : students.length
 
+  const uniqueDocentes = React.useMemo(() => {
+    const seen = new Set<string>()
+    return (sec.docentes || []).filter((d) => {
+      const key = d.dni ? `dni-${d.dni}` : `name-${d.fullName.toLowerCase().trim()}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [sec.docentes])
+
   return (
     <div className="space-y-2.5">
       {/* Encabezado del Desglose de Matriculados */}
@@ -62,7 +72,7 @@ export function TreeSectionRoster({
         </div>
         <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
           <Badge variant="outline" className="px-1.5 py-0 h-4">
-            (D) {sec.docentes.length} {sec.docentes.length === 1 ? 'Docente' : 'Docentes'}
+            (D) {uniqueDocentes.length} {uniqueDocentes.length === 1 ? 'Docente' : 'Docentes'}
           </Badge>
           <Badge variant="outline" className="px-1.5 py-0 h-4">
             {isLoading ? (
@@ -80,13 +90,13 @@ export function TreeSectionRoster({
       </div>
 
       {/* 1. Docentes asignados (D) */}
-      <div className="space-y-1">
-        <div className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider">
-          Docentes Asignados:
+      <div className="space-y-1 pl-3 border-l-2 border-amber-500/40 ml-1">
+        <div className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider flex items-center gap-1.5">
+          <span>Docentes Asignados ({uniqueDocentes.length}):</span>
         </div>
-        {sec.docentes.length > 0 ? (
+        {uniqueDocentes.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-            {sec.docentes.map((doc, dIdx) => (
+            {uniqueDocentes.map((doc, dIdx) => (
               <div
                 key={`doc-${sec.id}-${doc.dni || dIdx}`}
                 className="flex items-center gap-2 py-1 px-2.5 rounded bg-background border border-border/60 text-xs shadow-2xs"
@@ -120,7 +130,7 @@ export function TreeSectionRoster({
       </div>
 
       {/* 2. Estudiantes Matriculados (E) */}
-      <div className="space-y-1 pt-1">
+      <div className="space-y-1 pt-1 pl-3 border-l-2 border-primary/30 ml-1">
         <div className="text-[10px] uppercase font-semibold text-muted-foreground flex items-center justify-between tracking-wider">
           <span>Alumnos Matriculados ({displayCount}):</span>
           {!isLoading && students.length > 0 && (

@@ -544,7 +544,7 @@ export function CanvasCaseManager() {
 
         {/* Secciones y Roster del Curso */}
         {isCourseExpanded && (
-          <div className="p-2 space-y-2 bg-muted/5">
+          <div className="p-2 space-y-2 bg-muted/5 border-l-2 border-primary/25 ml-4 sm:ml-8 pl-3 sm:pl-4 my-1.5 rounded-r-lg">
             {!hasSections ? (
               <div className="p-2.5 text-center text-xs italic text-muted-foreground">
                 (Sin secciones registradas para este curso en Canvas)
@@ -555,12 +555,35 @@ export function CanvasCaseManager() {
                 const isSecExpanded = expandedSections.has(secKey) || searchQuery.trim().length > 0
 
                 const isOnlySection = course.sections.length <= 1
-                const secDocentes = (roster?.docentes || []).filter(
+                const rawDocentes = (roster?.docentes || []).filter(
                   (d) => d.sectionId === sec.id || isOnlySection || (!d.sectionId && secIdx === 0)
                 )
-                const secEstudiantes = (roster?.estudiantes || []).filter(
+                const seenDocKeys = new Set<string>()
+                const secDocentes = rawDocentes.filter((d) => {
+                  const key = d.dni
+                    ? `dni-${d.dni}`
+                    : d.id
+                      ? `id-${d.id}`
+                      : `name-${d.fullName.toLowerCase().trim()}`
+                  if (seenDocKeys.has(key)) return false
+                  seenDocKeys.add(key)
+                  return true
+                })
+
+                const rawEstudiantes = (roster?.estudiantes || []).filter(
                   (e) => e.sectionId === sec.id || isOnlySection || (!e.sectionId && secIdx === 0)
                 )
+                const seenEstKeys = new Set<string>()
+                const secEstudiantes = rawEstudiantes.filter((e) => {
+                  const key = e.codigo
+                    ? `cod-${e.codigo}`
+                    : e.id
+                      ? `id-${e.id}`
+                      : `name-${e.fullName.toLowerCase().trim()}`
+                  if (seenEstKeys.has(key)) return false
+                  seenEstKeys.add(key)
+                  return true
+                })
 
                 return (
                   <div
@@ -635,7 +658,7 @@ export function CanvasCaseManager() {
 
                     {/* Desglose Inline de Matriculados (D) y (E) */}
                     {isSecExpanded && (
-                      <div className="p-3 space-y-3 bg-card/60">
+                      <div className="p-3 pl-5 space-y-3 bg-card/60 border-l-2 border-emerald-600/30 ml-3 my-1 rounded-r-md">
                         {isLoadingRoster ? (
                           <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
                             <Loader2 className="size-4 animate-spin text-primary" />
@@ -659,7 +682,7 @@ export function CanvasCaseManager() {
                         ) : (
                           <div className="space-y-3">
                             {/* 1. Docentes asignados (D) */}
-                            <div className="space-y-1.5">
+                            <div className="space-y-1.5 pl-3 border-l-2 border-amber-500/40 ml-1">
                               <div className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider flex items-center gap-1.5">
                                 <span>Docentes Asignados ({secDocentes.length}):</span>
                               </div>
@@ -700,7 +723,7 @@ export function CanvasCaseManager() {
                             </div>
 
                             {/* 2. Estudiantes Matriculados (E) */}
-                            <div className="space-y-1.5 pt-1">
+                            <div className="space-y-1.5 pt-1 pl-3 border-l-2 border-emerald-500/40 ml-1">
                               <div className="text-[10px] uppercase font-semibold text-muted-foreground flex items-center justify-between tracking-wider">
                                 <span>Alumnos Matriculados ({secEstudiantes.length}):</span>
                                 <span className="text-[10px] text-muted-foreground font-normal font-sans">

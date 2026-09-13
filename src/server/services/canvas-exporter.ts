@@ -667,12 +667,20 @@ export async function exportSelectedToCanvasCsv(
                   treeLines.push(
                     `\t\t\t\t\t\t\t${rootIndent}[SECCION] ${s.seccionNombre} (SEC: ${s.seccionId}-${s.cursoCodigo}) - ${s.estudiantes.length} alumnos`
                   )
+                  const seenDocKeys = new Set<string>()
                   for (const d of s.docentes) {
+                    const key = d.dni ? d.dni.trim() : d.fullName.trim()
+                    if (seenDocKeys.has(key)) continue
+                    seenDocKeys.add(key)
                     treeLines.push(
                       `\t\t\t\t\t\t\t\t${rootIndent}(D) [DOCENTE] DNI:${d.dni} - ${d.fullName} <${d.email}>`
                     )
                   }
+                  const seenEstKeys = new Set<string>()
                   for (const e of s.estudiantes) {
+                    const key = e.codigo ? e.codigo.trim() : e.fullName.trim()
+                    if (seenEstKeys.has(key)) continue
+                    seenEstKeys.add(key)
                     treeLines.push(
                       `\t\t\t\t\t\t\t\t${rootIndent}(E) [ESTUDIANTE] COD:${e.codigo} - ${e.fullName} <${e.email}>`
                     )
