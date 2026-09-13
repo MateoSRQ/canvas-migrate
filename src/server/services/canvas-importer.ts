@@ -579,7 +579,94 @@ export async function getCanvasCaseAccountsTree(caseId: string) {
   }
 }
 
-export async function getCanvasCourseEnrollments(caseId: string, courseId: number) {
+export interface CanvasCourseRosterResult {
+  docentes: {
+    id: number
+    sectionId: number | null
+    dni: string
+    fullName: string
+    email: string
+  }[]
+  estudiantes: {
+    id: number
+    sectionId: number | null
+    codigo: string
+    fullName: string
+    email: string
+  }[]
+  sections?: CanvasCourseSectionNode[]
+}
+
+export async function getCanvasCourseEnrollments(
+  caseId: string,
+  courseId: number
+): Promise<CanvasCourseRosterResult> {
+  // Helper interno para resolver secciones (de SQLite o Canvas API)
+  async function resolveCourseSections(): Promise<CanvasCourseSectionNode[]> {
+    try {
+      const courseRecord = await db
+        .select({ sectionsJson: canvasCaseCourses.sectionsJson })
+        .from(canvasCaseCourses)
+        .where(
+          and(
+            eq(canvasCaseCourses.caseId, caseId),
+            eq(canvasCaseCourses.canvasId, courseId)
+          )
+        )
+        .get()
+
+      if (courseRecord?.sectionsJson) {
+        try {
+          const parsed = JSON.parse(courseRecord.sectionsJson)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              sisSectionId: s.sisSectionId || s.sis_section_id || null,
+              totalStudents: s.totalStudents ?? s.total_students ?? 0,
+              docentes: [],
+              estudiantes: [],
+              estudiantesCount: s.totalStudents ?? s.total_students ?? 0,
+            }))
+          }
+        } catch {}
+      }
+
+      // Si no existen o están vacías, extraer desde Canvas API
+      const { baseUrl, token } = getCanvasConfig()
+      const apiSections = await fetchCanvasPaginated<any>(
+        baseUrl,
+        token,
+        `/courses/${courseId}/sections`,
+        { per_page: 100 }
+      )
+      if (apiSections.length > 0) {
+        const mapped: CanvasCourseSectionNode[] = apiSections.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          sisSectionId: s.sis_section_id ? String(s.sis_section_id).trim() : null,
+          totalStudents: s.total_students ?? 0,
+          docentes: [],
+          estudiantes: [],
+          estudiantesCount: s.total_students ?? 0,
+        }))
+        await db
+          .update(canvasCaseCourses)
+          .set({ sectionsJson: JSON.stringify(mapped) })
+          .where(
+            and(
+              eq(canvasCaseCourses.caseId, caseId),
+              eq(canvasCaseCourses.canvasId, courseId)
+            )
+          )
+        return mapped
+      }
+    } catch (err) {
+      console.warn(`[Canvas API] No se pudieron resolver secciones para el curso ${courseId}:`, err)
+    }
+    return []
+  }
+
   // 1. Revisar si ya están en base de datos SQLite
   const cached = await db
     .select()
@@ -613,7 +700,8 @@ export async function getCanvasCourseEnrollments(caseId: string, courseId: numbe
         email: r.email || '',
       }))
 
-    return { docentes, estudiantes }
+    const sections = await resolveCourseSections()
+    return { docentes, estudiantes, sections }
   }
 
   // 2. Extraer desde Canvas API en vivo
@@ -662,61 +750,14 @@ export async function getCanvasCourseEnrollments(caseId: string, courseId: numbe
     }
   }
 
-  // 3. Sincronizar secciones del curso si no existen o estaban vacías
-  try {
-    const courseRecord = await db
-      .select()
-      .from(canvasCaseCourses)
-      .where(
-        and(
-          eq(canvasCaseCourses.caseId, caseId),
-          eq(canvasCaseCourses.canvasId, courseId)
-        )
-      )
-      .get()
-
-    let hasValidSections = false
-    if (courseRecord?.sectionsJson) {
-      try {
-        const parsed = JSON.parse(courseRecord.sectionsJson)
-        if (Array.isArray(parsed) && parsed.length > 0) hasValidSections = true
-      } catch {}
-    }
-
-    if (!hasValidSections) {
-      const apiSections = await fetchCanvasPaginated<any>(
-        baseUrl,
-        token,
-        `/courses/${courseId}/sections`,
-        { per_page: 100 }
-      )
-      if (apiSections.length > 0) {
-        const mapped = apiSections.map((s: any) => ({
-          id: s.id,
-          name: s.name,
-          sisSectionId: s.sis_section_id ? String(s.sis_section_id).trim() : null,
-          totalStudents: s.total_students ?? 0,
-        }))
-        await db
-          .update(canvasCaseCourses)
-          .set({ sectionsJson: JSON.stringify(mapped) })
-          .where(
-            and(
-              eq(canvasCaseCourses.caseId, caseId),
-              eq(canvasCaseCourses.canvasId, courseId)
-            )
-          )
-      }
-    }
-  } catch (secErr) {
-    console.warn(`No se pudieron sincronizar secciones para el curso ${courseId}:`, secErr)
-  }
+  // 3. Resolver secciones del curso (actualiza SQLite si estaban vacías)
+  const sections = await resolveCourseSections()
 
   const docentes = toInsert
     .filter((r) => r.role === 'teacher')
     .map((r) => ({
       id: r.userId,
-      sectionId: r.sectionId,
+      sectionId: r.sectionId ?? null,
       dni: r.sisUserId || '',
       fullName: r.fullName,
       email: r.email || '',
@@ -726,13 +767,13 @@ export async function getCanvasCourseEnrollments(caseId: string, courseId: numbe
     .filter((r) => r.role === 'student')
     .map((r) => ({
       id: r.userId,
-      sectionId: r.sectionId,
+      sectionId: r.sectionId ?? null,
       codigo: r.sisUserId || '',
       fullName: r.fullName,
       email: r.email || '',
     }))
 
-  return { docentes, estudiantes }
+  return { docentes, estudiantes, sections }
 }
 
 export async function getCanvasRawEntitySample(caseId: string, entityType: string): Promise<any[]> {

@@ -114,6 +114,10 @@
     - [x] Selector interactivo mediante tarjetas de selección tipo radio card en `CanvasExportDialog` con badges explicativos ("Recomendado en Sandbox", "Aislamiento Total") y descripciones técnicas.
     - [x] Propagación del modo en `hierarchy-selector.tsx` (`exportPrefixMode`), registro del modo en `RESUMEN.md` y encabezado de `hierarchy.txt`.
     - [x] Detección retrocompatible y badge diferenciado en `CaseComparisonView`: badge azul `Aislamiento Total ({prefix})` vs badge esmeralda `Aislado Cuentas ({prefix})`.
+  - [x] **Sincronización Reactiva de Secciones y Resolución de Matrículas Canvas API (Completado)**
+    - [x] Diagnóstico y corrección en la visualización de matrículas: Canvas LMS no incluye secciones en `/accounts/:id/courses`, por lo que los snapshots iniciales tenían secciones no vinculadas; al cargar matrículas bajo demanda (`getCanvasCourseEnrollments`), ahora se consultan y devuelven las secciones reales (`CanvasCourseSectionNode[]`), actualizando `canvasTree` en memoria y persistiendo en SQLite (`sectionsJson`).
+    - [x] Auto-despliegue de secciones únicas: En cursos con una sola sección (como los de TEST-6), al expandir el curso se despliegan automáticamente los docentes (D) y alumnos (E) sin requerir clics adicionales.
+    - [x] Filtro tolerante de matrículas: Inclusión de `isOnlySection` y coincidencia por identificador string en `case-comparison-view.tsx` y `canvas-case-manager.tsx`, deduplicación por DNI/código y visualización de correos institucionales.
   - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
   - [ ] Job status polling, import log inspection, and error auditing.
 
@@ -307,6 +311,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-13T12:44:00` | `5d24680` | Antigravity | Feature/MigrationComparison | Comparativa lado a lado basada en paquetes de migración exportados (migraciones/) vs Snapshots Canvas LMS con selección de migración | `src/server/services/migration-service.ts`, `src/server/functions/migrations.ts`, `src/components/comparison/case-comparison-view.tsx`, `src/routes/index.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T13:25:00` | `6cbcc7c` | Antigravity | Feature/SandboxIsolation | Modo de aislamiento de pruebas (Sandbox Prefix) en exportador Canvas LMS y visualizador de comparativa | `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `src/server/services/migration-service.ts`, `src/components/comparison/case-comparison-view.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T13:35:00` | `4aab608` | Antigravity | Feature/PrefixModes | 3 opciones de prefijado SIS (sin prefijo, aplicar a cuentas, aplicar a todos) en exportador, diálogo y comparativa | `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `src/server/services/migration-service.ts`, `src/components/comparison/case-comparison-view.tsx`, `PROJECT_MEMORY.md` |
+| `2026-09-13T14:30:00` | pending | Antigravity | Fix/CanvasEnrollmentSync | Sincronización reactiva de secciones en Canvas API, auto-despliegue de monosección y coincidencia robusta de matriculados en comparativa | `src/server/services/canvas-importer.ts`, `src/components/comparison/case-comparison-view.tsx`, `src/components/canvas/canvas-case-manager.tsx`, `PROJECT_MEMORY.md` |
 
 ---
 
@@ -475,10 +480,10 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
     1. **Sin prefijo (Estándar / Producción)**: Mantiene SIS IDs globales (`S-001`, `CUR006380`). Indicado para despliegues oficiales donde las cuentas son compartidas.
     2. **Aplicar prefijo a cuentas**: Badge verde esmeralda `Recomendado en Sandbox`. Prefija únicamente subcuentas (`TEST-5_S-001`, `TEST-5_P004084`), conservando los códigos originales en cursos y secciones. Evita reubicar la Sede Lima global en Canvas y arrastrar programas de salud no contemplados.
     3. **Aplicar prefijo a todos (Cuentas, Cursos y Secciones)**: Badge azul `Aislamiento Total`. Prefija cuentas (`TEST-5_S-001`), cursos (`TEST-5_CUR006380`) y secciones (`TEST-5_7115-CUR006380`), asociando los enrolamientos a estos identificadores para garantizar 0 conflictos en Canvas LMS.
-- **Distintivos Visuales en Comparativa Lado a Lado (`CaseComparisonView`)**:
-  - Distinción inmediata del nivel de aislamiento en el paquete de migración seleccionado:
-    - Badge azul font-mono `Aislamiento Total ({prefijo})` cuando el paquete fue exportado con prefijo a todos.
-    - Badge esmeralda font-mono `Aislado Cuentas ({prefijo})` cuando el paquete fue exportado con prefijo exclusivo a cuentas.
+- **Mejoras UX en Comparativa Lado a Lado (`CaseComparisonView`)**:
+  - **Auto-Despliegue de Cursos Monosección**: Cuando un curso contiene exactamente 1 sección (patrón común en posgrado como en TEST-6), al hacer clic para expandir el curso, la sección se despliega automáticamente en ambos árboles (Migración y Canvas), revelando inmediatamente el roster de docentes y estudiantes sin requerir un segundo clic sobre la barra de sección.
+  - **Identificadores y Correos de Contacto**: Muestra del correo institucional tanto para docentes (`<email>`) como para alumnos (`<email>`) en ambos paneles.
+  - **Conteo Dinámico de Matrículas en Cabecera de Sección**: Reflejo del número real de estudiantes cargados (`{count} estudiantes`) en la barra de la sección Canvas, sustituyendo el valor `0 estudiantes` devuelto inicialmente por Canvas API antes del fetch de matrículas.
 
 
 

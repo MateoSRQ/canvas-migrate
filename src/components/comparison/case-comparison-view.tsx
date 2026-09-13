@@ -243,6 +243,29 @@ export function CaseComparisonView({
           data: { caseId: selectedCanvasCaseId, courseId },
         })
         setCanvasRosters((prev) => ({ ...prev, [courseId]: data }))
+
+        if (data?.sections && data.sections.length > 0) {
+          setCanvasTree((prev) => {
+            if (!prev) return prev
+            function updateAccountNodes(
+              nodes: CanvasAccountTreeNode[]
+            ): CanvasAccountTreeNode[] {
+              return nodes.map((n) => ({
+                ...n,
+                children: updateAccountNodes(n.children),
+                courses: n.courses.map((c) =>
+                  c.canvasId === courseId
+                    ? { ...c, sections: data.sections! }
+                    : c
+                ),
+              }))
+            }
+            return {
+              ...prev,
+              rootNodes: updateAccountNodes(prev.rootNodes),
+            }
+          })
+        }
       } catch (err) {
         console.error('Error cargando matrículas Canvas:', err)
       } finally {
@@ -552,7 +575,9 @@ export function CaseComparisonView({
         {isExpanded && (
           <div className="p-2.5 border-t border-border/60 bg-background space-y-2">
             {course.sections.map((sec) => {
-              const isSecExpanded = migrationExpandedSections.has(sec.sectionId)
+              const isSecExpanded =
+                migrationExpandedSections.has(sec.sectionId) ||
+                (course.sections.length === 1 && isExpanded)
 
               return (
                 <div
@@ -822,20 +847,55 @@ export function CaseComparisonView({
             )}
 
             {course.sections && course.sections.length > 0 ? (
-              course.sections.map((sec) => {
+              course.sections.map((sec, secIdx) => {
                 const secKey = `${course.canvasId}-${sec.id}`
-                const isSecExpanded = canvasExpandedSections.has(secKey)
+                const isSecExpanded =
+                  canvasExpandedSections.has(secKey) ||
+                  (course.sections.length === 1 && isExpanded)
 
-                const secDocentes = roster?.docentes
-                  ? roster.docentes.filter(
-                      (d) => !d.sectionId || d.sectionId === sec.id
-                    )
-                  : []
-                const secEstudiantes = roster?.estudiantes
-                  ? roster.estudiantes.filter(
-                      (e) => !e.sectionId || e.sectionId === sec.id
-                    )
-                  : []
+                const isOnlySection = course.sections.length <= 1
+                const rawDocentes = (roster?.docentes || []).filter(
+                  (d) =>
+                    d.sectionId === sec.id ||
+                    isOnlySection ||
+                    (!d.sectionId && secIdx === 0) ||
+                    String(d.sectionId) === String(sec.id)
+                )
+                const seenDocKeys = new Set<string>()
+                const secDocentes = rawDocentes.filter((d) => {
+                  const key = d.dni
+                    ? `dni-${d.dni}`
+                    : d.id
+                      ? `id-${d.id}`
+                      : d.fullName.toLowerCase().trim()
+                  if (seenDocKeys.has(key)) return false
+                  seenDocKeys.add(key)
+                  return true
+                })
+
+                const rawEstudiantes = (roster?.estudiantes || []).filter(
+                  (e) =>
+                    e.sectionId === sec.id ||
+                    isOnlySection ||
+                    (!e.sectionId && secIdx === 0) ||
+                    String(e.sectionId) === String(sec.id)
+                )
+                const seenEstKeys = new Set<string>()
+                const secEstudiantes = rawEstudiantes.filter((e) => {
+                  const key = e.codigo
+                    ? `cod-${e.codigo}`
+                    : e.id
+                      ? `id-${e.id}`
+                      : e.fullName.toLowerCase().trim()
+                  if (seenEstKeys.has(key)) return false
+                  seenEstKeys.add(key)
+                  return true
+                })
+
+                const displayedStudentsCount =
+                  secEstudiantes.length > 0
+                    ? secEstudiantes.length
+                    : sec.totalStudents
 
                 return (
                   <div
@@ -864,7 +924,7 @@ export function CaseComparisonView({
                         )}
                       </div>
                       <span className="text-[10px] text-muted-foreground font-mono">
-                        {sec.totalStudents} estudiantes
+                        {displayedStudentsCount} estudiantes
                       </span>
                     </div>
 
@@ -889,6 +949,11 @@ export function CaseComparisonView({
                                   <span className="font-sans font-medium truncate">
                                     {d.fullName}
                                   </span>
+                                  {d.email && (
+                                    <span className="text-[10px] text-muted-foreground truncate max-w-[160px]">
+                                      &lt;{d.email}&gt;
+                                    </span>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -914,6 +979,11 @@ export function CaseComparisonView({
                                   <span className="text-emerald-700 dark:text-emerald-400 font-semibold truncate">
                                     (E) {e.codigo || `ID:${e.id}`} - {e.fullName}
                                   </span>
+                                  {e.email && (
+                                    <span className="text-[10px] text-muted-foreground truncate max-w-[160px]">
+                                      &lt;{e.email}&gt;
+                                    </span>
+                                  )}
                                 </div>
                               ))}
                             </div>

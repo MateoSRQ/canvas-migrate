@@ -184,6 +184,29 @@ export function CanvasCaseManager() {
           ...prev,
           [courseId]: result,
         }))
+
+        if (result?.sections && result.sections.length > 0) {
+          setTreeData((prev) => {
+            if (!prev) return prev
+            function updateAccountNodes(
+              nodes: CanvasAccountTreeNode[]
+            ): CanvasAccountTreeNode[] {
+              return nodes.map((n) => ({
+                ...n,
+                children: updateAccountNodes(n.children),
+                courses: n.courses.map((c) =>
+                  c.canvasId === courseId
+                    ? { ...c, sections: result.sections! }
+                    : c
+                ),
+              }))
+            }
+            return {
+              ...prev,
+              rootNodes: updateAccountNodes(prev.rootNodes),
+            }
+          })
+        }
         return result
       } catch (err) {
         console.error(`Error al cargar matriculados para el curso ${courseId}:`, err)
@@ -549,7 +572,11 @@ export function CanvasCaseManager() {
 
                 const isOnlySection = course.sections.length <= 1
                 const rawDocentes = (roster?.docentes || []).filter(
-                  (d) => d.sectionId === sec.id || isOnlySection || (!d.sectionId && secIdx === 0)
+                  (d) =>
+                    d.sectionId === sec.id ||
+                    isOnlySection ||
+                    (!d.sectionId && secIdx === 0) ||
+                    String(d.sectionId) === String(sec.id)
                 )
                 const seenDocKeys = new Set<string>()
                 const secDocentes = rawDocentes.filter((d) => {
@@ -564,7 +591,11 @@ export function CanvasCaseManager() {
                 })
 
                 const rawEstudiantes = (roster?.estudiantes || []).filter(
-                  (e) => e.sectionId === sec.id || isOnlySection || (!e.sectionId && secIdx === 0)
+                  (e) =>
+                    e.sectionId === sec.id ||
+                    isOnlySection ||
+                    (!e.sectionId && secIdx === 0) ||
+                    String(e.sectionId) === String(sec.id)
                 )
                 const seenEstKeys = new Set<string>()
                 const secEstudiantes = rawEstudiantes.filter((e) => {
