@@ -13,21 +13,21 @@ The source repository `/home/mateo/projects/canvas` defines connection credentia
 * **Database (Latest)**: `BDACADEMICO5` (`DB_NAME`)
   * *Historical revisions noted*: `BDACADEMICO`, `BDACADEMICO2`, `BDACADEMICO3`, `BDACADEMICO4`
 * **User**: `sa` (`DB_USER`)
-* **Password**: Definido en archivo `.env.local` (`DB_PASSWORD`)
+* **Password**: Defined in `.env.local` file (`DB_PASSWORD`)
 * **Client Library**: `mssql` (Node.js TDS driver) with `encrypt: false`, `trustServerCertificate: true`, `minVersion: TLSv1`.
 
 ### 1.2 Source SQL Server (Authentication & Person Database)
 * **Database (Latest)**: `BDAUTENTICACION5` (`UP_DB_NAME`)
   * *Historical revisions noted*: `BDAUTENTICACION`, `BDAUTENTICACION2`, `BDAUTENTICACION3`, `BDAUTENTICACION4`
 * **User**: `sa` (`UP_DB_USER`)
-* **Password**: Definido en archivo `.env.local` (`UP_DB_PASSWORD`)
+* **Password**: Defined in `.env.local` file (`UP_DB_PASSWORD`)
 * **Key Table**: `Personal.Utb_Persona` (Contains master teacher records, DNI identification, corporate & personal emails).
 
 ### 1.3 Canvas LMS API Credentials
 * **Production Endpoint**: `https://politecnica.instructure.com/` (`CANVAS_API_ENDPOINT`)
-* **Production Token**: Definido en archivo `.env.local` (`CANVAS_API_KEY`)
+* **Production Token**: Defined in `.env.local` file (`CANVAS_API_KEY`)
 * **Beta / Sandbox Endpoint (Commented)**: `https://politecnica.beta.instructure.com`
-* **Beta Token**: Definido en archivo `.env.local` (`CANVAS_BETA_KEY`)
+* **Beta Token**: Defined in `.env.local` file (`CANVAS_BETA_KEY`)
 
 ### 1.4 Business Rules & Export Flags
 * **`INCLUDE_NO_HABILITADO_SECTIONS=false`**: Filters out academic sections containing the substring `"NO HABILITADO"` (case-insensitive) across hierarchy generation, courses, sections, and enrollments.

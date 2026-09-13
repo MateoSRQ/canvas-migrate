@@ -5,8 +5,7 @@
 The file [`PROJECT_MEMORY.md`](file:///home/mateo/projects/canvas-migrate/PROJECT_MEMORY.md) is the single source of truth for:
 1. **Plan & Roadmap**
 2. **Memory & Architecture**
-3. **Commit & Change Log**
-4. **UI Design Log**
+3. **UI Design Log**
 
 ---
 
@@ -22,7 +21,6 @@ The file [`PROJECT_MEMORY.md`](file:///home/mateo/projects/canvas-migrate/PROJEC
 - You **MUST update `PROJECT_MEMORY.md` immediately**:
   - **Plan**: Check off completed tasks or add newly requested tasks.
   - **Memory & Architecture**: Update any architectural changes, schemas, dependencies, or structural patterns.
-  - **Commit & Change Log**: Add a new timestamped row to the Commit & Change Log recording the change, author, affected files, and rationale.
   - **UI Design Log**: Record any updates to colors, fonts, layout behaviors, or new components.
 
 ---

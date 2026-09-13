@@ -110,15 +110,15 @@ flowchart TD
 
 ### 2. Hierarchical Data Selection & Cascading Filters
 - **6-Level Cascading Filters**: Dynamically filters options based on parent selections:
-  `Periodo -> Sede -> Modalidad -> Facultad -> Carrera -> Plan`.
+  `Period -> Campus (Sede) -> Modality -> Faculty -> Career -> Academic Plan`.
 - **Business Rule Filters**: Instantly toggle exclusion of sections marked `"NO HABILITADO"` and perform instant debounced global text searches.
 - **Dual-View Switcher**:
   - **Nested Tree Table**: Expandable hierarchical tree rendering Accounts, Subaccounts, Courses, Sections, and Inline Rosters.
   - **TanStack Table (Detailed View)**: High-performance tabular data grid with multi-column sorting, row virtualization, and per-page expansion.
-- **Granular Folding Controls**: Plegar Todo, Nivel Sedes, Nivel Carreras, Nivel Cursos, and branch toggles with `Alt+Click` support.
+- **Granular Folding Controls**: Fold All, Campuses Level, Careers Level, Courses Level, and branch toggles with `Alt+Click` support.
 - **Complete Inline Rosters**: Expand any course section to view:
-  - **Docentes (D)**: Verified National ID (DNI), full name, and official institutional email.
-  - **Estudiantes (E)**: Student university code, full name, and academic email.
+  - **Teachers (D)**: Verified National ID (DNI), full name, and official institutional email.
+  - **Students (E)**: Student university code, full name, and academic email.
 
 ### 3. Canvas SIS CSV Exporter & Sandbox Isolation Modes
 - Emits fully validated, standard Instructure Canvas SIS CSV files:
@@ -132,9 +132,9 @@ flowchart TD
 - **3 Configurable Sandbox Isolation Modes**:
   | Mode | Behavior | Best Used For |
   | :--- | :--- | :--- |
-  | **Sin prefijo (`none`)** | Standard SIS IDs (`S-001`, `CUR006380`, `7115-CUR006380`). | Production migrations & official deployments. |
-  | **Aplicar prefijo a cuentas (`accounts`)** | Prefixes subaccounts only (`TEST-5_S-001`, `TEST-5_P004084`), keeping courses & sections standard. | Sandbox testing without moving shared campus subaccounts. |
-  | **Aplicar prefijo a todos (`all`)** | Prefixes subaccounts, courses (`TEST-5_CUR006380`), sections (`TEST-5_7115-CUR006380`), and enrollments. | Total sandbox isolation with zero collisions across test runs. |
+  | **No prefix (`none` / "Sin prefijo")** | Standard SIS IDs (`S-001`, `CUR006380`, `7115-CUR006380`). | Production migrations & official deployments. |
+  | **Prefix accounts (`accounts` / "Aplicar prefijo a cuentas")** | Prefixes subaccounts only (`TEST-5_S-001`, `TEST-5_P004084`), keeping courses & sections standard. | Sandbox testing without moving shared campus subaccounts. |
+  | **Prefix all (`all` / "Aplicar prefijo a todos")** | Prefixes subaccounts, courses (`TEST-5_CUR006380`), sections (`TEST-5_7115-CUR006380`), and enrollments. | Total sandbox isolation with zero collisions across test runs. |
 
 ### 4. Canvas LMS REST API Live Sync & Account Inspector
 - Connects directly to Canvas LMS REST API using Bearer Token authorization.
@@ -145,7 +145,7 @@ flowchart TD
 
 ### 5. Side-by-Side Comparison Workspace (`Migration vs Canvas API`)
 - 50/50 dual-panel visual comparison interface:
-  - **Left Panel**: Selected historical migration package (`migraciones/[periodo - timestamp]`).
+  - **Left Panel**: Selected historical migration package (`migraciones/[period - timestamp]`).
   - **Right Panel**: Selected live Canvas LMS API snapshot (`canvas_import_cases`).
 - **Synchronized Search**: A unified search bar simultaneously highlights and filters matching nodes in both trees.
 - **Manual Exploratory Approach**: Eliminates noisy automated discrepancy warnings, allowing operators to freely inspect selective and partial migrations.
@@ -159,26 +159,26 @@ The user interface is built on **shadcn/ui v4** with neutral **Gray** OKLCH toke
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  [≡] Canvas Migrate        [Casos SQL] [Visualización] [Comparativa] [Canvas API] │
+│  [≡] Canvas Migrate        [SQL Cases] [Visualization] [Comparison] [Canvas API] │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  Workspace Views:                                                           │
 │                                                                             │
-│  1. REGISTRO DE CASOS SQL (/#cases)                                         │
+│  1. SQL IMPORT CASE MANAGER (/#cases)                                       │
 │     ├── Left: Catalog of database import cases & timestamps                 │
 │     └── Right: Table inventory (20 tables), row counts & 50-row raw viewer  │
 │                                                                             │
-│  2. VISUALIZACIÓN Y SELECCIÓN (/#visualization)                             │
+│  2. VISUALIZATION & SELECTION (/#visualization)                             │
 │     ├── Top: Cascading 6-level filter bar & active selection summary        │
-│     ├── Center: Dual-View switcher (Árbol Jerárquico / TanStack Table)      │
-│     └── Actions: "Seleccionar Todos", "Invertir", "Limpiar", "Exportar SIS" │
+│     ├── Center: Dual-View switcher (Hierarchical Tree / TanStack Table)     │
+│     └── Actions: "Select All", "Invert Selection", "Clear", "Export SIS"    │
 │                                                                             │
-│  3. COMPARATIVA LADO A LADO (/#comparison)                                  │
+│  3. SIDE-BY-SIDE COMPARISON (/#comparison)                                  │
 │     ├── Top: Synchronized dual search & panel folding controls              │
 │     ├── Left: Exported Migration Tree (migraciones/)                        │
 │     └── Right: Live Canvas LMS API Tree (Snapshots)                         │
 │                                                                             │
-│  4. CASOS CANVAS LMS API (/#canvas)                                         │
+│  4. CANVAS LMS API CASES (/#canvas)                                         │
 │     ├── Left: Snapshots extracted from Canvas REST API                      │
 │     └── Right: Interactive account subaccount tree with lazy enrollment fetch│
 │                                                                             │
@@ -192,7 +192,7 @@ The entry landing screen. Allows operators to launch an extraction task from Mic
 The core migration workshop. Filter down by term, campus, and study program, or search for a specific professor or course code. Checkboxes cascade seamlessly down from campus level to individual sections. Click any section row to expand inline badges showing assigned professors with normalized DNI and all enrolled students.
 
 ### 3. Canvas SIS Exporter & Sandbox Isolation
-Triggered via the **"Exportar para Canvas"** button once sections are selected. Displays a pre-flight modal summarizing unique courses, total sections, and estimated enrollments. Offers optional root subaccount creation and the 3 sandbox prefixing modes before outputting to `migraciones/[Periodo] - [Timestamp]/`.
+Triggered via the **"Exportar para Canvas" (Export for Canvas)** button once sections are selected. Displays a pre-flight modal summarizing unique courses, total sections, and estimated enrollments. Offers optional root subaccount creation and the 3 sandbox prefixing modes before outputting to `migraciones/[Period] - [Timestamp]/`.
 
 ### 4. Side-by-Side Comparison Workspace (`/#comparison`)
 Compare any generated migration package against any Canvas LMS API snapshot. Allows operators to visually audit whether courses were published under the right subaccounts, whether teachers were properly assigned, and whether students were successfully enrolled.
