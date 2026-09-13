@@ -47,20 +47,20 @@ export function AppLayout({ children }: AppLayoutProps) {
               {/* Drawer Menu Items */}
               <nav className="flex-1 overflow-y-auto p-4 space-y-1 text-sm font-medium">
                 <a
-                  href="/#hierarchy"
-                  className="flex items-center gap-3 px-3 py-2 rounded-md bg-sidebar-accent text-sidebar-accent-foreground transition-colors"
-                  onClick={() => setIsDrawerOpen(false)}
-                >
-                  <Layers className="h-4 w-4" />
-                  <span>Jerarquía y Selección</span>
-                </a>
-                <a
                   href="/#cases"
-                  className="flex items-center gap-3 px-3 py-2 rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground transition-colors"
+                  className="flex items-center gap-3 px-3 py-2 rounded-md bg-sidebar-accent text-sidebar-accent-foreground transition-colors"
                   onClick={() => setIsDrawerOpen(false)}
                 >
                   <Database className="h-4 w-4" />
                   <span>Registro de Casos SQL</span>
+                </a>
+                <a
+                  href="/#visualization"
+                  className="flex items-center gap-3 px-3 py-2 rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground transition-colors"
+                  onClick={() => setIsDrawerOpen(false)}
+                >
+                  <Layers className="h-4 w-4" />
+                  <span>Visualización y Selección</span>
                 </a>
                 <a
                   href="/#canvas"

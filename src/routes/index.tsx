@@ -8,18 +8,19 @@ import { Layers, Database, Globe } from 'lucide-react'
 export const Route = createFileRoute('/')({ component: Home })
 
 function Home() {
-  const [activeTab, setActiveTab] = React.useState<'hierarchy' | 'cases' | 'canvas'>('hierarchy')
+  const [activeTab, setActiveTab] = React.useState<'cases' | 'visualization' | 'canvas'>('cases')
   const [selectedCaseId, setSelectedCaseId] = React.useState<string>('')
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       const handleHashChange = () => {
-        if (window.location.hash === '#cases') {
-          setActiveTab('cases')
-        } else if (window.location.hash === '#canvas') {
+        const hash = window.location.hash
+        if (hash === '#visualization' || hash === '#visualizacion' || hash === '#hierarchy') {
+          setActiveTab('visualization')
+        } else if (hash === '#canvas') {
           setActiveTab('canvas')
-        } else if (window.location.hash === '#hierarchy' || !window.location.hash) {
-          setActiveTab('hierarchy')
+        } else {
+          setActiveTab('cases')
         }
       }
       handleHashChange()
@@ -30,9 +31,9 @@ function Home() {
 
   const handleExploreHierarchy = (caseId: string) => {
     setSelectedCaseId(caseId)
-    setActiveTab('hierarchy')
+    setActiveTab('visualization')
     if (typeof window !== 'undefined') {
-      window.location.hash = 'hierarchy'
+      window.location.hash = 'visualization'
     }
   }
 
@@ -55,21 +56,6 @@ function Home() {
       {/* Top Workspace Tab Switcher */}
       <div className="flex items-center gap-1 border-b border-border pb-3">
         <button
-          onClick={() => {
-            setActiveTab('hierarchy')
-            if (typeof window !== 'undefined') window.location.hash = 'hierarchy'
-          }}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-            activeTab === 'hierarchy'
-              ? 'bg-primary text-primary-foreground shadow-xs'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-          }`}
-        >
-          <Layers className="size-3.5" />
-          <span>Jerarquía y Selección</span>
-        </button>
-
-        <button
           onClick={handleNavigateToCases}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
             activeTab === 'cases'
@@ -79,6 +65,21 @@ function Home() {
         >
           <Database className="size-3.5" />
           <span>Registro de Casos SQL</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('visualization')
+            if (typeof window !== 'undefined') window.location.hash = 'visualization'
+          }}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+            activeTab === 'visualization'
+              ? 'bg-primary text-primary-foreground shadow-xs'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+          }`}
+        >
+          <Layers className="size-3.5" />
+          <span>Visualización y Selección</span>
         </button>
 
         <button
@@ -95,14 +96,14 @@ function Home() {
       </div>
 
       {/* Main Workspace Panels */}
-      {activeTab === 'hierarchy' ? (
+      {activeTab === 'cases' ? (
+        <CaseManager onExploreHierarchy={handleExploreHierarchy} />
+      ) : activeTab === 'visualization' ? (
         <HierarchySelector
           onNavigateToCases={handleNavigateToCases}
           selectedCaseId={selectedCaseId}
           onSelectCaseId={setSelectedCaseId}
         />
-      ) : activeTab === 'cases' ? (
-        <CaseManager onExploreHierarchy={handleExploreHierarchy} />
       ) : (
         <CanvasCaseManager />
       )}

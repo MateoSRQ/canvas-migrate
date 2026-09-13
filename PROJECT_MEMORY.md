@@ -91,6 +91,14 @@
   - [x] Optimización de base de datos SQLite: Creación del índice compuesto `idx_canvas_case_enr_case_course` en `canvas_case_enrollments` para acelerar consultas bajo demanda en tiempo real.
   - [x] Corrección de consulta Drizzle con `.and()` en `getCaseRawTableData` (`importer.ts`) y eliminación de `integratedSecurity` no estándar en configuración del pool MSSQL (`sql-server.ts`).
   - [x] Diagnóstico estratégico de deuda técnica y oportunidades de optimización compilado en 5 pilares arquitectónicos (Frontend/Memoización, Redundancia de almacenamiento en importación MSSQL, Portabilidad de empaquetado Canvas ZIP sin CLI, Indexación SQLite y Code-splitting con React.lazy).
+  - [x] **Auditoría de Exportaciones contra Canvas LMS (API) y Optimización de UX de Selección (Completado)**
+    - [x] Reordenamiento de pestañas en Header y Drawer: Casos SQL -> Visualización y Selección (renombrado desde Jerarquía) -> Casos Canvas LMS (API), estableciendo Casos SQL como vista predeterminada inicial.
+    - [x] Simplificación del Modal de Exportación (`CanvasExportDialog`): métricas destacadas de alcance en la parte superior (Secciones, Cursos Únicos, Matrículas Totales, Periodo) y eliminación del bloque redundante inferior de archivos.
+    - [x] Controles enriquecidos de selección en `HierarchySelector`: botón alternable "Seleccionar Todos / Deseleccionar Todos ({N})" sobre las secciones visibles según filtros activos, botón "Invertir Selección" y botón "Limpiar".
+    - [x] Motor de Auditoría y Detección de Variaciones en Canvas LMS (`src/server/services/canvas-audit-service.ts` y RPC `auditCanvasExportFn`):
+      - Cotejo en tiempo real de cursos (`sis_course_id`), secciones, docentes con DNI oficial y alumnos con código institucional contra Canvas REST API.
+      - Detección de variaciones: cursos ausentes en Canvas (pendientes de SIS Import), diferencias en nombres de cursos, secciones faltantes, docentes no asignados y matrículas ausentes o coincidentes.
+      - Interfaz interactiva de auditoría en `CanvasExportDialog` con indicadores KPI, filtrado por categorías (`Todas`, `Variaciones`, `Coincidentes`, `Cursos`, `Docentes`, `Alumnos`), buscador en vivo y badges semánticos.
   - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
   - [ ] Job status polling, import log inspection, and error auditing.
 
@@ -266,6 +274,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-13T10:45:00` | `f0e3571` | Antigravity | Feature/SISExport | Creación automática de subcuenta padre en accounts.csv para SIS import y campos de control en modal de exportación | `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T11:28:00` | `0939c29` | Antigravity | Fix/UI | Identación visual de secciones, docentes y alumnos, y deduplicación de docentes en CUR006383 y árbol Canvas | `src/components/canvas/canvas-case-manager.tsx`, `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/tree-section-roster.tsx`, `src/server/services/canvas-exporter.ts`, `src/server/services/canvas-importer.ts`, `PROJECT_MEMORY.md` |
 | `2026-09-13T11:40:00` | `5fbb938` | Antigravity | Audit/Refactor | Auditoría de deuda técnica, índice compuesto en canvas_case_enrollments y resolución de tipos TS (0 errores en tsc y build) | `tsconfig.json`, `src/db/schema.ts`, `src/server/services/*`, `src/components/*`, `PROJECT_MEMORY.md` |
+| `2026-09-13T12:00:00` | - | Antigravity | Feature/AuditUX | Reordenamiento de tabs (Casos primero, Jerarquía a Visualización), botones de selección/inversión, modal limpio y auditoría de variaciones Canvas API | `src/routes/index.tsx`, `src/components/layout/app-layout.tsx`, `src/components/hierarchy/*`, `src/server/services/canvas-audit-service.ts`, `src/server/functions/canvas.ts`, `PROJECT_MEMORY.md` |
 
 
 
@@ -373,6 +382,24 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
       - **Sincronización Automática de Secciones Reales**: Detección y descarga en vivo de `/courses/:id/sections` al solicitar matriculados si el curso no poseía secciones registradas.
       - **Carga Bajo Demanda (Lazy Loading)**: Consulta instantánea al endpoint de Canvas API `/courses/:id/enrollments` únicamente cuando el usuario expande el curso o sección, almacenando en caché SQLite (`canvas_case_enrollments`) para reaperturas inmediatas en 0 ms con spinner `Loader2` no bloqueante.
   - **Inspector de Entidades Raw**: Vista alternativa en tabla con conteo de registros para `accounts`, `terms` y `courses`, con visor modal monospace de los primeros 50 registros crudos devueltos por la API.
+- **Reorganización de Pestañas y Navegación Principal (`AppLayout` & `routes/index.tsx`)**:
+  - Orden de pestañas ajustado para flujo secuencial:
+    1. `Registro de Casos SQL` (`Database`): Pantalla por defecto al ingresar (`/#cases`).
+    2. `Visualización y Selección` (`Layers`): Antes llamada Jerarquía (`/#visualization`).
+    3. `Casos Canvas LMS (API)` (`Globe`): Visualizador de snapshots y cuentas en Canvas (`/#canvas`).
+- **Barra de Selección Enriquecida (`HierarchySelector`)**:
+  - Sustituido el botón ambiguo "Seleccionar Filtrados" por un conjunto de controles explícitos:
+    - `Seleccionar Todos / Deseleccionar Todos ({N})`: Alterna dinámicamente con icono `CheckSquare` o `Square` según el estado de las filas visibles.
+    - `Invertir Selección`: Invierte el estado de marcado de todas las secciones que cumplen los filtros actuales (`RefreshCw`).
+    - `Limpiar`: Restablece a 0 todas las selecciones activas.
+- **Modal de Exportación Simplificado y Auditoría de Variaciones (`CanvasExportDialog`)**:
+  - Modal enfocado en los 4 números de alcance (Secciones, Cursos Únicos, Matrículas Totales y Periodo Académico) y configuración de subcuenta raíz.
+  - Eliminado el bloque redundante inferior de descripción de archivos estándar (`accounts.csv`, `terms.csv`, etc.).
+  - **Módulo de Auditoría y Cotejo con Canvas REST API**:
+    - Botón interactivo post-exportación "Auditar con Canvas API".
+    - Resumen KPI con conteos coincidentes vs pendientes de SIS Import para cursos, secciones, docentes (DNI oficial) y alumnos matriculados.
+    - Filtros por pestañas (`Todas`, `Variaciones`, `Coincidentes`, `Cursos`, `Docentes`, `Alumnos`), buscador textual en tiempo real y tabla monospace con badges semánticos (`Coincide en Canvas`, `Pendiente en Canvas`, `Variación de Datos`) y detalles comparativos de valores exportados vs valores en Canvas.
+
 
 
 

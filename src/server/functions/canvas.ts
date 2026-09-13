@@ -57,3 +57,19 @@ export const getCanvasCourseEnrollmentsFn = createServerFn({ method: 'GET' })
     return await getCanvasCourseEnrollments(data.caseId, data.courseId)
   })
 
+export const auditCanvasExportFn = createServerFn({ method: 'POST' })
+  .validator(
+    (payload: {
+      caseId: string
+      selectedSectionIds: number[]
+      rootAccountId?: string
+      endpoint?: string
+      apiKey?: string
+    }) => payload
+  )
+  .handler(async ({ data }) => {
+    const { auditExportAgainstCanvasApi } = await import('#/server/services/canvas-audit-service')
+    return await auditExportAgainstCanvasApi(data)
+  })
+
+

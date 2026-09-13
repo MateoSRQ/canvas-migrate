@@ -657,10 +657,36 @@ export function HierarchySelector({
   const selectedRowIds = Object.keys(rowSelection).filter((id) => rowSelection[id])
   const selectedCount = selectedRowIds.length
 
-  const handleSelectAllFiltered = () => {
+  // ¿Están todos los filtrados actualmente seleccionados?
+  const areAllFilteredSelected =
+    filteredItems.length > 0 &&
+    filteredItems.every((item) => rowSelection[String(item.id)])
+
+  // Alternar: Seleccionar todos los visibles / Deseleccionar todos los visibles
+  const handleToggleSelectAllFiltered = () => {
+    const newSelection: Record<string, boolean> = { ...rowSelection }
+    if (areAllFilteredSelected) {
+      for (const item of filteredItems) {
+        delete newSelection[String(item.id)]
+      }
+    } else {
+      for (const item of filteredItems) {
+        newSelection[String(item.id)] = true
+      }
+    }
+    setRowSelection(newSelection)
+  }
+
+  // Invertir selección de los elementos visibles/filtrados
+  const handleInvertSelection = () => {
     const newSelection: Record<string, boolean> = { ...rowSelection }
     for (const item of filteredItems) {
-      newSelection[String(item.id)] = true
+      const key = String(item.id)
+      if (newSelection[key]) {
+        delete newSelection[key]
+      } else {
+        newSelection[key] = true
+      }
     }
     setRowSelection(newSelection)
   }
@@ -1085,16 +1111,42 @@ export function HierarchySelector({
           )}
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
           <Button
             variant="outline"
             size="xs"
-            onClick={handleSelectAllFiltered}
+            onClick={handleToggleSelectAllFiltered}
             disabled={filteredItems.length === 0}
-            className="text-xs h-7 gap-1"
+            className="text-xs h-7 gap-1.5"
+            title={
+              areAllFilteredSelected
+                ? 'Deseleccionar todas las secciones visibles con los filtros actuales'
+                : 'Seleccionar todas las secciones visibles con los filtros actuales'
+            }
           >
-            <CheckSquare className="size-3" />
-            <span>Seleccionar Filtrados ({filteredItems.length})</span>
+            {areAllFilteredSelected ? (
+              <>
+                <Square className="size-3 text-primary" />
+                <span>Deseleccionar Todos ({filteredItems.length})</span>
+              </>
+            ) : (
+              <>
+                <CheckSquare className="size-3 text-primary" />
+                <span>Seleccionar Todos ({filteredItems.length})</span>
+              </>
+            )}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={handleInvertSelection}
+            disabled={filteredItems.length === 0}
+            className="text-xs h-7 gap-1.5"
+            title="Invertir selección sobre las secciones visibles"
+          >
+            <RefreshCw className="size-3 text-muted-foreground" />
+            <span>Invertir Selección</span>
           </Button>
 
           <Button
@@ -1103,6 +1155,7 @@ export function HierarchySelector({
             onClick={handleClearSelection}
             disabled={selectedCount === 0}
             className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground"
+            title="Limpiar absolutamente todas las selecciones activas"
           >
             <Square className="size-3" />
             <span>Limpiar</span>
@@ -1522,6 +1575,8 @@ export function HierarchySelector({
           setExportError(null)
         }}
         onExecuteExport={handleExecuteExport}
+        caseId={selectedCaseId}
+        selectedSectionIds={selectedRowIds.map(Number)}
       />
     </div>
   )
