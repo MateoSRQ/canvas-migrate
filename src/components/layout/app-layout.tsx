@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Menu, Layers, Database, Globe } from "lucide-react"
+import { Menu, Layers, Database, Globe, GitCompare } from "lucide-react"
 import { Button } from "#/components/ui/button"
 import {
   Sheet,
@@ -61,6 +61,14 @@ export function AppLayout({ children }: AppLayoutProps) {
                 >
                   <Layers className="h-4 w-4" />
                   <span>Visualización y Selección</span>
+                </a>
+                <a
+                  href="/#comparison"
+                  className="flex items-center gap-3 px-3 py-2 rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground transition-colors"
+                  onClick={() => setIsDrawerOpen(false)}
+                >
+                  <GitCompare className="h-4 w-4 text-blue-500" />
+                  <span>Comparativa Lado a Lado</span>
                 </a>
                 <a
                   href="/#canvas"

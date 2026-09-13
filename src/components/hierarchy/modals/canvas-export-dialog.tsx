@@ -1,4 +1,3 @@
-import * as React from 'react'
 import {
   FileSpreadsheet,
   FolderArchive,
@@ -10,9 +9,6 @@ import {
   AlertCircle,
   Layers,
   Loader2,
-  Globe,
-  RefreshCw,
-  Search,
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
@@ -26,8 +22,6 @@ import {
   DialogDescription,
 } from '#/components/ui/dialog'
 import type { ExportCanvasResult } from '#/server/services/canvas-exporter'
-import { auditCanvasExportFn } from '#/server/functions/canvas'
-import type { CanvasAuditReport } from '#/server/services/canvas-audit-service'
 
 interface CanvasExportDialogProps {
   isOpen: boolean
@@ -52,8 +46,6 @@ interface CanvasExportDialogProps {
   onCopyPath: (targetPath: string) => void
   onResetExport: () => void
   onExecuteExport: () => void
-  caseId?: string
-  selectedSectionIds?: number[]
 }
 
 export function CanvasExportDialog({
@@ -75,81 +67,10 @@ export function CanvasExportDialog({
   onCopyPath,
   onResetExport,
   onExecuteExport,
-  caseId,
-  selectedSectionIds,
 }: CanvasExportDialogProps) {
-  // Estados para la auditoría de variaciones con Canvas API
-  const [isAuditing, setIsAuditing] = React.useState(false)
-  const [auditResult, setAuditResult] = React.useState<CanvasAuditReport | null>(null)
-  const [auditError, setAuditError] = React.useState<string | null>(null)
-  const [auditFilter, setAuditFilter] = React.useState<
-    'all' | 'variations' | 'matches' | 'courses' | 'sections' | 'teachers' | 'students'
-  >('all')
-  const [auditSearchQuery, setAuditSearchQuery] = React.useState('')
-
-  const handleReset = () => {
-    setAuditResult(null)
-    setAuditError(null)
-    onResetExport()
-  }
-
-  const handleRunAudit = async () => {
-    if (!caseId || !selectedSectionIds || selectedSectionIds.length === 0) {
-      setAuditError('No hay secciones seleccionadas o identificador de caso para auditar.')
-      return
-    }
-
-    setIsAuditing(true)
-    setAuditError(null)
-    try {
-      const res = await auditCanvasExportFn({
-        data: {
-          caseId,
-          selectedSectionIds,
-          rootAccountId: exportResult?.rootAccountId || rootAccountId,
-        },
-      })
-      if (!res.success) {
-        setAuditError(res.error || 'Error al conectar con Canvas REST API.')
-      } else {
-        setAuditResult(res)
-      }
-    } catch (err: any) {
-      setAuditError(err?.message || 'Error inesperado al auditar contra Canvas LMS API.')
-    } finally {
-      setIsAuditing(false)
-    }
-  }
-
-  // Filtrado de variaciones para la vista
-  const displayedVariations = React.useMemo(() => {
-    if (!auditResult) return []
-    return auditResult.variations.filter((v) => {
-      // Filtro de pestaña
-      if (auditFilter === 'variations' && v.status === 'match') return false
-      if (auditFilter === 'matches' && v.status !== 'match') return false
-      if (auditFilter === 'courses' && v.entityType !== 'course') return false
-      if (auditFilter === 'sections' && v.entityType !== 'section') return false
-      if (auditFilter === 'teachers' && v.entityType !== 'teacher') return false
-      if (auditFilter === 'students' && v.entityType !== 'student') return false
-
-      // Búsqueda textual
-      if (auditSearchQuery.trim()) {
-        const q = auditSearchQuery.toLowerCase().trim()
-        const matchName = v.name.toLowerCase().includes(q)
-        const matchSis = v.sisId.toLowerCase().includes(q)
-        const matchCourse = v.courseCode.toLowerCase().includes(q) || v.courseName.toLowerCase().includes(q)
-        const matchDesc = v.description.toLowerCase().includes(q)
-        return matchName || matchSis || matchCourse || matchDesc
-      }
-
-      return true
-    })
-  }, [auditResult, auditFilter, auditSearchQuery])
-
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base font-semibold flex items-center gap-2">
             <FileSpreadsheet className="size-5 text-emerald-600" />
@@ -337,296 +258,6 @@ export function CanvasExportDialog({
               </div>
             </div>
 
-            {/* SECCIÓN NUEVA: Revisión y Auditoría de Variaciones con Canvas LMS (API) */}
-            <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 space-y-3.5">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                  <Globe className="size-4 text-emerald-600 shrink-0" />
-                  <div>
-                    <h4 className="text-xs font-semibold text-foreground">
-                      Revisión de Exportación contra Canvas LMS (API)
-                    </h4>
-                    <p className="text-[11px] text-muted-foreground">
-                      Coteja en vivo contra Canvas REST API si los cursos, secciones, docentes y alumnos ya existen o identifica variaciones.
-                    </p>
-                  </div>
-                </div>
-
-                <Button
-                  variant={auditResult ? 'outline' : 'default'}
-                  size="xs"
-                  onClick={handleRunAudit}
-                  disabled={isAuditing}
-                  className={`text-xs h-7 gap-1.5 font-medium ${
-                    !auditResult
-                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-                      : ''
-                  }`}
-                >
-                  {isAuditing ? (
-                    <>
-                      <Loader2 className="size-3 animate-spin" />
-                      <span>Auditando con Canvas API...</span>
-                    </>
-                  ) : auditResult ? (
-                    <>
-                      <RefreshCw className="size-3" />
-                      <span>Volver a Auditar</span>
-                    </>
-                  ) : (
-                    <>
-                      <Globe className="size-3" />
-                      <span>Auditar con Canvas API</span>
-                    </>
-                  )}
-                </Button>
-              </div>
-
-              {/* Estado de carga de auditoría */}
-              {isAuditing && (
-                <div className="p-6 text-center space-y-2 rounded-lg bg-card border border-border">
-                  <Loader2 className="size-6 text-emerald-600 animate-spin mx-auto" />
-                  <p className="text-xs font-medium text-foreground">
-                    Consultando Canvas REST API en vivo...
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Verificando existencia de cursos, secciones creadas, asignación oficial de docentes (DNI) y matrículas de estudiantes.
-                  </p>
-                </div>
-              )}
-
-              {/* Error en auditoría */}
-              {auditError && (
-                <div className="p-3 rounded-lg border border-destructive/20 bg-destructive/10 text-destructive text-xs flex items-center gap-2">
-                  <AlertCircle className="size-4 shrink-0" />
-                  <span>{auditError}</span>
-                </div>
-              )}
-
-              {/* Resultado de auditoría */}
-              {auditResult && !isAuditing && (
-                <div className="space-y-3 pt-1">
-                  {/* Banner de estado */}
-                  <div
-                    className={`p-3 rounded-lg border flex items-start gap-2.5 text-xs ${
-                      auditResult.variationsCount === 0
-                        ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200'
-                        : 'border-amber-500/20 bg-amber-500/10 text-amber-900 dark:text-amber-200'
-                    }`}
-                  >
-                    {auditResult.variationsCount === 0 ? (
-                      <CheckCircle2 className="size-4 text-emerald-600 shrink-0 mt-0.5" />
-                    ) : (
-                      <AlertCircle className="size-4 text-amber-600 shrink-0 mt-0.5" />
-                    )}
-                    <div className="space-y-0.5">
-                      <div className="font-semibold">
-                        {auditResult.variationsCount === 0
-                          ? '¡Coincidencia completa con Canvas LMS!'
-                          : `Se detectaron ${auditResult.variationsCount} variaciones o elementos pendientes de creación`}
-                      </div>
-                      <div className="text-[11px] opacity-90">
-                        Endpoint: <span className="font-mono">{auditResult.endpoint}</span> • Auditado: {new Date(auditResult.timestamp).toLocaleTimeString()}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 4 Métricas de cotejo */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-                    <div className="p-2 rounded-lg bg-card border border-border">
-                      <div className="font-mono font-bold text-foreground">
-                        <span className="text-emerald-600">{auditResult.matchedCourses}</span> / {auditResult.totalCourses}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">
-                        Cursos en Canvas ({auditResult.missingCourses} pendientes)
-                      </div>
-                    </div>
-
-                    <div className="p-2 rounded-lg bg-card border border-border">
-                      <div className="font-mono font-bold text-foreground">
-                        <span className="text-emerald-600">{auditResult.matchedSections}</span> / {auditResult.totalSections}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">
-                        Secciones ({auditResult.missingSections} pendientes)
-                      </div>
-                    </div>
-
-                    <div className="p-2 rounded-lg bg-card border border-border">
-                      <div className="font-mono font-bold text-foreground">
-                        <span className="text-emerald-600">{auditResult.matchedTeachers}</span> / {auditResult.totalTeachers}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">
-                        Docentes Asignados ({auditResult.missingTeachers} pendientes)
-                      </div>
-                    </div>
-
-                    <div className="p-2 rounded-lg bg-card border border-border">
-                      <div className="font-mono font-bold text-foreground">
-                        <span className="text-emerald-600">{auditResult.matchedStudents}</span> / {auditResult.totalStudents}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">
-                        Alumnos Matriculados ({auditResult.missingStudents} pendientes)
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Filtros y Buscador de Variaciones */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1">
-                    <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 text-xs">
-                      <button
-                        onClick={() => setAuditFilter('all')}
-                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                          auditFilter === 'all'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted/60 text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        Todas ({auditResult.variations.length})
-                      </button>
-                      <button
-                        onClick={() => setAuditFilter('variations')}
-                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                          auditFilter === 'variations'
-                            ? 'bg-amber-600 text-white'
-                            : 'bg-muted/60 text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        Variaciones ({auditResult.variationsCount})
-                      </button>
-                      <button
-                        onClick={() => setAuditFilter('matches')}
-                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                          auditFilter === 'matches'
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-muted/60 text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        Coincidentes ({auditResult.variations.length - auditResult.variationsCount})
-                      </button>
-                      <button
-                        onClick={() => setAuditFilter('courses')}
-                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                          auditFilter === 'courses'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted/60 text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        Cursos
-                      </button>
-                      <button
-                        onClick={() => setAuditFilter('teachers')}
-                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                          auditFilter === 'teachers'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted/60 text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        Docentes
-                      </button>
-                      <button
-                        onClick={() => setAuditFilter('students')}
-                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                          auditFilter === 'students'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted/60 text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        Alumnos
-                      </button>
-                    </div>
-
-                    <div className="relative w-full sm:w-48">
-                      <Search className="size-3.5 absolute left-2 top-2 text-muted-foreground" />
-                      <Input
-                        type="text"
-                        value={auditSearchQuery}
-                        onChange={(e) => setAuditSearchQuery(e.target.value)}
-                        placeholder="Filtrar por código/nombre..."
-                        className="text-xs h-7 pl-7 bg-background"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Lista de Variaciones */}
-                  <div className="rounded-lg border border-border divide-y divide-border overflow-y-auto max-h-64 text-xs font-mono bg-card">
-                    {displayedVariations.length === 0 ? (
-                      <div className="p-4 text-center text-muted-foreground text-xs italic">
-                        No hay elementos que coincidan con los filtros seleccionados.
-                      </div>
-                    ) : (
-                      displayedVariations.map((v) => (
-                        <div key={v.id} className="p-2.5 hover:bg-muted/20 space-y-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] uppercase font-semibold px-1 py-0 h-4"
-                              >
-                                {v.entityType === 'course'
-                                  ? 'Curso'
-                                  : v.entityType === 'section'
-                                  ? 'Sección'
-                                  : v.entityType === 'teacher'
-                                  ? 'Docente'
-                                  : 'Alumno'}
-                              </Badge>
-
-                              <Badge
-                                variant={
-                                  v.status === 'match'
-                                    ? 'secondary'
-                                    : v.status === 'missing'
-                                    ? 'destructive'
-                                    : 'outline'
-                                }
-                                className={`text-[10px] px-1.5 py-0 h-4 ${
-                                  v.status === 'match'
-                                    ? 'border-emerald-500/30 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10'
-                                    : v.status === 'missing'
-                                    ? 'border-amber-500/30 text-amber-700 dark:text-amber-300 bg-amber-500/10'
-                                    : 'border-blue-500/30 text-blue-700 dark:text-blue-300 bg-blue-500/10'
-                                }`}
-                              >
-                                {v.status === 'match'
-                                  ? 'Coincide en Canvas'
-                                  : v.status === 'missing'
-                                  ? 'Pendiente en Canvas'
-                                  : 'Variación de Datos'}
-                              </Badge>
-
-                              <span className="font-semibold text-foreground truncate max-w-xs">
-                                {v.name}
-                              </span>
-                            </div>
-
-                            <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
-                              SIS: {v.sisId}
-                            </span>
-                          </div>
-
-                          <div className="text-[11px] text-muted-foreground font-sans pl-1">
-                            {v.description}
-                          </div>
-
-                          {v.status !== 'match' && v.canvasValue && (
-                            <div className="text-[10px] text-muted-foreground flex items-center gap-2 pl-1 font-mono">
-                              <span>
-                                <strong>Exportado:</strong> {v.exportedValue}
-                              </span>
-                              <span>•</span>
-                              <span>
-                                <strong>Canvas:</strong> {v.canvasValue}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
             {/* Instrucciones de uso */}
             <div className="p-3 rounded-lg border border-border bg-muted/10 text-xs text-muted-foreground space-y-1.5 leading-relaxed">
               <p className="font-medium text-foreground">Instrucciones para Canvas LMS:</p>
@@ -650,7 +281,7 @@ export function CanvasExportDialog({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleReset}
+                onClick={onResetExport}
                 className="text-xs"
               >
                 Generar Otra Vez

@@ -3,20 +3,29 @@ import { createFileRoute } from '@tanstack/react-router'
 import { CaseManager } from '#/components/cases/case-manager'
 import { CanvasCaseManager } from '#/components/canvas/canvas-case-manager'
 import { HierarchySelector } from '#/components/hierarchy/hierarchy-selector'
-import { Layers, Database, Globe } from 'lucide-react'
+import { CaseComparisonView } from '#/components/comparison/case-comparison-view'
+import { Layers, Database, Globe, GitCompare } from 'lucide-react'
 
 export const Route = createFileRoute('/')({ component: Home })
 
 function Home() {
-  const [activeTab, setActiveTab] = React.useState<'cases' | 'visualization' | 'canvas'>('cases')
+  const [activeTab, setActiveTab] = React.useState<
+    'cases' | 'visualization' | 'comparison' | 'canvas'
+  >('cases')
   const [selectedCaseId, setSelectedCaseId] = React.useState<string>('')
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       const handleHashChange = () => {
         const hash = window.location.hash
-        if (hash === '#visualization' || hash === '#visualizacion' || hash === '#hierarchy') {
+        if (
+          hash === '#visualization' ||
+          hash === '#visualizacion' ||
+          hash === '#hierarchy'
+        ) {
           setActiveTab('visualization')
+        } else if (hash === '#comparison' || hash === '#comparativa') {
+          setActiveTab('comparison')
         } else if (hash === '#canvas') {
           setActiveTab('canvas')
         } else {
@@ -44,6 +53,13 @@ function Home() {
     }
   }
 
+  const handleNavigateToComparison = () => {
+    setActiveTab('comparison')
+    if (typeof window !== 'undefined') {
+      window.location.hash = 'comparison'
+    }
+  }
+
   const handleNavigateToCanvas = () => {
     setActiveTab('canvas')
     if (typeof window !== 'undefined') {
@@ -54,7 +70,7 @@ function Home() {
   return (
     <div className="w-full flex-1 p-6 md:p-8 space-y-6">
       {/* Top Workspace Tab Switcher */}
-      <div className="flex items-center gap-1 border-b border-border pb-3">
+      <div className="flex items-center gap-1 border-b border-border pb-3 flex-wrap">
         <button
           onClick={handleNavigateToCases}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
@@ -83,6 +99,18 @@ function Home() {
         </button>
 
         <button
+          onClick={handleNavigateToComparison}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+            activeTab === 'comparison'
+              ? 'bg-primary text-primary-foreground shadow-xs'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+          }`}
+        >
+          <GitCompare className="size-3.5 text-blue-500" />
+          <span>Comparativa Lado a Lado (BD vs Canvas)</span>
+        </button>
+
+        <button
           onClick={handleNavigateToCanvas}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
             activeTab === 'canvas'
@@ -104,9 +132,12 @@ function Home() {
           selectedCaseId={selectedCaseId}
           onSelectCaseId={setSelectedCaseId}
         />
+      ) : activeTab === 'comparison' ? (
+        <CaseComparisonView initialDbCaseId={selectedCaseId} />
       ) : (
         <CanvasCaseManager />
       )}
     </div>
   )
 }
+

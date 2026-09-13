@@ -39,3 +39,13 @@ export const getTableSampleFn = createServerFn({ method: 'GET' })
     const rows = await getCaseRawTableData(data.caseId, data.tableName)
     return rows.slice(0, 50)
   })
+
+export const compareCasesFn = createServerFn({ method: 'POST' })
+  .validator((payload: { dbCaseId: string; canvasCaseId: string }) => payload)
+  .handler(async ({ data }) => {
+    const { compareDbCaseWithCanvasCase } = await import(
+      '#/server/services/case-comparison-service'
+    )
+    return await compareDbCaseWithCanvasCase(data.dbCaseId, data.canvasCaseId)
+  })
+

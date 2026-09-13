@@ -93,12 +93,16 @@
   - [x] Diagnóstico estratégico de deuda técnica y oportunidades de optimización compilado en 5 pilares arquitectónicos (Frontend/Memoización, Redundancia de almacenamiento en importación MSSQL, Portabilidad de empaquetado Canvas ZIP sin CLI, Indexación SQLite y Code-splitting con React.lazy).
   - [x] **Auditoría de Exportaciones contra Canvas LMS (API) y Optimización de UX de Selección (Completado)**
     - [x] Reordenamiento de pestañas en Header y Drawer: Casos SQL -> Visualización y Selección (renombrado desde Jerarquía) -> Casos Canvas LMS (API), estableciendo Casos SQL como vista predeterminada inicial.
-    - [x] Simplificación del Modal de Exportación (`CanvasExportDialog`): métricas destacadas de alcance en la parte superior (Secciones, Cursos Únicos, Matrículas Totales, Periodo) y eliminación del bloque redundante inferior de archivos.
+    - [x] Simplificación del Modal de Exportación (`CanvasExportDialog`): métricas destacadas de alcance en la parte superior (Secciones, Cursos Únicos, Matrículas Totales, Periodo) y eliminación de la sección redundante inferior. Eliminación de la revisión post-exportación en el modal para trasladar toda la capacidad de auditoría a una pantalla dedicada.
     - [x] Controles enriquecidos de selección en `HierarchySelector`: botón alternable "Seleccionar Todos / Deseleccionar Todos ({N})" sobre las secciones visibles según filtros activos, botón "Invertir Selección" y botón "Limpiar".
-    - [x] Motor de Auditoría y Detección de Variaciones en Canvas LMS (`src/server/services/canvas-audit-service.ts` y RPC `auditCanvasExportFn`):
-      - Cotejo en tiempo real de cursos (`sis_course_id`), secciones, docentes con DNI oficial y alumnos con código institucional contra Canvas REST API.
-      - Detección de variaciones: cursos ausentes en Canvas (pendientes de SIS Import), diferencias en nombres de cursos, secciones faltantes, docentes no asignados y matrículas ausentes o coincidentes.
-      - Interfaz interactiva de auditoría en `CanvasExportDialog` con indicadores KPI, filtrado por categorías (`Todas`, `Variaciones`, `Coincidentes`, `Cursos`, `Docentes`, `Alumnos`), buscador en vivo y badges semánticos.
+    - [x] Motor de Auditoría y Detección de Variaciones en Canvas LMS (`src/server/services/canvas-audit-service.ts` y RPC `auditCanvasExportFn`).
+  - [x] **Comparativa Lado a Lado de Casos BD vs Snapshots Canvas LMS (Completado)**
+    - [x] Pantalla y pestaña dedicada `Comparativa Lado a Lado (BD vs Canvas)` (`/#comparison`) con navegación superior y drawer lateral.
+    - [x] Selectores independientes para escoger cualquier versión de Caso de Base de Datos SQL (lado izquierdo) y cualquier Snapshot de Canvas LMS API (lado derecho).
+    - [x] Motor de comparación local de alta velocidad en SQLite (`src/server/services/case-comparison-service.ts` y RPC `compareCasesFn`): cotejo en <100ms de cursos (`sis_course_id`/`course_code`), nombres, secciones, docentes con DNI oficial y alumnos matriculados.
+    - [x] Métricas KPI comparativas: Coincidentes (100%), Con Variaciones/Diferencias, Solo en BD (Pendientes SIS) y Solo en Canvas (Externos).
+    - [x] Filtros por estado, buscador textual global, paginación reactiva y desplegado masivo/individual de secciones y docentes.
+    - [x] Fila de comparación dividida en dos columnas alineadas con badges semánticos e indicación explícita de discrepancias.
   - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
   - [ ] Job status polling, import log inspection, and error auditing.
 
@@ -158,23 +162,31 @@ canvas-migrate/
     │   │   ├── sql-server.ts # MSSQL connection pool manager & table extractor
     │   │   ├── importer.ts   # Case extraction, batch ingestion & normalization engine
     │   │   ├── hierarchy-service.ts # Academic tree assembler, teacher resolver, LRU & lazy student map
-    │   │   └── canvas-exporter.ts # Canvas SIS CSV exporter, hierarchy writer & zip packager
+    │   │   ├── canvas-exporter.ts # Canvas SIS CSV exporter, hierarchy writer & zip packager
+    │   │   ├── canvas-importer.ts # Canvas API client, live accounts & course ingestion
+    │   │   ├── canvas-audit-service.ts # Auditoría contra Canvas REST API
+    │   │   └── case-comparison-service.ts # Motor local de comparativa BD vs Canvas Snapshot
     │   └── functions/
-    │       ├── cases.ts      # TanStack Start server functions for cases (RPC)
-    │       └── hierarchy.ts  # TanStack Start server functions for hierarchy & students (RPC)
+    │       ├── cases.ts      # TanStack Start server functions for cases & comparativa (RPC)
+    │       ├── hierarchy.ts  # TanStack Start server functions for hierarchy & students (RPC)
+    │       └── canvas.ts     # TanStack Start server functions for Canvas API (RPC)
     ├── components/
     │   ├── cases/
     │   │   └── case-manager.tsx # Full-width Case Manager UI & table sample inspector con spinning loaders
+    │   ├── canvas/
+    │   │   └── canvas-case-manager.tsx # Visualizador de cuentas y cursos en vivo de Canvas LMS
+    │   ├── comparison/
+    │   │   └── case-comparison-view.tsx # Pantalla de comparativa lado a lado (BD vs Canvas) con selectores y filtros
     │   ├── hierarchy/
     │   │   ├── modals/
     │   │   │   ├── student-inspector-dialog.tsx # Modal de inspección de alumnos matriculados con Loader2
     │   │   │   ├── selection-summary-dialog.tsx # Modal de resumen cuantitativo de selección activa
-    │   │   │   └── canvas-export-dialog.tsx     # Modal de exportación a CSV para Canvas LMS con Loader2
+    │   │   │   └── canvas-export-dialog.tsx     # Modal de exportación a CSV para Canvas LMS simplificado
     │   │   ├── tree-section-roster.tsx # Desglose modular de docentes y alumnos con carga bajo demanda
     │   │   ├── hierarchy-selector.tsx # Full-width TanStack Table & cascading filter UI modularizado
     │   │   └── hierarchy-tree-table.tsx # Nested account/subaccount tree con carga bajo demanda y Loader2
     │   ├── layout/
-    │   │   └── app-layout.tsx# Global layout: Top header, left drawer menu, full-width panel
+    │   │   └── app-layout.tsx# Global layout: Top header, left drawer menu con Comparativa, full-width panel
     │   └── ui/
     │       ├── badge.tsx     # shadcn Badge component
     │       ├── button.tsx    # shadcn Button component
@@ -276,8 +288,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-13T11:40:00` | `5fbb938` | Antigravity | Audit/Refactor | Auditoría de deuda técnica, índice compuesto en canvas_case_enrollments y resolución de tipos TS (0 errores en tsc y build) | `tsconfig.json`, `src/db/schema.ts`, `src/server/services/*`, `src/components/*`, `PROJECT_MEMORY.md` |
 | `2026-09-13T12:00:00` | `1988300` | Antigravity | Feature/AuditUX | Reordenamiento de tabs (Casos primero, Jerarquía a Visualización), botones de selección/inversión, modal limpio y auditoría de variaciones Canvas API | `src/routes/index.tsx`, `src/components/layout/app-layout.tsx`, `src/components/hierarchy/*`, `src/server/services/canvas-audit-service.ts`, `src/server/functions/canvas.ts`, `PROJECT_MEMORY.md` |
 | `2026-09-13T12:08:00` | `ec47f2b` | Antigravity | UI/Enhancement | Destacado visual del filtro de exclusión de secciones NO HABILITADO y confirmación en modal de exportación | `src/components/hierarchy/hierarchy-selector.tsx`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `PROJECT_MEMORY.md` |
-
-
+| `2026-09-13T12:25:00` | - | Antigravity | Feature/Comparison | Pantalla de comparativa lado a lado (BD vs Canvas LMS API), selectores de versión de cada caso, KPI diff y limpieza de modal de exportación | `src/components/comparison/case-comparison-view.tsx`, `src/server/services/case-comparison-service.ts`, `src/server/functions/cases.ts`, `src/routes/index.tsx`, `src/components/layout/app-layout.tsx`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `PROJECT_MEMORY.md` |
 
 ---
 
@@ -384,22 +395,41 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
       - **Carga Bajo Demanda (Lazy Loading)**: Consulta instantánea al endpoint de Canvas API `/courses/:id/enrollments` únicamente cuando el usuario expande el curso o sección, almacenando en caché SQLite (`canvas_case_enrollments`) para reaperturas inmediatas en 0 ms con spinner `Loader2` no bloqueante.
   - **Inspector de Entidades Raw**: Vista alternativa en tabla con conteo de registros para `accounts`, `terms` y `courses`, con visor modal monospace de los primeros 50 registros crudos devueltos por la API.
 - **Reorganización de Pestañas y Navegación Principal (`AppLayout` & `routes/index.tsx`)**:
-  - Orden de pestañas ajustado para flujo secuencial:
+  - Secuencia de pestañas en Header y Drawer:
     1. `Registro de Casos SQL` (`Database`): Pantalla por defecto al ingresar (`/#cases`).
-    2. `Visualización y Selección` (`Layers`): Antes llamada Jerarquía (`/#visualization`).
-    3. `Casos Canvas LMS (API)` (`Globe`): Visualizador de snapshots y cuentas en Canvas (`/#canvas`).
+    2. `Visualización y Selección` (`Layers`): Workspace de árbol y tabla jerárquica (`/#visualization`).
+    3. `Comparativa Lado a Lado (BD vs Canvas)` (`GitCompare`): Pantalla de cotejo bidireccional (`/#comparison`).
+    4. `Casos Canvas LMS (API)` (`Globe`): Visualizador de snapshots y cuentas en Canvas (`/#canvas`).
 - **Barra de Selección Enriquecida (`HierarchySelector`)**:
   - Sustituido el botón ambiguo "Seleccionar Filtrados" por un conjunto de controles explícitos:
     - `Seleccionar Todos / Deseleccionar Todos ({N})`: Alterna dinámicamente con icono `CheckSquare` o `Square` según el estado de las filas visibles.
     - `Invertir Selección`: Invierte el estado de marcado de todas las secciones que cumplen los filtros actuales (`RefreshCw`).
     - `Limpiar`: Restablece a 0 todas las selecciones activas.
-- **Modal de Exportación Simplificado y Auditoría de Variaciones (`CanvasExportDialog`)**:
-  - Modal enfocado en los 4 números de alcance (Secciones, Cursos Únicos, Matrículas Totales y Periodo Académico) y configuración de subcuenta raíz.
-  - Eliminado el bloque redundante inferior de descripción de archivos estándar (`accounts.csv`, `terms.csv`, etc.).
-  - **Módulo de Auditoría y Cotejo con Canvas REST API**:
-    - Botón interactivo post-exportación "Auditar con Canvas API".
-    - Resumen KPI con conteos coincidentes vs pendientes de SIS Import para cursos, secciones, docentes (DNI oficial) y alumnos matriculados.
-    - Filtros por pestañas (`Todas`, `Variaciones`, `Coincidentes`, `Cursos`, `Docentes`, `Alumnos`), buscador textual en tiempo real y tabla monospace con badges semánticos (`Coincide en Canvas`, `Pendiente en Canvas`, `Variación de Datos`) y detalles comparativos de valores exportados vs valores en Canvas.
+- **Modal de Exportación Simplificado (`CanvasExportDialog`)**:
+  - Modal enfocado exclusivamente en la configuración de alcance (Secciones, Cursos Únicos, Matrículas Totales y Periodo Académico) y parámetros de subcuenta raíz (`parent_account_id`).
+  - Eliminada la sección redundante inferior de archivos y la auditoría post-exportación para mantener el modal ligero y rápido, canalizando toda la inspección comparativa a la pantalla dedicada.
+- **Pantalla y Workspace de Comparativa Lado a Lado (`CaseComparisonView`)**:
+  - **Selectores de Caso Independientes**:
+    - Selector izquierdo para escoger cualquier versión histórica de Casos de Base de Datos SQL (`import_cases`).
+    - Selector derecho para escoger cualquier versión histórica de Snapshots de Canvas LMS (`canvas_import_cases`).
+    - Botón "Recalcular Comparativa" con spinner animado `Loader2`.
+  - **Cuadrícula de Indicadores KPI Semánticos**:
+    - `Coincidentes (100%)`: Borde y acento esmeralda, conteo y porcentaje de coincidencia exacta.
+    - `Con Variaciones`: Borde y acento ámbar, cursos presentes en ambas fuentes pero con discrepancias en nombre, número de secciones, docentes o alumnos.
+    - `Solo en Base de Datos`: Borde y acento azul, cursos de la base de datos pendientes de exportación/importación SIS a Canvas.
+    - `Solo en Canvas LMS`: Borde y acento violeta, cursos creados manualmente, de otros periodos o plantillas en Canvas.
+  - **Barra de Herramientas**:
+    - Filtros por pestañas (`Todos`, `Con Variaciones`, `Coincidentes`, `Solo en BD`, `Solo en Canvas`).
+    - Buscador reactivo en vivo por código, nombre, sede, carrera, sección o docente.
+    - Paginación ágil (25, 50, 100 por página) y botones de plegado/desplegado masivo ("Desplegar Todo", "Plegar Todo").
+  - **Filas de Comparación Dual**:
+    - Tarjeta contenedora con borde semántico y badge principal de estado.
+    - Franja de discrepancias con chips explicativos (ej: `Nombre diferente: "..." vs "..."`, `Secciones: 5 en BD vs 0 en Canvas`, `Alumnos: 28 en BD vs 58 en Canvas`).
+    - Disposición en 2 columnas:
+      - Columna izquierda: Datos en Base de Datos SQL (nombre, sede, carrera, plan, badges de docentes D con DNI y secciones con estado).
+      - Columna derecha: Datos en Canvas LMS (nombre en Canvas, ID numérico, código SIS, subcuenta, docentes asignados y secciones con ID SIS).
+    - Estados vacíos estilizados para elementos exclusivos de una sola plataforma ("No existe en este Snapshot de Canvas" / "No existe en el caso de BD").
+
 
 
 

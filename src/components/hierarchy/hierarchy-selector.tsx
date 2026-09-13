@@ -1589,8 +1589,6 @@ export function HierarchySelector({
           setExportError(null)
         }}
         onExecuteExport={handleExecuteExport}
-        caseId={selectedCaseId}
-        selectedSectionIds={selectedRowIds.map(Number)}
       />
     </div>
   )
