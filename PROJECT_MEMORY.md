@@ -118,6 +118,13 @@
     - [x] Diagnóstico y corrección en la visualización de matrículas: Canvas LMS no incluye secciones en `/accounts/:id/courses`, por lo que los snapshots iniciales tenían secciones no vinculadas; al cargar matrículas bajo demanda (`getCanvasCourseEnrollments`), ahora se consultan y devuelven las secciones reales (`CanvasCourseSectionNode[]`), actualizando `canvasTree` en memoria y persistiendo en SQLite (`sectionsJson`).
     - [x] Auto-despliegue de secciones únicas: En cursos con una sola sección (como los de TEST-6), al expandir el curso se despliegan automáticamente los docentes (D) y alumnos (E) sin requerir clics adicionales.
     - [x] Filtro tolerante de matrículas: Inclusión de `isOnlySection` y coincidencia por identificador string en `case-comparison-view.tsx` y `canvas-case-manager.tsx`, deduplicación por DNI/código y visualización de correos institucionales.
+  - [x] **Limpieza Integral de Datos y Base de Datos (Completado)**
+    - [x] Vaciado completo de registros de prueba en todas las tablas de SQLite `dev.db` con `VACUUM;` (0 filas en todas las entidades).
+    - [x] Limpieza de paquetes y carpetas de prueba en `migraciones/` preservando `.gitkeep`.
+  - [x] **Auditoría de Seguridad y Sanitización de Credenciales para GitHub (Completado)**
+    - [x] Auditoría exhaustiva en código fuente, historial git y documentación: verificación de ausencia total de credenciales, passwords quemadas o tokens reales en archivos rastreados.
+  - [x] **Documentación Integral de Producción (`README.md`) para GitHub (Completado)**
+    - [x] Elaboración de documentación completa y profesional cubriendo Propósito, Características, Diagramas Mermaid de Arquitectura, Especificaciones SIS, Guía Visual de las 4 Interfaces, Opciones de Aislamiento Sandbox, Guía de Instalación, Variables de Entorno y Políticas de Seguridad.
   - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
   - [ ] Job status polling, import log inspection, and error auditing.
 
@@ -312,6 +319,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-13T13:25:00` | `6cbcc7c` | Antigravity | Feature/SandboxIsolation | Modo de aislamiento de pruebas (Sandbox Prefix) en exportador Canvas LMS y visualizador de comparativa | `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `src/server/services/migration-service.ts`, `src/components/comparison/case-comparison-view.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T13:35:00` | `4aab608` | Antigravity | Feature/PrefixModes | 3 opciones de prefijado SIS (sin prefijo, aplicar a cuentas, aplicar a todos) en exportador, diálogo y comparativa | `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `src/server/services/migration-service.ts`, `src/components/comparison/case-comparison-view.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T14:30:00` | `af611e7` | Antigravity | Fix/CanvasEnrollmentSync | Sincronización reactiva de secciones en Canvas API, auto-despliegue de monosección y coincidencia robusta de matriculados en comparativa | `src/server/services/canvas-importer.ts`, `src/components/comparison/case-comparison-view.tsx`, `src/components/canvas/canvas-case-manager.tsx`, `PROJECT_MEMORY.md` |
+| `2026-09-13T17:25:00` | `c468fee` | Antigravity | Docs/Clean | Limpieza de datos de prueba en SQLite (dev.db) y migraciones/, auditoría de seguridad sin credenciales quemadas y README.md para GitHub | `README.md`, `PROJECT_MEMORY.md` |
 
 ---
 
@@ -484,6 +492,11 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Auto-Despliegue de Cursos Monosección**: Cuando un curso contiene exactamente 1 sección (patrón común en posgrado como en TEST-6), al hacer clic para expandir el curso, la sección se despliega automáticamente en ambos árboles (Migración y Canvas), revelando inmediatamente el roster de docentes y estudiantes sin requerir un segundo clic sobre la barra de sección.
   - **Identificadores y Correos de Contacto**: Muestra del correo institucional tanto para docentes (`<email>`) como para alumnos (`<email>`) en ambos paneles.
   - **Conteo Dinámico de Matrículas en Cabecera de Sección**: Reflejo del número real de estudiantes cargados (`{count} estudiantes`) en la barra de la sección Canvas, sustituyendo el valor `0 estudiantes` devuelto inicialmente por Canvas API antes del fetch de matrículas.
+- **Documentación de Interfaces y Arquitectura Visual en GitHub (`README.md`)**:
+  - Esquema visual de la barra superior de navegación y drawer lateral con las 4 vistas clave (`Casos SQL`, `Visualización y Selección`, `Comparativa Lado a Lado`, `Casos Canvas API`).
+  - Diagrama de flujo de arquitectura con Mermaid visualizando el pipeline completo (MSSQL -> SQLite -> Exporter SIS -> Canvas SIS / Canvas API).
+  - Tablas de especificación de los 6 archivos CSV estándar de Instructure Canvas LMS y normalización de identidades de docentes (DNI) y estudiantes.
+
 
 
 
