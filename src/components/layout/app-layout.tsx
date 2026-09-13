@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Menu, Layers, Settings, FileText, Home } from "lucide-react"
+import { Menu, Layers, Database, Globe, FileText } from "lucide-react"
 import { Button } from "#/components/ui/button"
 import {
   Sheet,
@@ -59,8 +59,16 @@ export function AppLayout({ children }: AppLayoutProps) {
                   className="flex items-center gap-3 px-3 py-2 rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground transition-colors"
                   onClick={() => setIsDrawerOpen(false)}
                 >
-                  <FileText className="h-4 w-4" />
-                  <span>Registro de Casos de Importación</span>
+                  <Database className="h-4 w-4" />
+                  <span>Registro de Casos SQL</span>
+                </a>
+                <a
+                  href="/#canvas"
+                  className="flex items-center gap-3 px-3 py-2 rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground transition-colors"
+                  onClick={() => setIsDrawerOpen(false)}
+                >
+                  <Globe className="h-4 w-4 text-emerald-500" />
+                  <span>Casos Canvas LMS (API)</span>
                 </a>
               </nav>
 

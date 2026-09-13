@@ -76,7 +76,12 @@
     - [x] Sanitización de tokens Canvas y credenciales de base de datos en `docs/CANVAS_REFERENCE.md` y `PROJECT_MEMORY.md`.
     - [x] Verificación de aislamiento en bundles Vite/cliente (`dist/client/` libre de variables privadas) y verificación de exclusión en `.gitignore`.
   - [ ] Implement differential engine comparing Case A against Case B (`_added`, `_updated`, `_deleted`, `_concluded`).
-- [ ] **Phase 5: Canvas LMS API Synchronization & Monitoring**
+- [x] **Phase 5: Canvas LMS API Synchronization & Live State Extraction (Completado)**
+  - [x] Esquema relacional segregado en SQLite para casos Canvas (`canvas_import_cases`, `canvas_case_raw_entities`, `canvas_case_accounts`).
+  - [x] Servicio cliente Canvas REST API (`src/server/services/canvas-importer.ts`) con paginación Link header, reintentos exponenciales y extracción de cuentas, términos y cursos.
+  - [x] TanStack Start server functions (`getCanvasCasesFn`, `getCanvasCaseDetailFn`, `getCanvasCaseAccountsTreeFn`, `runCanvasImportCaseFn`, `deleteCanvasCaseFn`, `getCanvasEntitySampleFn`, `testCanvasConnectionFn`).
+  - [x] Componente `CanvasCaseManager` (`src/components/canvas/canvas-case-manager.tsx`) con visualizador jerárquico interactivo de cuentas, buscador en tiempo real, conteos de cursos y badges de SIS ID vs no-SIS.
+  - [x] Pestaña de navegación en el shell superior `Casos Canvas LMS (API)` y enlace en el drawer menú lateral (`AppLayout`).
   - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
   - [ ] Job status polling, import log inspection, and error auditing.
 
@@ -236,6 +241,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-11T16:55:00` | `90cc0c2` | Antigravity | Sec/Audit | Auditoría de seguridad y credenciales: eliminación de contraseñas fallback quemadas en `sql-server.ts`, ofuscación y sanitización de tokens Canvas y passwords de base de datos en documentación y memoria del proyecto | `src/server/services/sql-server.ts`, `docs/CANVAS_REFERENCE.md`, `PROJECT_MEMORY.md` |
 | `2026-09-12T23:42:00` | - | Antigravity | Docs/Architecture | Documentación de arquitectura de ubicación de cursos en Canvas LMS y diseño de cuenta raíz personalizable | `PROJECT_MEMORY.md` |
 | `2026-09-12T23:48:00` | `292e92a` | Antigravity | Feature/Export | Soporte para subcuenta inicial/raíz opcional en exportador Canvas LMS y UI del modal | `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `PROJECT_MEMORY.md` |
+| `2026-09-13T00:00:00` | `46bd26a` | Antigravity | Feature/CanvasAPI | Importador de casos Canvas LMS vía REST API y visualizador jerárquico de cuentas con buscador y métricas | `src/db/schema.ts`, `src/server/services/canvas-importer.ts`, `src/server/functions/canvas.ts`, `src/components/canvas/canvas-case-manager.tsx`, `src/routes/index.tsx`, `src/components/layout/app-layout.tsx`, `PROJECT_MEMORY.md` |
 
 ---
 
@@ -324,4 +330,15 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Inspección de Alumnos en Modal (`StudentInspectorDialog`)**: Spinner animado `Loader2` centrado con mensaje de progreso durante la resolución de registros.
   - **Gestor de Casos (`CaseManager`)**: Retroalimentación giratoria en vivo durante la lectura inicial de casos (`isLoadingCases`), la carga del detalle del caso (`isLoadingDetail`), la extracción asíncrona de 20 tablas desde Microsoft SQL Server (`isImporting`) y la obtención de la muestra de 50 registros (`isLoadingSample`).
   - **Exportación para Canvas LMS (`CanvasExportDialog`)**: Spinner de gran tamaño `size-10 text-emerald-600 animate-spin` con detalles del empaquetado ZIP y generación de CSVs.
+- **Gestor de Casos Canvas LMS y Visualizador de Cuentas (`CanvasCaseManager`)**:
+  - **Pestaña Global & Menú**: Acceso directo desde la barra de navegación superior con icono `Globe` (`Casos Canvas LMS (API)`) y en el menú drawer lateral (`/#canvas`).
+  - **Directorio de Casos en Vivo**: Panel lateral izquierdo con listado cronológico de instantáneas de Canvas, badges de estado (`Completado`, `En Progreso`, `Fallido`), endpoint objetivo, métricas rápidas de cuentas y cursos, y botón de eliminación atómica con confirmación.
+  - **Modal de Creación con Test de Conexión**: Permite ingresar nombre, descripción, alternar la descarga de cursos oficiales, y botón "Probar Conexión" que consulta en vivo la cuenta raíz de Canvas LMS con retroalimentación inmediata.
+  - **Visualizador Jerárquico de Cuentas (Árbol Canvas)**:
+    - Reconstrucción recursiva de la estructura de cuentas y subcuentas cargadas en Canvas LMS.
+    - Indentación por niveles de profundidad con chevrons plegables y atajos de "Desplegar Todo" / "Plegar Todo".
+    - Badges distintivos: SIS ID (`SIS: S-001`) con borde esmeralda vs `Sin SIS ID` en borde punteado, ID numérico de Canvas, y contador de cursos asociados (`N cursos`).
+    - Búsqueda en tiempo real que filtra el árbol por coincidencia de nombre, SIS ID o ID de Canvas manteniendo las ramas padre visibles.
+  - **Inspector de Entidades Raw**: Vista alternativa en tabla con conteo de registros para `accounts`, `terms` y `courses`, con visor modal monospace de los primeros 50 registros crudos devueltos por la API.
+
 

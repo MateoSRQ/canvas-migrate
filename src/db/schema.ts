@@ -161,6 +161,79 @@ export const caseEnrollments = sqliteTable(
   ]
 )
 
+// 8. Canvas Import Cases (Live state extraction via Canvas LMS REST API)
+export const canvasImportCases = sqliteTable(
+  'canvas_import_cases',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description'),
+    status: text('status', { enum: ['pending', 'in_progress', 'completed', 'failed'] })
+      .notNull()
+      .default('pending'),
+    endpoint: text('endpoint').notNull(),
+    totalAccounts: integer('total_accounts').default(0).notNull(),
+    totalTerms: integer('total_terms').default(0).notNull(),
+    totalCourses: integer('total_courses').default(0).notNull(),
+    totalRows: integer('total_rows').default(0).notNull(),
+    entityStats: text('entity_stats'),
+    errorMessage: text('error_message'),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .default(sql`(unixepoch())`)
+      .notNull(),
+    completedAt: integer('completed_at', { mode: 'timestamp' }),
+  },
+  (table) => [
+    index('idx_canvas_import_cases_status').on(table.status),
+    index('idx_canvas_import_cases_created_at').on(table.createdAt),
+  ]
+)
+
+// 9. Canvas Case Raw Entity Snapshots
+export const canvasCaseRawEntities = sqliteTable(
+  'canvas_case_raw_entities',
+  {
+    id: integer('id', { mode: 'number' }).primaryKey({ autoIncrement: true }),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => canvasImportCases.id, { onDelete: 'cascade' }),
+    entityType: text('entity_type').notNull(),
+    itemCount: integer('item_count').notNull().default(0),
+    dataJson: text('data_json').notNull(),
+    extractedAt: integer('extracted_at', { mode: 'timestamp' })
+      .default(sql`(unixepoch())`)
+      .notNull(),
+  },
+  (table) => [
+    index('idx_canvas_case_raw_entities_case_id').on(table.caseId),
+    uniqueIndex('uidx_canvas_case_raw_entity').on(table.caseId, table.entityType),
+  ]
+)
+
+// 10. Canvas Case Normalized Accounts
+export const canvasCaseAccounts = sqliteTable(
+  'canvas_case_accounts',
+  {
+    id: integer('id', { mode: 'number' }).primaryKey({ autoIncrement: true }),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => canvasImportCases.id, { onDelete: 'cascade' }),
+    canvasId: integer('canvas_id').notNull(),
+    name: text('name').notNull(),
+    parentAccountId: integer('parent_account_id'),
+    rootAccountId: integer('root_account_id'),
+    sisAccountId: text('sis_account_id'),
+    workflowState: text('workflow_state'),
+    coursesCount: integer('courses_count').default(0).notNull(),
+  },
+  (table) => [
+    index('idx_canvas_case_accounts_case_id').on(table.caseId),
+    index('idx_canvas_case_accounts_canvas_id').on(table.canvasId),
+    index('idx_canvas_case_accounts_parent_id').on(table.parentAccountId),
+    index('idx_canvas_case_accounts_sis_id').on(table.sisAccountId),
+  ]
+)
+
 export type ImportCase = typeof importCases.$inferSelect
 export type NewImportCase = typeof importCases.$inferInsert
 export type CaseRawTable = typeof caseRawTables.$inferSelect
@@ -169,3 +242,7 @@ export type CaseCourse = typeof caseCourses.$inferSelect
 export type CaseSection = typeof caseSections.$inferSelect
 export type CaseUser = typeof caseUsers.$inferSelect
 export type CaseEnrollment = typeof caseEnrollments.$inferSelect
+export type CanvasImportCase = typeof canvasImportCases.$inferSelect
+export type NewCanvasImportCase = typeof canvasImportCases.$inferInsert
+export type CanvasCaseRawEntity = typeof canvasCaseRawEntities.$inferSelect
+export type CanvasCaseAccount = typeof canvasCaseAccounts.$inferSelect
