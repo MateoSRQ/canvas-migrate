@@ -86,6 +86,11 @@
   - [x] Pestaña de navegación en el shell superior `Casos Canvas LMS (API)` y enlace en el drawer menú lateral (`AppLayout`).
   - [x] Identación visual jerárquica de Secciones, Alumnos y Docentes con líneas guía vertical en Vista Jerárquica (Tree Table) y Árbol de Casos Canvas LMS (API).
   - [x] Deduplicación y resolución precisa de docentes y alumnos en vistas anidadas (corrección de nombres duplicados en CUR006383 - CULTURA CIENTÍFICA I y sincronización de secciones reales en API de Canvas).
+- [x] **Auditoría de Deuda Técnica y Optimización de Arquitectura (Completado)**
+  - [x] Corrección integral de tipos TypeScript (`tsc --noEmit` y `npm run build` con 0 errores): exclusión de carpetas de referencia en `tsconfig.json`, tipado estricto en respuestas y headers de Canvas API, corrección de tipos en estado de matriculados (`courseRosters`), y depuración de variables e importaciones no utilizadas en 9 archivos.
+  - [x] Optimización de base de datos SQLite: Creación del índice compuesto `idx_canvas_case_enr_case_course` en `canvas_case_enrollments` para acelerar consultas bajo demanda en tiempo real.
+  - [x] Corrección de consulta Drizzle con `.and()` en `getCaseRawTableData` (`importer.ts`) y eliminación de `integratedSecurity` no estándar en configuración del pool MSSQL (`sql-server.ts`).
+  - [x] Diagnóstico estratégico de deuda técnica y oportunidades de optimización compilado en 5 pilares arquitectónicos (Frontend/Memoización, Redundancia de almacenamiento en importación MSSQL, Portabilidad de empaquetado Canvas ZIP sin CLI, Indexación SQLite y Code-splitting con React.lazy).
   - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
   - [ ] Job status polling, import log inspection, and error auditing.
 
@@ -260,6 +265,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 | `2026-09-13T10:30:00` | `fc7fcf7` | Antigravity | Fix/SISExport | Corrección de resolución de códigos de Sede (S-001 vs S-174) y clarificación de parent_account_id en exportador Canvas | `src/server/services/hierarchy-service.ts`, `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T10:45:00` | `f0e3571` | Antigravity | Feature/SISExport | Creación automática de subcuenta padre en accounts.csv para SIS import y campos de control en modal de exportación | `src/server/services/canvas-exporter.ts`, `src/components/hierarchy/modals/canvas-export-dialog.tsx`, `src/components/hierarchy/hierarchy-selector.tsx`, `PROJECT_MEMORY.md` |
 | `2026-09-13T11:28:00` | `0939c29` | Antigravity | Fix/UI | Identación visual de secciones, docentes y alumnos, y deduplicación de docentes en CUR006383 y árbol Canvas | `src/components/canvas/canvas-case-manager.tsx`, `src/components/hierarchy/hierarchy-tree-table.tsx`, `src/components/hierarchy/tree-section-roster.tsx`, `src/server/services/canvas-exporter.ts`, `src/server/services/canvas-importer.ts`, `PROJECT_MEMORY.md` |
+| `2026-09-13T11:40:00` | - | Antigravity | Audit/Refactor | Auditoría de deuda técnica, índice compuesto en canvas_case_enrollments y resolución de tipos TS (0 errores en tsc y build) | `tsconfig.json`, `src/db/schema.ts`, `src/server/services/*`, `src/components/*`, `PROJECT_MEMORY.md` |
 
 
 

@@ -6,8 +6,6 @@ import { getTableFromDb } from './db-helpers'
 import {
   getCaseHierarchyData,
   type HierarchyItem,
-  type EnrolledTeacher,
-  type EnrolledStudent,
 } from './hierarchy-service'
 
 const execFileAsync = promisify(execFile)

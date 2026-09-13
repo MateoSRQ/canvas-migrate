@@ -4,19 +4,13 @@ import {
   ChevronDown,
   Building2,
   GraduationCap,
-  Calendar,
   BookOpen,
-  Layers,
   Users,
-  CheckSquare,
-  Square,
   Maximize2,
-  Minimize2,
   FoldVertical,
   ChevronsUpDown,
   UserCheck,
   Loader2,
-  ExternalLink,
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
@@ -543,10 +537,10 @@ export function HierarchyTreeTable({
       fId: number,
       cId: number,
       plId: number,
-      cur: TreeCursoNode
+      cur: TreeCourseNode
     ): string[] => {
       return cur.secciones.map(
-        (sec) => `sec-${pId}-${sId}-${mId}-${fId}-${cId}-${plId}-${cur.cursoId}-${sec.id}`
+        (sec: TreeSectionNode) => `sec-${pId}-${sId}-${mId}-${fId}-${cId}-${plId}-${cur.cursoId}-${sec.id}`
       )
     },
     []

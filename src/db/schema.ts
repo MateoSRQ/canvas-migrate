@@ -279,6 +279,7 @@ export const canvasCaseEnrollments = sqliteTable(
   (table) => [
     index('idx_canvas_case_enr_case_id').on(table.caseId),
     index('idx_canvas_case_enr_course_id').on(table.courseId),
+    index('idx_canvas_case_enr_case_course').on(table.caseId, table.courseId),
     index('idx_canvas_case_enr_section_id').on(table.sectionId),
     index('idx_canvas_case_enr_role').on(table.role),
   ]

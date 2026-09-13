@@ -19,7 +19,6 @@ function getAcademicConfig(options: SqlServerConnectionOptions = {}): sql.config
     options: {
       encrypt: false,
       trustServerCertificate: true,
-      integratedSecurity: false,
       connectTimeout: 30000,
     },
     pool: {
@@ -40,7 +39,6 @@ function getAuthConfig(options: SqlServerConnectionOptions = {}): sql.config {
     options: {
       encrypt: false,
       trustServerCertificate: true,
-      integratedSecurity: false,
       connectTimeout: 30000,
     },
     pool: {

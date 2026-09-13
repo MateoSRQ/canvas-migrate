@@ -166,11 +166,11 @@ async function fetchCanvasPaginated<T>(
     results = results.concat(data)
 
     // Analizar Link header para paginación
-    const linkHeader = res.headers.get('link') || res.headers.get('Link')
+    const linkHeader: string | null = res.headers.get('link') || res.headers.get('Link')
     nextUrl = null
 
     if (linkHeader) {
-      const match = linkHeader.match(/<([^>]+)>;\s*rel="next"/)
+      const match: RegExpMatchArray | null = linkHeader.match(/<([^>]+)>;\s*rel="next"/)
       if (match) {
         nextUrl = match[1]
       }
@@ -758,7 +758,7 @@ export async function getCanvasRawEntitySample(caseId: string, entityType: strin
 }
 
 export async function deleteCanvasCase(caseId: string) {
-  const res = await db
+  await db
     .delete(canvasImportCases)
     .where(eq(canvasImportCases.id, caseId))
   return { success: true, caseId }

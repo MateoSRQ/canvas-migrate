@@ -9,7 +9,7 @@ import {
   caseEnrollments,
   type ImportCase,
 } from '#/db/schema'
-import { eq, desc } from 'drizzle-orm'
+import { eq, desc, and } from 'drizzle-orm'
 import { createSqlServerConnection, fetchTableRows } from './sql-server'
 
 export interface CreateImportCaseOptions {
@@ -436,11 +436,11 @@ export async function getCaseRawTablesList(caseId: string) {
 }
 
 export async function getCaseRawTableData(caseId: string, tableName: string): Promise<any[]> {
-  const [entry] = await db
+  const entry = db
     .select()
     .from(caseRawTables)
-    .where(eq(caseRawTables.caseId, caseId))
-    .where(eq(caseRawTables.tableName, tableName))
+    .where(and(eq(caseRawTables.caseId, caseId), eq(caseRawTables.tableName, tableName)))
+    .get()
 
   if (!entry) return []
   try {
@@ -452,6 +452,6 @@ export async function getCaseRawTableData(caseId: string, tableName: string): Pr
 
 export async function deleteImportCase(caseId: string): Promise<boolean> {
   // Cascades automatically to raw tables, periods, courses, sections, users, enrollments
-  const result = await db.delete(importCases).where(eq(importCases.id, caseId))
+  await db.delete(importCases).where(eq(importCases.id, caseId))
   return true
 }

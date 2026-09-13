@@ -30,23 +30,14 @@ import {
   ExternalLink,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   ChevronsLeft,
   ChevronsRight,
   ListTree,
   Table as TableIcon,
   Eye,
-  UserCheck,
   FoldVertical,
   FileSpreadsheet,
-  FolderArchive,
-  Download,
-  Copy,
-  Check,
-  FileText,
-  Sparkles,
   Loader2,
-  FolderCheck,
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'

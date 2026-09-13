@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Menu, Layers, Database, Globe, FileText } from "lucide-react"
+import { Menu, Layers, Database, Globe } from "lucide-react"
 import { Button } from "#/components/ui/button"
 import {
   Sheet,

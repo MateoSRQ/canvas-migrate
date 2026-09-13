@@ -6,7 +6,6 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
-  Clock,
   ChevronRight,
   ChevronDown,
   Layers,
@@ -16,11 +15,7 @@ import {
   FolderTree,
   Building,
   BookOpen,
-  Calendar,
-  ExternalLink,
-  SlidersHorizontal,
   Users,
-  GraduationCap,
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
@@ -40,13 +35,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '#/components/ui/dialog'
 import type { CanvasImportCase } from '#/db/schema'
 import type {
   CanvasAccountTreeNode,
   CanvasCourseTreeNode,
-  CanvasCourseSectionNode,
 } from '#/server/services/canvas-importer'
 import {
   getCanvasCasesFn,
@@ -92,8 +85,8 @@ export function CanvasCaseManager() {
     Record<
       number,
       {
-        docentes: { id: number; sectionId: number | null; dni: string; fullName: string; email: string }[]
-        estudiantes: { id: number; sectionId: number | null; codigo: string; fullName: string; email: string }[]
+        docentes: { id: number; sectionId?: number | null; dni: string; fullName: string; email: string }[]
+        estudiantes: { id: number; sectionId?: number | null; codigo: string; fullName: string; email: string }[]
       }
     >
   >({})
