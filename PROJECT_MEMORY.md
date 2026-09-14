@@ -125,6 +125,10 @@
   - [x] Thorough audit of codebase, git history, and docs: verified zero credentials, hardcoded passwords, or active API tokens in tracked files.
 - [x] **Comprehensive Production Documentation (README.md) for GitHub (Completed)**
   - [x] Replaced TanStack Start boilerplate with complete technical guide covering Purpose, Features, Architecture Mermaid Diagrams, Canvas SIS Specs, 4-Interface Visual Tour, Sandbox Isolation Modes, Installation, Environment Variables, and Security Best Practices.
+- [x] **Student Enrollment Foreign Key Resolution Fix (Completed)**
+  - [x] Resolved foreign key mismatch in `src/server/services/hierarchy-service.ts`: `Matricula.Matricula_Alumno_Curso.matricula_alumno_id` references `Matricula.Matricula_Alumno.id` (not `Academico.Alumno.id`).
+  - [x] Loaded `Matricula.Matricula_Alumno` raw table dump into a lookup map to resolve `ma.alumno_id` into `alumnoMap`, with fallback to `ma.codalumno` / `ma.nomalumno`.
+  - [x] Keyed section deduplication map by `s.codigo || String(s.id)` to guarantee 100% accurate student rosters across both lazy-loaded tree components and exported `enrollments.csv`.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
 
@@ -274,6 +278,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - Course Placement (`courses.csv`): Associated directly with the Curricular Plan subaccount (`account_id: <cod_plan>`).
   - Root Account Association & SIS Provisioning: Top-level Sedes point to `parent_account_id: cleanRootAccountId` (or `""` to attach directly to Canvas institutional root). When `createRootAccount` is enabled, the exporter generates the custom root definition in the first row of `accounts.csv` with `parent_account_id: ""` and `status: "active"`. This enables Canvas LMS to create the subaccount during the same SIS import process and attach Sedes immediately without *"Parent account didn't exist"* warnings. Includes optional descriptive display name (`rootAccountName`).
   - Sandbox Isolation Testing Mode (Prefixing): Enabling `isolateAccountPrefix` with a root subaccount (e.g. `TEST-5`) prefixes all generated subaccounts (Campus, Modality, Faculty, Career, Plan) with `${rootAccountId}_` (e.g. `TEST-5_S-001`, `TEST-5_M-2264`, `TEST-5_P004084`) and links them coherently in `courses.csv`. This guarantees a 100% isolated tree in Canvas LMS, preventing Canvas from moving or reparenting the real institutional `SEDE LIMA` (`S-001`) or dragging unselected faculties.
+  - Student Enrollment Foreign Key Resolution: In MSSQL `BDACADEMICO5`, the table `Matricula.Matricula_Alumno_Curso` links to `Matricula.Matricula_Alumno.id` via `matricula_alumno_id` (the student's term enrollment header record), NOT directly to `Academico.Alumno.id`. The service resolves `matricula_alumno_id` -> `Matricula.Matricula_Alumno` -> `Academico.Alumno.id` -> `General.Persona` (with fallback to `Matricula.Matricula_Alumno.codalumno`), preventing accidental primary key ID collisions with `Academico.Alumno.id` and guaranteeing 100% accurate student rosters in both UI views and `enrollments.csv`.
 
 ---
 

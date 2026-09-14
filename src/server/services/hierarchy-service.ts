@@ -104,6 +104,8 @@ export function getCaseHierarchyData(
   const horarios = getTableFromDb(caseId, 'Carga_Academica.Carga_Academica_Sede_Curso_Horario')
   const detalles = getTableFromDb(caseId, 'Carga_Academica.Carga_Academica_Sede_Curso_Horario_Detalle')
   const utbPersonas = getTableFromDb(caseId, 'Personal.Utb_Persona')
+  const matriculaAlumnos = getTableFromDb(caseId, 'Matricula.Matricula_Alumno')
+  const matriculaAlumnoMap = new Map<number, any>(matriculaAlumnos.map((ma: any) => [ma.id, ma]))
   const matriculas = getTableFromDb(caseId, 'Matricula.Matricula_Alumno_Curso')
   const alumnos = getTableFromDb(caseId, 'Academico.Alumno')
   const personas = getTableFromDb(caseId, 'General.Persona')
@@ -150,8 +152,21 @@ export function getCaseHierarchyData(
   for (const m of matriculas) {
     const hid = m.carga_academica_sede_curso_horario_id
     if (!hid) continue
-    const stu = alumnoMap.get(m.matricula_alumno_id)
+    const ma = matriculaAlumnoMap.get(m.matricula_alumno_id)
+    if (!ma) continue
+
+    let stu = ma.alumno_id ? alumnoMap.get(ma.alumno_id) : undefined
+    if (!stu && ma.codalumno) {
+      const codigo = String(ma.codalumno).trim()
+      stu = {
+        id: ma.alumno_id || ma.id,
+        codigo,
+        fullName: String(ma.nomalumno || `Estudiante ${codigo}`).trim(),
+        email: `${codigo}@politecnica.edu.pe`,
+      }
+    }
     if (!stu) continue
+
     let list = studentsByHorario.get(hid)
     if (!list) {
       list = []
@@ -233,14 +248,15 @@ export function getCaseHierarchyData(
     const plan = planMap.get(curso.plan_id)
 
     const hs = horariosByCargaCurso.get(cc.id) || []
-    const sectionStudentsMap = new Map<number, EnrolledStudent>()
+    const sectionStudentsMap = new Map<string, EnrolledStudent>()
     const sectionTeachersMap = new Map<string, EnrolledTeacher>()
 
     for (const h of hs) {
       const hStudents = studentsByHorario.get(h.id) || []
       for (const s of hStudents) {
-        if (!sectionStudentsMap.has(s.id)) {
-          sectionStudentsMap.set(s.id, s)
+        const key = s.codigo || String(s.id)
+        if (!sectionStudentsMap.has(key)) {
+          sectionStudentsMap.set(key, s)
         }
       }
 
