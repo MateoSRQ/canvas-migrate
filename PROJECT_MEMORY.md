@@ -134,6 +134,10 @@
   - [x] Restored database `BDACADEMICO6` in local Microsoft SQL Server 2022 with logical file moves (`BDACADEMICO` -> `/var/opt/mssql/data/BDACADEMICO6.mdf`, `BDACADEMICO_log` -> `/var/opt/mssql/data/BDACADEMICO6_log.ldf`).
   - [x] Verified database status (ONLINE, 371 tables, 95,656 enrollments, 2,257 courses, 3,022 course-sections).
   - [x] Updated `.env.local` to point to `DB_NAME=BDACADEMICO6` and updated default fallbacks in `src/server/services/sql-server.ts`, `src/server/services/importer.ts`, and `src/components/cases/case-manager.tsx`.
+- [x] **Fresh Database & Generated Packages Purge (Completed)**
+  - [x] Wiped all SQLite tables in `dev.db` across SQL cases and Canvas snapshots (0 rows total) and executed `VACUUM;`.
+  - [x] Purged all historical export directories in `migraciones/` preserving only `.gitkeep`.
+  - [x] Ready for fresh clean extraction and migration pipeline execution from `BDACADEMICO6`.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
 
