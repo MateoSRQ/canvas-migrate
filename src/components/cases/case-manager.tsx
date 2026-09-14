@@ -360,7 +360,7 @@ export function CaseManager({ onExploreHierarchy }: CaseManagerProps) {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Registro de Casos de Importación</h1>
           <p className="text-sm text-muted-foreground">
-            Instantáneas independientes extraídas desde Microsoft SQL Server (<span className="font-mono">BDACADEMICO5</span> y{" "}
+            Instantáneas independientes extraídas desde Microsoft SQL Server (<span className="font-mono">BDACADEMICO6</span> y{" "}
             <span className="font-mono">BDAUTENTICACION5</span>) hacia SQLite.
           </p>
         </div>
@@ -399,7 +399,7 @@ export function CaseManager({ onExploreHierarchy }: CaseManagerProps) {
                   <input
                     id="import-case-name"
                     type="text"
-                    placeholder="Ej. BDACADEMICO5 - Instantánea 2026-09"
+                    placeholder="Ej. BDACADEMICO6 - Instantánea 2026-09"
                     value={importName}
                     onChange={(e) => setImportName(e.target.value)}
                     className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground text-sm outline-none focus:border-ring"
@@ -420,7 +420,7 @@ export function CaseManager({ onExploreHierarchy }: CaseManagerProps) {
                 </div>
                 <div className="p-3 bg-muted rounded-md text-xs text-muted-foreground space-y-1 font-mono">
                   <p>Servidor Origen: localhost:1433</p>
-                  <p>BD Académica: BDACADEMICO5 (19 tablas)</p>
+                  <p>BD Académica: BDACADEMICO6 (19 tablas)</p>
                   <p>BD Autenticación: BDAUTENTICACION5 (Personal.Utb_Persona)</p>
                 </div>
               </div>

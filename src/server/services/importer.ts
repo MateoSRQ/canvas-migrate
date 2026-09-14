@@ -65,7 +65,7 @@ export async function executeImportCase(
 ): Promise<ImportCase> {
   const caseId = generateCaseId()
   const server = options.server || process.env.DB_SERVER || 'localhost'
-  const academicDb = options.academicDb || process.env.DB_NAME || 'BDACADEMICO5'
+  const academicDb = options.academicDb || process.env.DB_NAME || 'BDACADEMICO6'
   const authDb = options.authDb || process.env.UP_DB_NAME || 'BDAUTENTICACION5'
   const now = new Date()
 

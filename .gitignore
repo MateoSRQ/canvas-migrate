@@ -19,3 +19,5 @@ todos.json
 .vscode
 /new/
 migraciones/
+*.7z
+*.bak

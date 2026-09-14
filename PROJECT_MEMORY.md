@@ -129,6 +129,11 @@
   - [x] Resolved foreign key mismatch in `src/server/services/hierarchy-service.ts`: `Matricula.Matricula_Alumno_Curso.matricula_alumno_id` references `Matricula.Matricula_Alumno.id` (not `Academico.Alumno.id`).
   - [x] Loaded `Matricula.Matricula_Alumno` raw table dump into a lookup map to resolve `ma.alumno_id` into `alumnoMap`, with fallback to `ma.codalumno` / `ma.nomalumno`.
   - [x] Keyed section deduplication map by `s.codigo || String(s.id)` to guarantee 100% accurate student rosters across both lazy-loaded tree components and exported `enrollments.csv`.
+- [x] **Database Migration to BDACADEMICO6 (Completed)**
+  - [x] Decompressed `LSFWSRVUPPBD_BDACADEMICO_FULL_20260914_100234.7z` containing full backup `LSFWSRVUPPBD_BDACADEMICO_FULL_20260914_100234.bak` (443.6 MB).
+  - [x] Restored database `BDACADEMICO6` in local Microsoft SQL Server 2022 with logical file moves (`BDACADEMICO` -> `/var/opt/mssql/data/BDACADEMICO6.mdf`, `BDACADEMICO_log` -> `/var/opt/mssql/data/BDACADEMICO6_log.ldf`).
+  - [x] Verified database status (ONLINE, 371 tables, 95,656 enrollments, 2,257 courses, 3,022 course-sections).
+  - [x] Updated `.env.local` to point to `DB_NAME=BDACADEMICO6` and updated default fallbacks in `src/server/services/sql-server.ts`, `src/server/services/importer.ts`, and `src/components/cases/case-manager.tsx`.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
 
@@ -264,7 +269,7 @@ canvas-migrate/
 
 ### Canvas LMS Integration & Migration Reference Architecture
 Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mateo/projects/canvas-migrate/docs/CANVAS_REFERENCE.md):
-- **Source MSSQL Databases**: `BDACADEMICO5` (academic loads, courses, sections, enrollments) & `BDAUTENTICACION5` (`Personal.Utb_Persona` for teacher DNI/emails) hosted on `localhost:1433` (credentials loaded via `process.env.DB_PASSWORD` in `.env.local`).
+- **Source MSSQL Databases**: `BDACADEMICO6` (academic loads, courses, sections, enrollments - updated from `BDACADEMICO5`) & `BDAUTENTICACION5` (`Personal.Utb_Persona` for teacher DNI/emails) hosted on `localhost:1433` (credentials loaded via `process.env.DB_PASSWORD` in `.env.local`).
 - **Canvas LMS API**: Production instance `https://politecnica.instructure.com/` (authentication token loaded via `process.env.CANVAS_API_KEY` in `.env.local`).
 - **Data Pipelines (`canvas/new/`)**:
   - `hierarchy.ts`: Multi-level academic tree builder.

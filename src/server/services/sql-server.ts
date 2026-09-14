@@ -14,7 +14,7 @@ function getAcademicConfig(options: SqlServerConnectionOptions = {}): sql.config
     user: options.user || process.env.DB_USER || 'sa',
     password: options.password || process.env.DB_PASSWORD || '',
     server: options.server || process.env.DB_SERVER || 'localhost',
-    database: options.academicDb || process.env.DB_NAME || 'BDACADEMICO5',
+    database: options.academicDb || process.env.DB_NAME || 'BDACADEMICO6',
     port: options.port || Number(process.env.DB_PORT) || 1433,
     options: {
       encrypt: false,
