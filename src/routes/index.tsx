@@ -4,13 +4,14 @@ import { CaseManager } from '#/components/cases/case-manager'
 import { CanvasCaseManager } from '#/components/canvas/canvas-case-manager'
 import { HierarchySelector } from '#/components/hierarchy/hierarchy-selector'
 import { CaseComparisonView } from '#/components/comparison/case-comparison-view'
-import { Layers, Database, Globe, GitCompare } from 'lucide-react'
+import { ForecastView } from '#/components/forecast/forecast-view'
+import { Layers, Database, Globe, GitCompare, TrendingUp } from 'lucide-react'
 
 export const Route = createFileRoute('/')({ component: Home })
 
 function Home() {
   const [activeTab, setActiveTab] = React.useState<
-    'cases' | 'visualization' | 'comparison' | 'canvas'
+    'cases' | 'visualization' | 'forecast' | 'comparison' | 'canvas'
   >('cases')
   const [selectedCaseId, setSelectedCaseId] = React.useState<string>('')
 
@@ -24,6 +25,8 @@ function Home() {
           hash === '#hierarchy'
         ) {
           setActiveTab('visualization')
+        } else if (hash === '#forecast' || hash === '#prevision') {
+          setActiveTab('forecast')
         } else if (hash === '#comparison' || hash === '#comparativa') {
           setActiveTab('comparison')
         } else if (hash === '#canvas') {
@@ -99,6 +102,21 @@ function Home() {
         </button>
 
         <button
+          onClick={() => {
+            setActiveTab('forecast')
+            if (typeof window !== 'undefined') window.location.hash = 'forecast'
+          }}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+            activeTab === 'forecast'
+              ? 'bg-primary text-primary-foreground shadow-xs'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+          }`}
+        >
+          <TrendingUp className="size-3.5 text-purple-500" />
+          <span>Previsión de Matrícula (Forecast)</span>
+        </button>
+
+        <button
           onClick={handleNavigateToComparison}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
             activeTab === 'comparison'
@@ -132,6 +150,8 @@ function Home() {
           selectedCaseId={selectedCaseId}
           onSelectCaseId={setSelectedCaseId}
         />
+      ) : activeTab === 'forecast' ? (
+        <ForecastView initialCaseId={selectedCaseId} />
       ) : activeTab === 'comparison' ? (
         <CaseComparisonView />
       ) : (

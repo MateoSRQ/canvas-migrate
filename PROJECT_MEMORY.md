@@ -147,6 +147,23 @@
   - [x] Automatic generation of `CURSOS_COMPARTIDOS.md` detailing full parent-child relationships (master container courses, combined sections, original curricular courses, student counts, teachers, and career locations).
   - [x] Global database audit file `CURSOS_GRUPOS_COMPLETOS.md` generated covering all 269 groups and 1,246 course-sections across all periods, modalities, and careers.
   - [x] UI visual enhancements: Cross-list badges and indicators in Tree Table, Table View, Comparison Workspace, and Canvas API Case Manager.
+- [x] **Feature: Previsión de Matrícula / Forecast por Carrera y Ciclo (`forecast`) (Completed)**
+  - [x] Created feature branch `forecast` based on `feature/groups`.
+  - [x] Data lineage discovery & relational reconciliation:
+    - Enrolled students: `Matricula.Matricula_Alumno_Curso` linked to `Matricula.Matricula_Alumno` (student identity: `codalumno`, `dnialumno`, `nomalumno`).
+    - Course & Cycle: `Carga_Academica_Sede_Curso_Horario` -> `Carga_Academica_Sede_Curso` -> `Academico.Curso` (cycle defined in `cat_ciclo_id` -> `General.Catalogo`, ordered by `valor_orden` 1 to 12).
+    - Career & Academic Offer: `Academico.Curso.plan_id` -> `Academico.Plan.carrera_id` -> `General.Carrera`, matching `Carga_Academica_Sede` -> `General.SedeCarrera` -> `General.Carrera` 100% (95,656 of 95,656 records).
+  - [x] Implemented forecast engine service (`src/server/services/forecast-service.ts`) with bounded LRU caching (`LruCache`), dynamic cycle sorting, career aggregation, multi-level student deduplication, and course breakdown.
+  - [x] Implemented TanStack Start server function RPC (`src/server/functions/forecast.ts` with `getForecastDataFn`).
+  - [x] Full-width Previsión de Matrícula (Forecast) workspace (`src/components/forecast/forecast-view.tsx`):
+    - Case directory switcher, cascading period dropdown (with enrollments and student counts), and institutional campus (Sede) filter.
+    - Dynamic metric switcher: "Alumnos Únicos" vs "Matrículas-Curso (Cupos)".
+    - Interactive matrix table (Pivot table) displaying career rows across cycle columns (Ciclo 1 to 12) with sticky headers and sticky career column.
+    - Expandable nested course catalog under every career showing Course Code, Name, Curricular Plan, Credits, Open Sections count, and enrolled students count.
+    - Instant client-side text filtering across career names, faculties, course names, and codes.
+    - Summary footer row calculating total students and total enrollments per cycle and overall total.
+    - CSV export engine (`handleExportCsv`) generating downloadable spreadsheet with matrix and complete course breakdown.
+  - [x] Navigation integration: Added top header tab and left drawer menu item (`Previsión de Matrícula (Forecast)`) with `#forecast` hash routing in `app-layout.tsx` and `routes/index.tsx`.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
 - [ ] Theory vs. Practice Session Modeling: Badges and indicators in Tree/Table and selective cross-listing support for decoupled theory and practice schedules.
@@ -301,6 +318,11 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - Multi-Course Grouping & Shared Classrooms (`grupo`): In table `Carga_Academica.Carga_Academica_Sede_Curso_Horario_Detalle`, the column `grupo` (`varchar(20)`) unifies course-sections from different plans/careers that share the exact same teacher, weekly schedule, and physical/virtual classroom (e.g. `EEGG_CCM1D01`, `FI_MIC01`). Enables Canvas LMS cross-listing (sections grouped under a single master course) or Canvas Groups generation.
   - Theory vs. Practice Session Classification: In `Academico.Curso`, hours are defined by `num_horas_sem_teoria`, `num_horas_sem_practica`, and `num_horas_sem_laboratorio`. In academic scheduling, `Carga_Academica.Carga_Academica_Sede_Curso_Horario_Detalle.cat_tipo_hora_id` links directly to `General.Catalogo` (`2217` = "Teoría" with 2,870 sessions, `2218` = "Práctica" with 2,262 sessions), with `cat_tipo_id` indicating session mode (`2077` = "Normal", `2078` = "Compartido"). This schema allows distinguishing sections where theory and practice have different teachers (271 instances) or distinct cross-listing groups (37 instances).
   - Cross-listing Cluster Patterns (`xlists.csv`): In `2026-2 PREGRADO`, 499 section combinations are grouped into 62 container courses across 24 core academic disciplines. Groups follow the standard university nomenclature `EEGG_<MATERIA><TURNO: D=Diurno/N=Nocturno><NUM>` (e.g., `EEGG_CCM1D01`). Groups cluster up to 18 sections and 7-8 different curricular plans simultaneously under shared general studies classrooms (Health cluster: Nursing + Stomatology + Physical Therapy; Engineering cluster: Civil + Industrial + Systems + Cybersecurity; Business/Humanities cluster: Administration + Communication + Law + Psychology + Accounting).
+  - Enrollment Resolution & Academic Forecast (Course x Career x Cycle):
+    - Course & Cycle: In `Academico.Curso`, `cat_ciclo_id` links directly to `General.Catalogo` (`catalogo_tipo_id = 5`) defining institutional cycles (`CICLO 1` to `CICLO 12`), with exact sorting driven by `valor_orden` (1 to 12).
+    - Career Alignment: Curricular plans (`Academico.Plan.carrera_id`) and course sections (`Carga_Academica_Sede` -> `General.SedeCarrera.carrera_id`) match 100% across all 95,656 enrollments in the database (`matches: 95656, diffs: 0`).
+    - Multi-cohort Academic Progression: Lower cycles (Ciclo 1-2) dominate regular undergraduate admissions in 2026-2 PREGRADO (e.g. Estomatología: 24 in Ciclo 1, 35 in Ciclo 2), upper cycles (Ciclos 5-12) dominate convalidation programs in 2026-2 CONVALIDANTES, and posgrado (Maestrías) populate separate terms.
+    - Aggregation Engine (`forecast-service.ts`): Computes dual metrics: unique students (`totalAlumnos`) and total course-level registrations (`totalMatriculas`), with bounded LRU caching (`LruCache`), cascading period/sede filtering, and full course catalogs with credit hours and section counts.
 
 ---
 
@@ -418,8 +440,16 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - Top header and drawer tab sequence:
     1. `Registro de Casos SQL` (`Database`): Default landing screen (`/#cases`).
     2. `Visualización y Selección` (`Layers`): Tree and table workspace (`/#visualization`).
-    3. `Comparativa Lado a Lado (BD vs Canvas)` (`GitCompare`): Dual-panel comparison (`/#comparison`).
-    4. `Casos Canvas LMS (API)` (`Globe`): Canvas cloud snapshots (`/#canvas`).
+    3. `Previsión de Matrícula (Forecast)` (`TrendingUp`): Career x Cycle enrollment matrix workspace (`/#forecast`).
+    4. `Comparativa Lado a Lado (BD vs Canvas)` (`GitCompare`): Dual-panel comparison (`/#comparison`).
+    5. `Casos Canvas LMS (API)` (`Globe`): Canvas cloud snapshots (`/#canvas`).
+- **Enrollment Forecast Workspace (`ForecastView` - `src/components/forecast/forecast-view.tsx`)**:
+  - **Full-Width Interactive Pivot Table**: Displays Careers on the Y-axis and Academic Cycles (Ciclo 1 to 12) on the X-axis, with sticky column for Career names and sticky header for cycle labels.
+  - **Dual Metric Toggle**: Smooth switcher between "Alumnos Únicos" (distinct student headcount per career/cycle) and "Matrículas-Curso (Cupos)" (total enrollments / class seat occupancy).
+  - **Nested Course Roster Expansion**: Clicking any career row reveals the granular curricular breakdown of open courses for that career: Ciclo, Course Code, Asignatura, Curricular Plan, Credits, Section count, and Enrolled student count.
+  - **Cascading Filter Bar**: Seamless switching between SQL Cases, Academic Periods (displaying student/enrollment counts per period), Institutional Campuses (Sedes), and instant client-side text filtering across career names, faculties, course names, and codes.
+  - **Mass Batch Controls**: "Expandir Todo" and "Plegar Todo" buttons for unfolding all careers simultaneously.
+  - **Export to CSV**: Client-side CSV generator compiling both the high-level Career x Cycle matrix and the exhaustive course breakdown.
 - **GitHub Interface & Visual Architecture Documentation (`README.md`)**:
   - ASCII visual layout of navigation header, drawer, and 4 core workspaces.
   - Mermaid architecture flowchart representing the full data pipeline.
