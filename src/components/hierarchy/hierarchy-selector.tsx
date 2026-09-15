@@ -304,6 +304,9 @@ export function HierarchySelector({
         const matchAnyTeacher = item.docentes?.some(
           (t) => t.dni.toLowerCase().includes(query) || t.fullName.toLowerCase().includes(query)
         )
+        const matchGrupo = item.grupoCodigo
+          ? item.grupoCodigo.toLowerCase().includes(query)
+          : false
 
         if (
           !matchCourseCode &&
@@ -313,7 +316,8 @@ export function HierarchySelector({
           !matchDni &&
           !matchCareer &&
           !matchStudent &&
-          !matchAnyTeacher
+          !matchAnyTeacher &&
+          !matchGrupo
         ) {
           return false
         }
@@ -519,7 +523,19 @@ export function HierarchySelector({
         accessorKey: 'seccionNombre',
         cell: ({ row }) => (
           <div className="space-y-1">
-            <div className="font-medium text-xs">{row.original.seccionNombre}</div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-medium text-xs text-foreground">{row.original.seccionNombre}</span>
+              {row.original.grupoCodigo && (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] px-1 py-0 h-4 bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 font-mono font-medium flex items-center gap-1 shadow-2xs"
+                  title={`Grupo: ${row.original.grupoCodigo} (Cross-listing)`}
+                >
+                  <span className="size-1 rounded-full bg-purple-500" />
+                  Grupo: {row.original.grupoCodigo}
+                </Badge>
+              )}
+            </div>
             {row.original.isNoHabilitado && (
               <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4">
                 NO HABILITADO

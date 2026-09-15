@@ -47,6 +47,7 @@ export interface CanvasCourseSectionNode {
   name: string
   sisSectionId: string | null
   totalStudents: number
+  nonxlistCourseId?: number | null
   docentes: { id: number; dni: string; fullName: string; email: string }[]
   estudiantes: { id: number; codigo: string; fullName: string; email: string }[]
   estudiantesCount: number
@@ -501,6 +502,7 @@ export async function getCanvasCaseAccountsTree(caseId: string) {
               name: 'Sección Principal',
               sisSectionId: c.sisCourseId,
               totalStudents: c.totalStudents,
+              nonxlistCourseId: null,
             },
           ]
     ).map((s: any) => ({
@@ -508,6 +510,7 @@ export async function getCanvasCaseAccountsTree(caseId: string) {
       name: s.name,
       sisSectionId: s.sisSectionId || s.sis_section_id || null,
       totalStudents: s.totalStudents ?? s.total_students ?? 0,
+      nonxlistCourseId: s.nonxlistCourseId ?? s.nonxlist_course_id ?? null,
       docentes: [],
       estudiantes: [],
       estudiantesCount: s.totalStudents ?? s.total_students ?? 0,
@@ -646,6 +649,7 @@ export async function getCanvasCourseEnrollments(
           name: s.name,
           sisSectionId: s.sis_section_id ? String(s.sis_section_id).trim() : null,
           totalStudents: s.total_students ?? 0,
+          nonxlistCourseId: s.nonxlist_course_id ?? null,
           docentes: [],
           estudiantes: [],
           estudiantesCount: s.total_students ?? 0,

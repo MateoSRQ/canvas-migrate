@@ -138,13 +138,13 @@
   - [x] Wiped all SQLite tables in `dev.db` across SQL cases and Canvas snapshots (0 rows total) and executed `VACUUM;`.
   - [x] Purged all historical export directories in `migraciones/` preserving only `.gitkeep`.
   - [x] Ready for fresh clean extraction and migration pipeline execution from `BDACADEMICO6`.
-- [ ] **Feature: Canvas Cross-listing & Grouping (`feature/groups`)**
+- [x] **Feature: Canvas Cross-listing & Grouping (`feature/groups`) (Completed)**
   - [x] Created feature branch `feature/groups`.
   - [x] Database discovery: Identified `grupo` (`varchar(20)`) in `Carga_Academica.Carga_Academica_Sede_Curso_Horario_Detalle` (1,284 course-sections across 269 multi-section groups) linking shared classroom courses taught by the same teacher.
   - [x] Architectural definition: Instructure Canvas SIS `xlists.csv` standard and Canvas REST API `nonxlist_course_id` resolution.
-  - [ ] Implementation of `grupo` field in `HierarchyItem` and normalization services.
-  - [ ] Implementation of Canvas SIS Cross-listing exporter (`xlists.csv` generator and master course handler).
-  - [ ] UI visual enhancements: Cross-list badges and indicators in Tree Table, Comparison, and Canvas API tree.
+  - [x] Implementation of `grupoCodigo` field in `HierarchyItem` and normalization services (`hierarchy-service.ts`).
+  - [x] Implementation of Canvas SIS Cross-listing exporter (`xlists.csv` generation, `GRP_<grupo>` container courses in `courses.csv`, zip inclusion, and `RESUMEN.md` reporting).
+  - [x] UI visual enhancements: Cross-list badges and indicators in Tree Table, Table View, Comparison Workspace, and Canvas API Case Manager.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
 
@@ -419,3 +419,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - ASCII visual layout of navigation header, drawer, and 4 core workspaces.
   - Mermaid architecture flowchart representing the full data pipeline.
   - Instructure Canvas standard SIS CSV specification tables and identity normalization rules.
+- **Cross-listing & Multi-Course Group Badging (Purple OKLCH Design)**:
+  - Nested Tree & Detailed Table: Sections with `grupoCodigo` display an outline badge `Grupo: {codigo}` with purple background (`bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800`), font-mono styling, and pulsating indicator dot. Search bar automatically matches group codes.
+  - Comparison Workspace: Left panel displays `Xlist: {masterCourseId}` on exported sections and `{count} Xlist` in summary bar. Right panel parses `nonxlist_course_id` and displays `Cross-list (Origen: #{id})`.
+  - Canvas Case Manager: Sections originating from cross-listing dynamically render purple `Cross-list (Origen: #{id})` badge.

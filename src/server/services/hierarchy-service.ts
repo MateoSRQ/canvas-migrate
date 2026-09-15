@@ -44,6 +44,7 @@ export interface HierarchyItem {
   docenteEmail: string
   docentes: EnrolledTeacher[]
   estudiantes: EnrolledStudent[]
+  grupoCodigo: string | null
 }
 
 export interface HierarchyFilterOptions {
@@ -209,6 +210,17 @@ export function getCaseHierarchyData(
     }
   }
 
+  // Grupos by Horario ID (from Carga_Academica_Sede_Curso_Horario_Detalle)
+  const gruposByHorario = new Map<number, string>()
+  for (const d of detalles) {
+    if (d.grupo && typeof d.grupo === 'string' && d.grupo.trim().length > 0) {
+      const hid = d.carga_academica_sede_curso_horario_id
+      if (hid && !gruposByHorario.has(hid)) {
+        gruposByHorario.set(hid, d.grupo.trim())
+      }
+    }
+  }
+
   // Horarios by carga curso id
   const horariosByCargaCurso = new Map<number, any[]>()
   for (const h of horarios) {
@@ -251,7 +263,12 @@ export function getCaseHierarchyData(
     const sectionStudentsMap = new Map<string, EnrolledStudent>()
     const sectionTeachersMap = new Map<string, EnrolledTeacher>()
 
+    let grupoCodigo: string | null = null
     for (const h of hs) {
+      if (!grupoCodigo) {
+        const g = gruposByHorario.get(h.id)
+        if (g) grupoCodigo = g
+      }
       const hStudents = studentsByHorario.get(h.id) || []
       for (const s of hStudents) {
         const key = s.codigo || String(s.id)
@@ -336,6 +353,7 @@ export function getCaseHierarchyData(
       docenteEmail: primaryTeacher ? primaryTeacher.email : '',
       docentes: sectionTeachers,
       estudiantes: [], // Payload optimizado: estudiantes se cargan bajo demanda (lazy loading)
+      grupoCodigo,
     }
 
     items.push(baseItem)

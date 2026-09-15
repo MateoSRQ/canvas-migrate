@@ -44,6 +44,7 @@ interface TreeSectionNode {
   seccionId: number
   seccionNombre: string
   isNoHabilitado: boolean
+  grupoCodigo?: string | null
   docenteNombre: string
   docenteDni: string
   docenteEmail: string
@@ -278,6 +279,7 @@ export function HierarchyTreeTable({
         docentes: it.docentes || [],
         estudiantes: it.estudiantes || [],
         estudiantesCount: it.estudiantesCount,
+        grupoCodigo: it.grupoCodigo,
         item: it,
       })
     }
@@ -1455,12 +1457,22 @@ export function HierarchyTreeTable({
                                                                                                   />
                                                                                                 </TableCell>
                                                                                                 <TableCell className="py-2">
-                                                                                                  <div className="flex items-center gap-2">
+                                                                                                  <div className="flex items-center gap-2 flex-wrap">
                                                                                                     <span className="font-semibold text-foreground">
                                                                                                       {
                                                                                                         sec.seccionNombre
                                                                                                       }
                                                                                                     </span>
+                                                                                                    {sec.grupoCodigo && (
+                                                                                                      <Badge
+                                                                                                        variant="outline"
+                                                                                                        className="text-[10px] px-1.5 py-0 h-4.5 bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 font-mono font-medium flex items-center gap-1 shadow-xs"
+                                                                                                        title={`Grupo compartido: ${sec.grupoCodigo}. Comparte aula y docente con otras secciones (se exportará con cross-listing en xlists.csv).`}
+                                                                                                      >
+                                                                                                        <span className="size-1.5 rounded-full bg-purple-500 animate-pulse" />
+                                                                                                        Grupo: {sec.grupoCodigo}
+                                                                                                      </Badge>
+                                                                                                    )}
                                                                                                     {sec.isNoHabilitado && (
                                                                                                       <Badge
                                                                                                         variant="destructive"

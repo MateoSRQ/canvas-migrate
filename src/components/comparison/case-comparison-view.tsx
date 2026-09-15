@@ -600,6 +600,16 @@ export function CaseComparisonView({
                       <span className="text-[10px] text-muted-foreground font-mono">
                         (SEC: {sec.sectionId})
                       </span>
+                      {sec.xlistCourseId && (
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] px-1 py-0 h-4 bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 font-mono font-medium flex items-center gap-1 shadow-2xs"
+                          title={`Cross-listed hacia el curso maestro: ${sec.xlistCourseId}`}
+                        >
+                          <span className="size-1 rounded-full bg-purple-500 animate-pulse" />
+                          Xlist: {sec.xlistCourseId}
+                        </Badge>
+                      )}
                     </div>
                     <span className="text-[10px] text-muted-foreground font-mono">
                       {sec.students.length} estudiantes
@@ -922,6 +932,16 @@ export function CaseComparisonView({
                             (SIS: {sec.sisSectionId})
                           </span>
                         )}
+                        {sec.nonxlistCourseId && (
+                          <Badge
+                            variant="outline"
+                            className="text-[9px] px-1 py-0 h-4 bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 font-mono font-medium flex items-center gap-1 shadow-2xs"
+                            title={`Sección combinada en Canvas mediante cross-listing. Proviene del curso original ID #${sec.nonxlistCourseId}`}
+                          >
+                            <span className="size-1 rounded-full bg-purple-500 animate-pulse" />
+                            Cross-list (Origen: #{sec.nonxlistCourseId})
+                          </Badge>
+                        )}
                       </div>
                       <span className="text-[10px] text-muted-foreground font-mono">
                         {displayedStudentsCount} estudiantes
@@ -1118,6 +1138,17 @@ export function CaseComparisonView({
                 <span>
                   <strong>Secciones:</strong> {migrationData?.totalSections || 0}
                 </span>
+                {selectedMigration?.xlistsCount ? (
+                  <>
+                    <span>•</span>
+                    <Badge
+                      variant="outline"
+                      className="text-[9px] px-1.5 py-0 h-4 bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 font-mono"
+                    >
+                      {selectedMigration.xlistsCount} Xlist
+                    </Badge>
+                  </>
+                ) : null}
                 {selectedMigration?.sandboxIsolated && (
                   <Badge
                     variant="outline"

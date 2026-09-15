@@ -17,6 +17,7 @@ export interface MigrationSummary {
   teachersCount: number
   studentsCount: number
   accountsCount: number
+  xlistsCount?: number
 }
 
 export interface MigrationUserNode {
@@ -33,6 +34,7 @@ export interface MigrationSectionNode {
   name: string
   teachers: MigrationUserNode[]
   students: MigrationUserNode[]
+  xlistCourseId?: string | null
 }
 
 export interface MigrationCourseNode {
@@ -147,6 +149,7 @@ export async function listMigrationPackages(): Promise<MigrationSummary[]> {
       const teachersMatch = resumen.match(/\|\s*-\s*\*Docentes[^*]*\*\s*\|\s*(\d+)\s*\|/)
       const studentsMatch = resumen.match(/\|\s*-\s*\*Estudiantes\*\s*\|\s*(\d+)\s*\|/)
       const accountsMatch = resumen.match(/\|\s*\*\*Cuentas y Subcuentas\*\*\s*\|\s*(\d+)\s*\|/)
+      const xlistsMatch = resumen.match(/\|\s*\*\*Combinaciones[^*]*\*\*\s*\|\s*(\d+)\s*\|/)
 
       let mtime = Date.now()
       try {
@@ -169,6 +172,7 @@ export async function listMigrationPackages(): Promise<MigrationSummary[]> {
         teachersCount: teachersMatch ? parseInt(teachersMatch[1], 10) : 0,
         studentsCount: studentsMatch ? parseInt(studentsMatch[1], 10) : 0,
         accountsCount: accountsMatch ? parseInt(accountsMatch[1], 10) : 0,
+        xlistsCount: xlistsMatch ? parseInt(xlistsMatch[1], 10) : 0,
       })
     }
 
@@ -186,13 +190,14 @@ export async function getMigrationTree(folderName: string): Promise<MigrationTre
   const dir = path.resolve(process.cwd(), 'migraciones', folderName)
 
   try {
-    const [accountsCsv, coursesCsv, sectionsCsv, usersCsv, enrollmentsCsv] =
+    const [accountsCsv, coursesCsv, sectionsCsv, usersCsv, enrollmentsCsv, xlistsCsv] =
       await Promise.all([
         fs.readFile(path.join(dir, 'accounts.csv'), 'utf8').catch(() => ''),
         fs.readFile(path.join(dir, 'courses.csv'), 'utf8').catch(() => ''),
         fs.readFile(path.join(dir, 'sections.csv'), 'utf8').catch(() => ''),
         fs.readFile(path.join(dir, 'users.csv'), 'utf8').catch(() => ''),
         fs.readFile(path.join(dir, 'enrollments.csv'), 'utf8').catch(() => ''),
+        fs.readFile(path.join(dir, 'xlists.csv'), 'utf8').catch(() => ''),
       ])
 
     const accounts = parseCsv(accountsCsv)
@@ -200,6 +205,14 @@ export async function getMigrationTree(folderName: string): Promise<MigrationTre
     const sections = parseCsv(sectionsCsv)
     const users = parseCsv(usersCsv)
     const enrollments = parseCsv(enrollmentsCsv)
+    const xlists = parseCsv(xlistsCsv)
+
+    const xlistMap = new Map<string, string>()
+    for (const x of xlists) {
+      const sId = (x.section_id || '').trim()
+      const cId = (x.xlist_course_id || '').trim()
+      if (sId && cId) xlistMap.set(sId, cId)
+    }
 
     // 1. Mapeo de usuarios por user_id
     const userMap = new Map<string, { id: string; login: string; fullName: string; email: string }>()
@@ -267,6 +280,7 @@ export async function getMigrationTree(folderName: string): Promise<MigrationTre
         name: s.name?.trim() || `Sección ${sId}`,
         teachers: enrs.teachers,
         students: enrs.students,
+        xlistCourseId: xlistMap.get(sId) || null,
       })
     }
 

@@ -647,6 +647,17 @@ export function CanvasCaseManager() {
                             SIS: {sec.sisSectionId}
                           </Badge>
                         )}
+
+                        {sec.nonxlistCourseId && (
+                          <Badge
+                            variant="outline"
+                            className="font-mono text-[9px] bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 flex items-center gap-1"
+                            title={`Sección combinada en Canvas (Cross-listing). Proviene del curso original #${sec.nonxlistCourseId}`}
+                          >
+                            <span className="size-1 rounded-full bg-purple-500 animate-pulse" />
+                            Cross-list (Origen: #{sec.nonxlistCourseId})
+                          </Badge>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
