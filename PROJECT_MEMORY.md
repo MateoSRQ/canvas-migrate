@@ -138,10 +138,13 @@
   - [x] Wiped all SQLite tables in `dev.db` across SQL cases and Canvas snapshots (0 rows total) and executed `VACUUM;`.
   - [x] Purged all historical export directories in `migraciones/` preserving only `.gitkeep`.
   - [x] Ready for fresh clean extraction and migration pipeline execution from `BDACADEMICO6`.
-- [ ] **Feature: Canvas Groups & Group Categories (`feature/groups`)**
+- [ ] **Feature: Canvas Cross-listing & Grouping (`feature/groups`)**
   - [x] Created feature branch `feature/groups`.
-  - [x] Database discovery: Identified `grupo` (`varchar(20)`) in `Carga_Academica.Carga_Academica_Sede_Curso_Horario_Detalle` (1,945 active rows, 269 distinct groups) linking shared classroom courses taught by the same teacher.
-  - [ ] Canvas LMS groups / cross-listing architecture definition.
+  - [x] Database discovery: Identified `grupo` (`varchar(20)`) in `Carga_Academica.Carga_Academica_Sede_Curso_Horario_Detalle` (1,284 course-sections across 269 multi-section groups) linking shared classroom courses taught by the same teacher.
+  - [x] Architectural definition: Instructure Canvas SIS `xlists.csv` standard and Canvas REST API `nonxlist_course_id` resolution.
+  - [ ] Implementation of `grupo` field in `HierarchyItem` and normalization services.
+  - [ ] Implementation of Canvas SIS Cross-listing exporter (`xlists.csv` generator and master course handler).
+  - [ ] UI visual enhancements: Cross-list badges and indicators in Tree Table, Comparison, and Canvas API tree.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
 
