@@ -138,6 +138,9 @@
   - [x] Wiped all SQLite tables in `dev.db` across SQL cases and Canvas snapshots (0 rows total) and executed `VACUUM;`.
   - [x] Purged all historical export directories in `migraciones/` preserving only `.gitkeep`.
   - [x] Ready for fresh clean extraction and migration pipeline execution from `BDACADEMICO6`.
+- [ ] **Feature: Canvas Groups & Group Categories (`feature/groups`)**
+  - [x] Created feature branch `feature/groups`.
+  - [ ] Requirements definition and implementation of groups feature.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
 
