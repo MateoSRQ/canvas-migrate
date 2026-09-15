@@ -140,7 +140,8 @@
   - [x] Ready for fresh clean extraction and migration pipeline execution from `BDACADEMICO6`.
 - [ ] **Feature: Canvas Groups & Group Categories (`feature/groups`)**
   - [x] Created feature branch `feature/groups`.
-  - [ ] Requirements definition and implementation of groups feature.
+  - [x] Database discovery: Identified `grupo` (`varchar(20)`) in `Carga_Academica.Carga_Academica_Sede_Curso_Horario_Detalle` (1,945 active rows, 269 distinct groups) linking shared classroom courses taught by the same teacher.
+  - [ ] Canvas LMS groups / cross-listing architecture definition.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
 
@@ -291,6 +292,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - Root Account Association & SIS Provisioning: Top-level Sedes point to `parent_account_id: cleanRootAccountId` (or `""` to attach directly to Canvas institutional root). When `createRootAccount` is enabled, the exporter generates the custom root definition in the first row of `accounts.csv` with `parent_account_id: ""` and `status: "active"`. This enables Canvas LMS to create the subaccount during the same SIS import process and attach Sedes immediately without *"Parent account didn't exist"* warnings. Includes optional descriptive display name (`rootAccountName`).
   - Sandbox Isolation Testing Mode (Prefixing): Enabling `isolateAccountPrefix` with a root subaccount (e.g. `TEST-5`) prefixes all generated subaccounts (Campus, Modality, Faculty, Career, Plan) with `${rootAccountId}_` (e.g. `TEST-5_S-001`, `TEST-5_M-2264`, `TEST-5_P004084`) and links them coherently in `courses.csv`. This guarantees a 100% isolated tree in Canvas LMS, preventing Canvas from moving or reparenting the real institutional `SEDE LIMA` (`S-001`) or dragging unselected faculties.
   - Student Enrollment Foreign Key Resolution: In MSSQL `BDACADEMICO5`, the table `Matricula.Matricula_Alumno_Curso` links to `Matricula.Matricula_Alumno.id` via `matricula_alumno_id` (the student's term enrollment header record), NOT directly to `Academico.Alumno.id`. The service resolves `matricula_alumno_id` -> `Matricula.Matricula_Alumno` -> `Academico.Alumno.id` -> `General.Persona` (with fallback to `Matricula.Matricula_Alumno.codalumno`), preventing accidental primary key ID collisions with `Academico.Alumno.id` and guaranteeing 100% accurate student rosters in both UI views and `enrollments.csv`.
+  - Multi-Course Grouping & Shared Classrooms (`grupo`): In table `Carga_Academica.Carga_Academica_Sede_Curso_Horario_Detalle`, the column `grupo` (`varchar(20)`) unifies course-sections from different plans/careers that share the exact same teacher, weekly schedule, and physical/virtual classroom (e.g. `EEGG_CCM1D01`, `FI_MIC01`). Enables Canvas LMS cross-listing (sections grouped under a single master course) or Canvas Groups generation.
 
 ---
 
