@@ -890,6 +890,113 @@ ${xlistsList.length > 0 ? '9.' : '8.'} **\`canvas_migration.zip\`**: Paquete ZIP
 `
   await fs.writeFile(path.join(targetDir, 'RESUMEN.md'), resumenContent, 'utf8')
 
+  // 10.1 Generar CURSOS_COMPARTIDOS.md si existen combinaciones cross-listing
+  if (xlistsList.length > 0) {
+    const ccLines: string[] = [
+      '# RELACIÓN COMPLETA DE CURSOS COMPARTIDOS (CROSS-LISTING)',
+      '',
+      `> **Periodo Principal:** ${primaryPeriodName}  `,
+      `> **Estándar:** Canvas LMS SIS Cross-Listing (\`xlists.csv\`)  `,
+      `> **Total de Cursos Contenedores Padres:** ${xlistGroupsMap.size}  `,
+      `> **Total de Secciones Hijas Combinadas:** ${xlistsList.length}  `,
+      '',
+      '---',
+      '',
+      '## Índice de Asignaturas y Cursos Contenedores',
+      '',
+    ]
+
+    const sortedGroups = Array.from(xlistGroupsMap.entries()).sort((a, b) => {
+      const nameA = a[1][0]?.cursoNombre || a[0]
+      const nameB = b[1][0]?.cursoNombre || b[0]
+      return nameA.localeCompare(nameB)
+    })
+
+    sortedGroups.forEach(([g, gItems], idx) => {
+      const rawXlistId = `GRP_${g}`
+      const xlistId = coursePrefix ? `${coursePrefix}${rawXlistId}` : rawXlistId
+      const masterName = `[GRUPO ${g}] ${gItems[0]?.cursoNombre.trim() || g}`
+      const totalAlumnos = gItems.reduce((acc, it) => acc + (it.estudiantes?.length || 0), 0)
+      const anchor = xlistId.toLowerCase().replace(/[^a-z0-9_-]/g, '')
+      ccLines.push(
+        `${idx + 1}. [**${masterName}**](#${anchor}) — \`${xlistId}\` (${gItems.length} secciones, ${totalAlumnos} alumnos)`
+      )
+    })
+
+    ccLines.push('')
+    ccLines.push('---')
+    ccLines.push('')
+    ccLines.push('## Detalle de Cursos Padres e Hijos')
+    ccLines.push('')
+
+    sortedGroups.forEach(([g, gItems], idx) => {
+      const rawXlistId = `GRP_${g}`
+      const xlistId = coursePrefix ? `${coursePrefix}${rawXlistId}` : rawXlistId
+      const masterName = `[GRUPO ${g}] ${gItems[0]?.cursoNombre.trim() || g}`
+      const totalAlumnos = gItems.reduce((acc, it) => acc + (it.estudiantes?.length || 0), 0)
+      const anchor = xlistId.toLowerCase().replace(/[^a-z0-9_-]/g, '')
+      const firstItem = gItems[0]
+      const rawPlanAccId = `P${firstItem.planCodigo.replace(/^P0*/, '').padStart(6, '0')}`
+      const planAccId = accPrefix ? `${accPrefix}${rawPlanAccId}` : rawPlanAccId
+
+      // Docentes únicos
+      const teacherMap = new Map<string, string>()
+      for (const it of gItems) {
+        if (it.docentes && it.docentes.length > 0) {
+          for (const d of it.docentes) {
+            teacherMap.set(d.dni, `${d.fullName} (DNI: \`${d.dni}\`${d.email ? `, Email: \`${d.email}\`` : ''})`)
+          }
+        } else if (it.docenteDni) {
+          teacherMap.set(it.docenteDni, `${it.docenteNombre} (DNI: \`${it.docenteDni}\`${it.docenteEmail ? `, Email: \`${it.docenteEmail}\`` : ''})`)
+        }
+      }
+      const teachersList = Array.from(teacherMap.values())
+
+      const distinctCourses = new Set(gItems.map((it) => it.cursoCodigo))
+
+      ccLines.push(`### ${idx + 1}. <a id="${anchor}"></a>${masterName}`)
+      ccLines.push('')
+      ccLines.push('#### 📌 Información del Curso Padre (Contenedor Maestro en Canvas)')
+      ccLines.push(`- **SIS Course ID (Padre):** \`${xlistId}\``)
+      ccLines.push(`- **Nombre en Canvas:** ${masterName}`)
+      ccLines.push(`- **Código de Grupo:** \`${g}\``)
+      ccLines.push(`- **Subcuenta Canvas Asignada:** \`${planAccId}\` (${firstItem.carreraNombre} > ${firstItem.planNombre})`)
+      ccLines.push(`- **Total Secciones Hijas:** ${gItems.length} secciones (${distinctCourses.size} cursos curriculares diferentes)`)
+      ccLines.push(`- **Total Alumnos Acumulados:** ${totalAlumnos} matriculados`)
+      ccLines.push(
+        `- **Docente(s) del Grupo:** ${teachersList.length > 0 ? teachersList.join(', ') : '*(Sin docente asignado)*'}`
+      )
+      ccLines.push('')
+      ccLines.push('#### 👶 Secciones Hijas Combinadas (Cross-Listed)')
+      ccLines.push('')
+      ccLines.push('| Sección (Hijo) | SIS Section ID | Curso Curricular Original | Carrera / Plan (Ubicación) | Alumnos | Docente de Sección |')
+      ccLines.push('| :--- | :--- | :--- | :--- | :---: | :--- |')
+
+      for (const it of gItems) {
+        const rawCourseId = it.cursoCodigo.trim()
+        const courseId = coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId
+        const rawSecId = `${it.seccionId}-${rawCourseId}`
+        const secId = coursePrefix ? `${coursePrefix}${rawSecId}` : rawSecId
+        const teachStr =
+          it.docentes && it.docentes.length > 0
+            ? it.docentes.map((d) => `${d.fullName} (\`${d.dni}\`)`).join('<br>')
+            : it.docenteNombre
+            ? `${it.docenteNombre} (\`${it.docenteDni}\`)`
+            : '*(Sin asignar)*'
+        const alumnosCount = it.estudiantes?.length || 0
+        ccLines.push(
+          `| **${it.seccionNombre}** | \`${secId}\` | \`${courseId}\`<br>${it.cursoNombre} | ${it.carreraNombre} > ${it.planNombre} | **${alumnosCount}** | ${teachStr} |`
+        )
+      }
+
+      ccLines.push('')
+      ccLines.push('---')
+      ccLines.push('')
+    })
+
+    await fs.writeFile(path.join(targetDir, 'CURSOS_COMPARTIDOS.md'), ccLines.join('\n'), 'utf8')
+  }
+
   // 11. Generar paquete comprimido canvas_migration.zip
   let zipCreated = false
   try {
@@ -922,7 +1029,10 @@ ${xlistsList.length > 0 ? '9.' : '8.'} **\`canvas_migration.zip\`**: Paquete ZIP
     'hierarchy.txt',
     'RESUMEN.md',
   ]
-  if (xlistsList.length > 0) fileNames.push('xlists.csv')
+  if (xlistsList.length > 0) {
+    fileNames.push('xlists.csv')
+    fileNames.push('CURSOS_COMPARTIDOS.md')
+  }
   if (zipCreated) fileNames.push('canvas_migration.zip')
 
   const filesMeta = await Promise.all(

@@ -144,6 +144,7 @@
   - [x] Architectural definition: Instructure Canvas SIS `xlists.csv` standard and Canvas REST API `nonxlist_course_id` resolution.
   - [x] Implementation of `grupoCodigo` field in `HierarchyItem` and normalization services (`hierarchy-service.ts`).
   - [x] Implementation of Canvas SIS Cross-listing exporter (`xlists.csv` generation, `GRP_<grupo>` container courses in `courses.csv`, zip inclusion, and `RESUMEN.md` reporting).
+  - [x] Automatic generation of `CURSOS_COMPARTIDOS.md` detailing full parent-child relationships (master container courses, combined sections, original curricular courses, student counts, teachers, and career locations).
   - [x] UI visual enhancements: Cross-list badges and indicators in Tree Table, Table View, Comparison Workspace, and Canvas API Case Manager.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
