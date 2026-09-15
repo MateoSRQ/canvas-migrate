@@ -147,6 +147,7 @@
   - [x] UI visual enhancements: Cross-list badges and indicators in Tree Table, Table View, Comparison Workspace, and Canvas API Case Manager.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
+- [ ] Theory vs. Practice Session Modeling: Badges and indicators in Tree/Table and selective cross-listing support for decoupled theory and practice schedules.
 
 ---
 
@@ -297,6 +298,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - Student Enrollment Foreign Key Resolution: In MSSQL `BDACADEMICO5`, the table `Matricula.Matricula_Alumno_Curso` links to `Matricula.Matricula_Alumno.id` via `matricula_alumno_id` (the student's term enrollment header record), NOT directly to `Academico.Alumno.id`. The service resolves `matricula_alumno_id` -> `Matricula.Matricula_Alumno` -> `Academico.Alumno.id` -> `General.Persona` (with fallback to `Matricula.Matricula_Alumno.codalumno`), preventing accidental primary key ID collisions with `Academico.Alumno.id` and guaranteeing 100% accurate student rosters in both UI views and `enrollments.csv`.
   - Multi-Course Grouping & Shared Classrooms (`grupo`): In table `Carga_Academica.Carga_Academica_Sede_Curso_Horario_Detalle`, the column `grupo` (`varchar(20)`) unifies course-sections from different plans/careers that share the exact same teacher, weekly schedule, and physical/virtual classroom (e.g. `EEGG_CCM1D01`, `FI_MIC01`). Enables Canvas LMS cross-listing (sections grouped under a single master course) or Canvas Groups generation.
   - Theory vs. Practice Session Classification: In `Academico.Curso`, hours are defined by `num_horas_sem_teoria`, `num_horas_sem_practica`, and `num_horas_sem_laboratorio`. In academic scheduling, `Carga_Academica.Carga_Academica_Sede_Curso_Horario_Detalle.cat_tipo_hora_id` links directly to `General.Catalogo` (`2217` = "Teoría" with 2,870 sessions, `2218` = "Práctica" with 2,262 sessions), with `cat_tipo_id` indicating session mode (`2077` = "Normal", `2078` = "Compartido"). This schema allows distinguishing sections where theory and practice have different teachers (271 instances) or distinct cross-listing groups (37 instances).
+  - Cross-listing Cluster Patterns (`xlists.csv`): In `2026-2 PREGRADO`, 499 section combinations are grouped into 62 container courses across 24 core academic disciplines. Groups follow the standard university nomenclature `EEGG_<MATERIA><TURNO: D=Diurno/N=Nocturno><NUM>` (e.g., `EEGG_CCM1D01`). Groups cluster up to 18 sections and 7-8 different curricular plans simultaneously under shared general studies classrooms (Health cluster: Nursing + Stomatology + Physical Therapy; Engineering cluster: Civil + Industrial + Systems + Cybersecurity; Business/Humanities cluster: Administration + Communication + Law + Psychology + Accounting).
 
 ---
 
