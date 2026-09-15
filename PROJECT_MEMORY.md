@@ -421,5 +421,5 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - Instructure Canvas standard SIS CSV specification tables and identity normalization rules.
 - **Cross-listing & Multi-Course Group Badging (Purple OKLCH Design)**:
   - Nested Tree & Detailed Table: Sections with `grupoCodigo` display an outline badge `Grupo: {codigo}` with purple background (`bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800`), font-mono styling, and pulsating indicator dot. Search bar automatically matches group codes.
-  - Comparison Workspace: Left panel displays `Xlist: {masterCourseId}` on exported sections and `{count} Xlist` in summary bar. Right panel parses `nonxlist_course_id` and displays `Cross-list (Origen: #{id})`.
+  - Comparison Workspace: Left panel displays `Xlist: {masterCourseId}` on exported sections and `{count} Xlist` in summary bar. Right panel parses `nonxlist_course_id` and displays `Cross-list (Origen: #{id})`. Synchronized and local search engines automatically match `xlistCourseId` and section IDs when filtering migration trees.
   - Canvas Case Manager: Sections originating from cross-listing dynamically render purple `Cross-list (Origen: #{id})` badge.

@@ -425,6 +425,7 @@ export function CaseComparisonView({
             (s) =>
               s.name.toLowerCase().includes(q) ||
               s.sectionId.toLowerCase().includes(q) ||
+              Boolean(s.xlistCourseId && s.xlistCourseId.toLowerCase().includes(q)) ||
               s.teachers.some(
                 (t) =>
                   t.fullName.toLowerCase().includes(q) ||
@@ -508,7 +509,12 @@ export function CaseComparisonView({
       if (
         c.courseId.toLowerCase().includes(query) ||
         c.longName.toLowerCase().includes(query) ||
-        c.sections.some((s) => s.name.toLowerCase().includes(query))
+        c.sections.some(
+          (s) =>
+            s.name.toLowerCase().includes(query) ||
+            s.sectionId.toLowerCase().includes(query) ||
+            Boolean(s.xlistCourseId && s.xlistCourseId.toLowerCase().includes(query))
+        )
       ) {
         return true
       }
