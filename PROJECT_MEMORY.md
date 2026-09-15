@@ -156,7 +156,9 @@
   - [x] Implemented forecast engine service (`src/server/services/forecast-service.ts`) with bounded LRU caching (`LruCache`), dynamic cycle sorting, career aggregation, multi-level student deduplication, and course breakdown.
   - [x] Implemented TanStack Start server function RPC (`src/server/functions/forecast.ts` with `getForecastDataFn`).
   - [x] Full-width Previsión de Matrícula (Forecast) workspace (`src/components/forecast/forecast-view.tsx`):
-    - Case directory switcher, cascading period dropdown (with enrollments and student counts), and institutional campus (Sede) filter.
+    - Case directory switcher, institutional campus (Sede) filter, and **Multi-Period Selection Popover (`periodoIds: number[]`)**:
+      - Interactive popover dropdown with checkboxes, search filter, "Todos" / "Limpiar" batch buttons, and instant "Solo este" 1-click focus button.
+      - Displays active period badges with quick removal (×) and multi-period aggregation (e.g. combining regular + convalidation periods like `2026-2 PREGRADO` + `2026-2 CONVALIDANTES`).
     - Dynamic metric switcher: "Alumnos Únicos" vs "Matrículas-Curso (Cupos)".
     - Interactive matrix table (Pivot table) displaying career rows across cycle columns (Ciclo 1 to 12) with sticky headers and sticky career column.
     - Expandable nested course catalog under every career showing Course Code, Name, Curricular Plan, Credits, Open Sections count, and enrolled students count.
@@ -447,9 +449,13 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Full-Width Interactive Pivot Table**: Displays Careers on the Y-axis and Academic Cycles (Ciclo 1 to 12) on the X-axis, with sticky column for Career names and sticky header for cycle labels.
   - **Dual Metric Toggle**: Smooth switcher between "Alumnos Únicos" (distinct student headcount per career/cycle) and "Matrículas-Curso (Cupos)" (total enrollments / class seat occupancy).
   - **Nested Course Roster Expansion**: Clicking any career row reveals the granular curricular breakdown of open courses for that career: Ciclo, Course Code, Asignatura, Curricular Plan, Credits, Section count, and Enrolled student count.
-  - **Cascading Filter Bar**: Seamless switching between SQL Cases, Academic Periods (displaying student/enrollment counts per period), Institutional Campuses (Sedes), and instant client-side text filtering across career names, faculties, course names, and codes.
+  - **Cascading Filter Bar & Multi-Period Popover**: Seamless switching between SQL Cases, Institutional Campuses (Sedes), and **Multi-Period Selection**:
+    - Interactive popover trigger with period count badge and dynamic labels (`Todos los Periodos`, individual period name, or `N periodos seleccionados`).
+    - Internal period search filter, `Todos` and `Limpiar` actions, individual checkboxes, and quick `Solo este` button per period.
+    - Removable active period pill badges (`Badge`) with `×` button for instant scope adjustment.
+  - **Instant Search Filter**: Instant client-side text filtering across career names, faculties, course names, and codes.
   - **Mass Batch Controls**: "Expandir Todo" and "Plegar Todo" buttons for unfolding all careers simultaneously.
-  - **Export to CSV**: Client-side CSV generator compiling both the high-level Career x Cycle matrix and the exhaustive course breakdown.
+  - **Export to CSV**: Client-side CSV generator compiling both the high-level Career x Cycle matrix and the exhaustive course breakdown, with dynamic filename reflecting selected period(s).
 - **GitHub Interface & Visual Architecture Documentation (`README.md`)**:
   - ASCII visual layout of navigation header, drawer, and 4 core workspaces.
   - Mermaid architecture flowchart representing the full data pipeline.

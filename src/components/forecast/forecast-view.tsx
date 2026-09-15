@@ -13,11 +13,13 @@ import {
   Layers,
   Loader2,
   ChevronsUpDown,
-  Filter,
+  Check,
+  X,
 } from 'lucide-react'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
+import { Checkbox } from '#/components/ui/checkbox'
 import { getCasesFn } from '#/server/functions/cases'
 import { getForecastDataFn } from '#/server/functions/forecast'
 import type {
@@ -33,13 +35,33 @@ interface ForecastViewProps {
 export function ForecastView({ initialCaseId }: ForecastViewProps) {
   const [cases, setCases] = React.useState<any[]>([])
   const [selectedCaseId, setSelectedCaseId] = React.useState<string>(initialCaseId || '')
-  const [selectedPeriodoId, setSelectedPeriodoId] = React.useState<number | 'all'>('all')
+  const [selectedPeriodoIds, setSelectedPeriodoIds] = React.useState<number[]>([])
   const [selectedSedeId, setSelectedSedeId] = React.useState<number | 'all'>('all')
   const [metricMode, setMetricMode] = React.useState<'alumnos' | 'matriculas'>('alumnos')
   const [searchQuery, setSearchQuery] = React.useState<string>('')
+  const [periodFilterSearch, setPeriodFilterSearch] = React.useState<string>('')
+  const [isPeriodDropdownOpen, setIsPeriodDropdownOpen] = React.useState<boolean>(false)
   const [expandedCarreras, setExpandedCarreras] = React.useState<Set<number>>(new Set())
   const [loading, setLoading] = React.useState<boolean>(true)
   const [data, setData] = React.useState<ForecastResult | null>(null)
+
+  const periodDropdownRef = React.useRef<HTMLDivElement>(null)
+
+  // Click outside to close period dropdown
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        periodDropdownRef.current &&
+        !periodDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsPeriodDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
 
   // 1. Cargar lista de casos al montar
   React.useEffect(() => {
@@ -76,15 +98,15 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
         const res = await getForecastDataFn({
           data: {
             caseId: selectedCaseId,
-            periodoId: selectedPeriodoId === 'all' ? null : selectedPeriodoId,
+            periodoIds: selectedPeriodoIds.length === 0 ? null : selectedPeriodoIds,
             sedeId: selectedSedeId === 'all' ? null : selectedSedeId,
           },
         })
         if (active && res) {
           setData(res)
-          // Si es la primera carga y no se había seleccionado periodo, sincronizar con el periodo por defecto
-          if (selectedPeriodoId === 'all' && res.selectedPeriodoId && res.periodos.length > 0) {
-            setSelectedPeriodoId(res.selectedPeriodoId)
+          // Si no había periodos seleccionados, inicializar con los asignados por el backend
+          if (selectedPeriodoIds.length === 0 && res.selectedPeriodoIds.length > 0) {
+            setSelectedPeriodoIds(res.selectedPeriodoIds)
           }
         }
       } catch (err) {
@@ -98,7 +120,36 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
     return () => {
       active = false
     }
-  }, [selectedCaseId, selectedPeriodoId, selectedSedeId])
+  }, [selectedCaseId, selectedPeriodoIds, selectedSedeId])
+
+  // Alternar selección de un periodo
+  const togglePeriod = (periodId: number) => {
+    setSelectedPeriodoIds((prev) => {
+      if (prev.includes(periodId)) {
+        // Evitar deseleccionar todos si se desea mantener al menos uno, o permitir vacío para "todos"
+        const next = prev.filter((id) => id !== periodId)
+        return next
+      } else {
+        return [...prev, periodId]
+      }
+    })
+  }
+
+  // Seleccionar únicamente un periodo
+  const selectOnlyPeriod = (periodId: number) => {
+    setSelectedPeriodoIds([periodId])
+  }
+
+  // Seleccionar todos los periodos
+  const selectAllPeriods = () => {
+    if (!data) return
+    setSelectedPeriodoIds(data.periodos.map((p) => p.id))
+  }
+
+  // Limpiar / deseleccionar periodos
+  const clearPeriods = () => {
+    setSelectedPeriodoIds([])
+  }
 
   // Alternar expansión de carrera individual
   const toggleCarreraExpand = (carrId: number) => {
@@ -144,7 +195,6 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
         if (matchesCarrera) {
           return c
         } else if (matchingCourses.length > 0) {
-          // Devolver la carrera con solo los cursos que coinciden
           return {
             ...c,
             courses: matchingCourses,
@@ -155,14 +205,40 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
       .filter((c): c is ForecastCareerRow => c !== null)
   }, [data, searchQuery])
 
+  // Filtrar periodos para el selector modal
+  const filteredPeriodsForDropdown = React.useMemo(() => {
+    if (!data) return []
+    const q = periodFilterSearch.trim().toLowerCase()
+    if (!q) return data.periodos
+    return data.periodos.filter((p) => p.nombre.toLowerCase().includes(q))
+  }, [data, periodFilterSearch])
+
+  // Texto amigable para el selector de periodos
+  const periodSelectorLabel = React.useMemo(() => {
+    if (!data || data.periodos.length === 0) return 'Sin periodos'
+    if (selectedPeriodoIds.length === 0 || selectedPeriodoIds.length === data.periodos.length) {
+      return `Todos los Periodos (${data.periodos.length})`
+    }
+    if (selectedPeriodoIds.length === 1) {
+      const found = data.periodos.find((p) => p.id === selectedPeriodoIds[0])
+      return found ? found.nombre : `Periodo ${selectedPeriodoIds[0]}`
+    }
+    return `${selectedPeriodoIds.length} periodos seleccionados`
+  }, [data, selectedPeriodoIds])
+
   // Exportar matriz a archivo CSV
   const handleExportCsv = () => {
     if (!data) return
 
-    const periodLabel =
-      selectedPeriodoId === 'all'
-        ? 'TODOS_LOS_PERIODOS'
-        : data.periodos.find((p) => p.id === selectedPeriodoId)?.nombre.replace(/\s+/g, '_') || 'PERIODO'
+    let periodLabel = 'PERIODOS'
+    if (selectedPeriodoIds.length === 0 || selectedPeriodoIds.length === data.periodos.length) {
+      periodLabel = 'TODOS_LOS_PERIODOS'
+    } else if (selectedPeriodoIds.length === 1) {
+      const p = data.periodos.find((x) => x.id === selectedPeriodoIds[0])
+      periodLabel = p ? p.nombre.replace(/\s+/g, '_') : String(selectedPeriodoIds[0])
+    } else {
+      periodLabel = `${selectedPeriodoIds.length}_PERIODOS`
+    }
 
     const cyclesHeaders = data.ciclos.map((c) => `"${c.nombre}"`).join(',')
     const headerRow = `"CÓDIGO","CARRERA","FACULTAD",${cyclesHeaders},"TOTAL GENERAL"`
@@ -221,7 +297,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
               </h2>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Matriz consolidada de alumnos matriculados por carrera, ciclo y desglose curricular por asignatura.
+              Matriz consolidada de alumnos matriculados por carrera, ciclo y desglose curricular con soporte multi-periodo.
             </p>
           </div>
 
@@ -277,7 +353,10 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
             </label>
             <select
               value={selectedCaseId}
-              onChange={(e) => setSelectedCaseId(e.target.value)}
+              onChange={(e) => {
+                setSelectedCaseId(e.target.value)
+                setSelectedPeriodoIds([]) // Resetear para que el nuevo caso use su periodo por defecto
+              }}
               className="w-full text-xs h-9 rounded-md border border-input bg-background px-2.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             >
               {cases.map((c) => (
@@ -288,28 +367,154 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
             </select>
           </div>
 
-          {/* Academic Period Selector */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
-              <Calendar className="size-3 text-muted-foreground" />
-              <span>Periodo Académico</span>
+          {/* Academic Period Multi-Selector Popover */}
+          <div className="space-y-1 relative" ref={periodDropdownRef}>
+            <label className="text-[11px] font-medium text-muted-foreground flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Calendar className="size-3 text-muted-foreground" />
+                <span>Periodos Académicos</span>
+              </span>
+              {data && (
+                <span className="text-[10px] text-muted-foreground">
+                  {selectedPeriodoIds.length === 0 || selectedPeriodoIds.length === data.periodos.length
+                    ? 'Todos activos'
+                    : `${selectedPeriodoIds.length} de ${data.periodos.length}`}
+                </span>
+              )}
             </label>
-            <select
-              value={selectedPeriodoId}
-              onChange={(e) => {
-                const val = e.target.value
-                setSelectedPeriodoId(val === 'all' ? 'all' : Number(val))
-              }}
+
+            {/* Trigger Button */}
+            <button
+              type="button"
+              onClick={() => setIsPeriodDropdownOpen((prev) => !prev)}
               disabled={!data || loading}
-              className="w-full text-xs h-9 rounded-md border border-input bg-background px-2.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="w-full text-xs h-9 rounded-md border border-input bg-background px-2.5 text-foreground flex items-center justify-between gap-2 hover:bg-muted/40 transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
             >
-              <option value="all">Todos los Periodos ({data?.periodos.length || 0})</option>
-              {data?.periodos.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre} ({p.totalAlumnos} alumnos • {p.totalMatriculas} matrículas)
-                </option>
-              ))}
-            </select>
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <span className="truncate">{periodSelectorLabel}</span>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {selectedPeriodoIds.length > 1 && selectedPeriodoIds.length < (data?.periodos.length || 0) && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-semibold">
+                    {selectedPeriodoIds.length}
+                  </Badge>
+                )}
+                <ChevronsUpDown className="size-3.5 text-muted-foreground opacity-60" />
+              </div>
+            </button>
+
+            {/* Dropdown Popover Card */}
+            {isPeriodDropdownOpen && data && (
+              <div className="absolute z-50 left-0 top-full mt-1 w-full sm:w-[360px] rounded-xl border border-border bg-popover text-popover-foreground p-3 shadow-xl space-y-2.5">
+                {/* Search in periods */}
+                <div className="relative">
+                  <Search className="size-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Filtrar periodos..."
+                    value={periodFilterSearch}
+                    onChange={(e) => setPeriodFilterSearch(e.target.value)}
+                    className="h-8 text-xs pl-8 pr-7"
+                  />
+                  {periodFilterSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setPeriodFilterSearch('')}
+                      className="absolute right-2 top-2 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Batch controls */}
+                <div className="flex items-center justify-between text-xs border-b border-border/50 pb-2">
+                  <span className="text-[11px] text-muted-foreground font-medium">
+                    {filteredPeriodsForDropdown.length} periodos disponibles
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={selectAllPeriods}
+                      className="text-[11px] text-primary hover:underline px-1.5 py-0.5 font-medium rounded hover:bg-muted/50"
+                    >
+                      Todos
+                    </button>
+                    <span className="text-muted-foreground/40">•</span>
+                    <button
+                      type="button"
+                      onClick={clearPeriods}
+                      className="text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 font-medium rounded hover:bg-muted/50"
+                    >
+                      Limpiar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Checkbox list */}
+                <div className="max-h-60 overflow-y-auto space-y-0.5 pr-1 divide-y divide-border/30">
+                  {filteredPeriodsForDropdown.map((p) => {
+                    const isChecked = selectedPeriodoIds.includes(p.id)
+
+                    return (
+                      <div
+                        key={p.id}
+                        onClick={() => togglePeriod(p.id)}
+                        className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors group ${
+                          isChecked ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                          <Checkbox
+                            checked={isChecked}
+                            onCheckedChange={() => togglePeriod(p.id)}
+                            className="shrink-0"
+                          />
+                          <div className="flex flex-col min-w-0">
+                            <span
+                              className={`text-xs font-medium truncate ${
+                                isChecked ? 'text-primary font-semibold' : 'text-foreground'
+                              }`}
+                            >
+                              {p.nombre}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {p.totalAlumnos.toLocaleString()} alumnos • {p.totalMatriculas.toLocaleString()} matrículas
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Solo button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            selectOnlyPeriod(p.id)
+                          }}
+                          className="opacity-0 group-hover:opacity-100 text-[10px] font-semibold text-primary px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 transition-opacity whitespace-nowrap"
+                        >
+                          Solo este
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Footer action */}
+                <div className="pt-2 border-t border-border/50 flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground">
+                    {selectedPeriodoIds.length} seleccionados
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setIsPeriodDropdownOpen(false)}
+                    className="h-7 text-xs px-3"
+                  >
+                    Cerrar
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Campus / Sede Selector */}
@@ -355,14 +560,14 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                   onClick={() => setSearchQuery('')}
                   className="absolute right-2 top-2.5 text-xs text-muted-foreground hover:text-foreground"
                 >
-                  ×
+                  <X className="size-3.5" />
                 </button>
               )}
             </div>
           </div>
         </div>
 
-        {/* Global Key Metrics Summary Bar */}
+        {/* Global Key Metrics Summary Bar & Active Filter Badges */}
         {data && !loading && (
           <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/40 text-xs text-muted-foreground flex-wrap">
             <div className="flex items-center gap-3 flex-wrap">
@@ -388,6 +593,38 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                 Ciclos Activos:{' '}
                 <strong className="text-foreground">{data.ciclos.length}</strong>
               </span>
+
+              {/* Active period badges */}
+              {selectedPeriodoIds.length > 0 && selectedPeriodoIds.length < data.periodos.length && (
+                <>
+                  <span>•</span>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {selectedPeriodoIds.map((pid) => {
+                      const p = data.periodos.find((x) => x.id === pid)
+                      if (!p) return null
+                      return (
+                        <Badge
+                          key={pid}
+                          variant="outline"
+                          className="text-[10px] py-0 px-1.5 gap-1 bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800"
+                        >
+                          <span>{p.nombre}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              togglePeriod(pid)
+                            }}
+                            className="hover:text-destructive transition-colors ml-0.5"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="flex items-center gap-1">
@@ -419,17 +656,17 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
             <Loader2 className="size-8 text-primary animate-spin" />
             <p className="text-sm font-medium text-foreground">Calculando previsión de matrícula...</p>
             <p className="text-xs text-muted-foreground max-w-sm">
-              Procesando matriz de estudiantes matriculados, cruce de planes de estudio y ciclos académicos.
+              Procesando matriz consolidada para {selectedPeriodoIds.length === 0 ? 'todos los periodos' : `${selectedPeriodoIds.length} periodos seleccionados`}.
             </p>
           </div>
         ) : !data || filteredCarreras.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-2">
             <GraduationCap className="size-10 text-muted-foreground/50" />
-            <h3 className="text-sm font-semibold">No se encontraron matrículas para los filtros seleccionados</h3>
+            <h3 className="text-sm font-semibold">No se encontraron matrículas para los periodos o filtros seleccionados</h3>
             <p className="text-xs text-muted-foreground max-w-sm">
               {searchQuery
                 ? `No hay carreras o cursos que coincidan con "${searchQuery}".`
-                : 'Intenta seleccionar otro periodo académico o sede institucional.'}
+                : 'Intenta seleccionar otro conjunto de periodos o sede institucional.'}
             </p>
           </div>
         ) : (

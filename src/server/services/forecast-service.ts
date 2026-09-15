@@ -70,6 +70,7 @@ export interface ForecastResult {
   carreras: ForecastCareerRow[]
   totals: ForecastTotals
   selectedPeriodoId: number | null
+  selectedPeriodoIds: number[]
   selectedSedeId: number | null
 }
 
@@ -131,6 +132,7 @@ export function getForecastData(
   caseId: string,
   options?: {
     periodoId?: number | null
+    periodoIds?: number[] | null
     sedeId?: number | null
   }
 ): ForecastResult {
@@ -238,14 +240,22 @@ export function getForecastData(
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
 
   // Determine active period filter:
-  // If undefined (not passed), default to the period with the highest enrollments (first one)
-  let activePeriodoId: number | null = null
-  if (options?.periodoId === null) {
-    activePeriodoId = null // All periods
+  // Can be multiple periods, a single period, or all periods (null)
+  let activePeriodoIdsSet: Set<number> | null = null
+  if (Array.isArray(options?.periodoIds)) {
+    if (options!.periodoIds.length === 0) {
+      activePeriodoIdsSet = null // Empty array means all periods
+    } else {
+      activePeriodoIdsSet = new Set(options!.periodoIds)
+    }
+  } else if (options?.periodoIds === null) {
+    activePeriodoIdsSet = null // All periods
+  } else if (options?.periodoId === null) {
+    activePeriodoIdsSet = null // All periods
   } else if (typeof options?.periodoId === 'number') {
-    activePeriodoId = options.periodoId
+    activePeriodoIdsSet = new Set([options.periodoId])
   } else if (periodos.length > 0) {
-    activePeriodoId = periodos[0].id
+    activePeriodoIdsSet = new Set([periodos[0].id])
   }
 
   const activeSedeId = typeof options?.sedeId === 'number' ? options.sedeId : null
@@ -295,7 +305,7 @@ export function getForecastData(
     if (!c || !c.periodo_id) continue
 
     // Period filter
-    if (activePeriodoId !== null && c.periodo_id !== activePeriodoId) {
+    if (activePeriodoIdsSet !== null && !activePeriodoIdsSet.has(c.periodo_id)) {
       continue
     }
 
@@ -467,7 +477,13 @@ export function getForecastData(
     ciclos: sortedCycles,
     carreras,
     totals,
-    selectedPeriodoId: activePeriodoId,
+    selectedPeriodoId:
+      activePeriodoIdsSet && activePeriodoIdsSet.size === 1
+        ? Array.from(activePeriodoIdsSet)[0]
+        : null,
+    selectedPeriodoIds: activePeriodoIdsSet
+      ? Array.from(activePeriodoIdsSet)
+      : periodos.map((p) => p.id),
     selectedSedeId: activeSedeId,
   }
 }
