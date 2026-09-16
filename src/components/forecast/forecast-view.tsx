@@ -23,6 +23,7 @@ import {
   Laptop,
   Clock,
   FileSpreadsheet,
+  Printer,
 } from 'lucide-react'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
@@ -36,6 +37,8 @@ import type {
   ForecastCareerRow,
 } from '#/server/services/forecast-service'
 import { ForecastChartView } from '#/components/forecast/forecast-chart-view'
+import { ForecastPrintReport } from '#/components/forecast/forecast-print-report'
+import { ForecastPrintDialog } from '#/components/forecast/modals/forecast-print-dialog'
 
 interface ForecastViewProps {
   initialCaseId?: string
@@ -66,6 +69,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
   const [desercionRate, setDesercionRate] = React.useState<number>(0) // 0% a 100%
   const [retentionRate, setRetentionRate] = React.useState<number>(100) // 100% a 0%
   const [showEmptyCycles] = React.useState<boolean>(false)
+  const [isPrintDialogOpen, setIsPrintDialogOpen] = React.useState<boolean>(false)
 
   const periodDropdownRef = React.useRef<HTMLDivElement>(null)
 
@@ -797,7 +801,8 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
   }
 
   return (
-    <div className="w-full flex-1 flex flex-col space-y-5">
+    <>
+      <div className="print:hidden w-full flex-1 flex flex-col space-y-5">
       {/* Top Filter & Command Bar */}
       <div className="rounded-xl border border-border bg-card p-4 sm:p-5 shadow-xs space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -872,7 +877,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
               </button>
             </div>
 
-            {/* Export buttons: Native Excel (.xlsx) & Plain CSV */}
+            {/* Export buttons: Native Excel (.xlsx), Plain CSV & Executive PDF */}
             <Button
               variant="outline"
               size="sm"
@@ -893,6 +898,17 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
             >
               <Download className="size-3.5 text-muted-foreground" />
               <span>Exportar CSV</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsPrintDialogOpen(true)}
+              disabled={!data || loading}
+              className="gap-1.5 text-xs h-8 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/30 hover:bg-purple-100/60 dark:hover:bg-purple-900/40 shadow-2xs"
+            >
+              <Printer className="size-3.5 text-purple-600 dark:text-purple-400" />
+              <span>Presentación PDF</span>
             </Button>
           </div>
         </div>
@@ -1908,5 +1924,50 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
         )}
       </div>
     </div>
+
+    {/* Documento Ejecutivo de Impresión en PDF (Landscape A4) */}
+    {data && (
+      <div className="hidden print:block">
+        <ForecastPrintReport
+          data={data}
+          filteredCarreras={filteredCarreras}
+          visibleCycles={visibleCycles}
+          metricMode={metricMode}
+          enablePrediction={enablePrediction}
+          desercionRate={desercionRate}
+          retentionRate={retentionRate}
+          selectedPeriodoIds={selectedPeriodoIds}
+          selectedSedeId={selectedSedeId}
+          selectedModalidadId={selectedModalidadId}
+          selectedTurno={selectedTurno}
+          expandedCarreras={expandedCarreras}
+          getProjectedForCycle={getProjectedForCycle}
+          getProjectedBreakdownForCycle={getProjectedBreakdownForCycle}
+        />
+      </div>
+    )}
+
+    {/* Modal de Presentación y Exportación Ejecutiva en PDF */}
+    {data && (
+      <ForecastPrintDialog
+        open={isPrintDialogOpen}
+        onOpenChange={setIsPrintDialogOpen}
+        data={data}
+        filteredCarreras={filteredCarreras}
+        visibleCycles={visibleCycles}
+        metricMode={metricMode}
+        enablePrediction={enablePrediction}
+        desercionRate={desercionRate}
+        retentionRate={retentionRate}
+        selectedPeriodoIds={selectedPeriodoIds}
+        selectedSedeId={selectedSedeId}
+        selectedModalidadId={selectedModalidadId}
+        selectedTurno={selectedTurno}
+        expandedCarreras={expandedCarreras}
+        getProjectedForCycle={getProjectedForCycle}
+        getProjectedBreakdownForCycle={getProjectedBreakdownForCycle}
+      />
+    )}
+  </>
   )
 }

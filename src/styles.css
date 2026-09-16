@@ -129,3 +129,80 @@
     margin: 0;
   }
 }
+
+/* ==========================================================================
+   Executive PDF & Print Stylesheet (Landscape Orientation)
+   ========================================================================== */
+@media print {
+  @page {
+    size: landscape;
+    margin: 8mm 8mm 10mm 8mm;
+  }
+
+  /* Force background colors and exact color rendering */
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Hide application shell navigation, interactive controls, and modals */
+  header,
+  nav,
+  aside,
+  .no-print,
+  .print\:hidden,
+  [data-slot="dialog-overlay"],
+  [data-slot="dialog-content"] {
+    display: none !important;
+  }
+
+  /* Display printable report containers */
+  .print\:block {
+    display: block !important;
+  }
+
+  /* Reset body and application roots */
+  html,
+  body,
+  #app {
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 10px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Table page breaking rules */
+  table {
+    page-break-inside: auto !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  /* Container page break utilities */
+  .break-inside-avoid,
+  .print-break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}
+
