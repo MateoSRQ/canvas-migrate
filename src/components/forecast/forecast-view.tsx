@@ -24,7 +24,6 @@ import {
   Clock,
   FileSpreadsheet,
 } from 'lucide-react'
-import * as XLSX from 'xlsx'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
@@ -259,6 +258,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
       const repitentesCurrent = Math.max(0, remainCurrent - pasanSiguienteCurrent)
 
       // 3. Alumnos que avanzan desde el ciclo anterior (k - 1)
+      // Para Ciclo 1 (cy.orden === 1), ingresan los nuevos ingresantes en la misma proporción de los ingresantes actuales
       let promovidosFromPrev = 0
       if (cy.orden > 1) {
         const prevCycle = data.ciclos.find((c) => c.orden === cy.orden - 1)
@@ -272,6 +272,9 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
           const remainPrev = Math.max(0, actualPrev - dPrev)
           promovidosFromPrev = Math.round(remainPrev * (tRate / 100))
         }
+      } else {
+        // Ciclo 1: Cohorte de nuevos ingresantes proyectada en la misma proporción de los ingresantes actuales
+        promovidosFromPrev = actualCurrent
       }
 
       const projected = repitentesCurrent + promovidosFromPrev
@@ -557,8 +560,9 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
   }
 
   // Exportar matriz a archivo Excel nativo (.xlsx) con hojas separadas
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!data) return
+    const XLSX = await import('xlsx')
 
     let periodLabel = 'PERIODOS'
     if (selectedPeriodoIds.length === 0) {
@@ -1189,9 +1193,9 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                   </Badge>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Proyección: <span className="font-semibold text-foreground">Ciclo 2 ← Ciclo 1</span>,{' '}
-                  <span className="font-semibold text-foreground">Ciclo 3 ← Ciclo 2</span>,{' '}
-                  <span className="font-semibold text-foreground">Ciclo 4 ← Ciclo 3</span>... aplicando la tasa de traslado.
+                  Proyección: <span className="font-semibold text-foreground">Ciclo 1 ← Nuevos Ingresantes</span> (misma proporción actual + repitentes),{' '}
+                  <span className="font-semibold text-foreground">Ciclo 2 ← Ciclo 1</span>,{' '}
+                  <span className="font-semibold text-foreground">Ciclo 3 ← Ciclo 2</span>... aplicando traslados y repitencias.
                 </p>
               </div>
             </div>
@@ -1352,6 +1356,11 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                   <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800 gap-1 font-medium">
                     <ArrowRight className="size-2.5" />
                     Pasan a sgte. ciclo: {retentionRate}%
+                  </Badge>
+                  <span className="text-muted-foreground/40 font-mono text-[10px]">+</span>
+                  <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 gap-1 font-medium">
+                    <GraduationCap className="size-2.5" />
+                    Ciclo 1: Cohorte ingresantes
                   </Badge>
                 </div>
 
@@ -1682,7 +1691,11 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
 
                                   {/* Projected Value in Emerald Green */}
                                   <span
-                                    title={`Proyección ${cy.nombre}: ${projectedVal} (${breakdown.promovidos} promovidos de Ciclo anterior + ${breakdown.repitentes} repitentes de ${cy.nombre} | ${breakdown.desercion} desertores)`}
+                                    title={
+                                      cy.orden === 1
+                                        ? `Proyección ${cy.nombre}: ${projectedVal} (${breakdown.promovidos} nuevos ingresantes + ${breakdown.repitentes} repitentes de ${cy.nombre} | ${breakdown.desercion} desertores)`
+                                        : `Proyección ${cy.nombre}: ${projectedVal} (${breakdown.promovidos} promovidos de Ciclo anterior + ${breakdown.repitentes} repitentes de ${cy.nombre} | ${breakdown.desercion} desertores)`
+                                    }
                                     className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold transition-colors cursor-help ${
                                       projectedVal > 0
                                         ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-2xs'

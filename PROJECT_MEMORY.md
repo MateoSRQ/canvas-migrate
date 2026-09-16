@@ -214,6 +214,13 @@
     - Generación de libro de trabajo con múltiples hojas vía `xlsx` (`Matriz Previsión`, `Detalle Asignaturas`, `Parámetros y Filtros`).
     - Valores numéricos nativos para compatibilidad total con fórmulas Excel (`SUMA`, etc.).
     - Ajuste automático de anchos de columna (`!cols`) y cálculo de variación neta y porcentual.
+  - [x] **Optimización de Empaquetado Vite & Code-Splitting**:
+    - Extracción asíncrona de `xlsx` bajo demanda (`await import('xlsx')`), separándolo del bundle principal de rutas.
+    - Reducción del chunk `routes-*.js` de 739.8 kB a 458.9 kB, eliminando completamente la advertencia de Vite de chunks > 500 kB.
+  - [x] **Cohorte de Nuevos Ingresantes en Ciclo 1**:
+    - Inclusión de los nuevos ingresantes al Ciclo 1 en la misma proporción que los ingresantes actuales ($A_1$).
+    - Fórmula actualizada: $\text{Proyectado}(1) = M_1 + A_1$ (repitentes que quedan del ciclo actual + nueva cohorte de ingresantes).
+    - Actualización integral de tooltips informativos, insignias en la leyenda de flujo, proyecciones proporcionales de asignaturas y exportaciones CSV / Excel.
   - [ ] **Presentación y Exportación en PDF**: Vista ejecutiva de impresión apaisada (Landscape A4/Letter) con `@media print`, membrete institucional, badges de filtros activos, saltos de página limpios y gráficos vectoriales de TanStack Charts / descarga de archivo `.pdf`.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
@@ -386,7 +393,7 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
       - 3-Step Mathematical Prediction Engine:
         1. **Deserción ($d\% \in [0, 100]$)**: Alumnos que abandonan se restan primero antes de cualquier otro cálculo: $D_k = \text{round}(A_k \times \frac{d}{100})$, quedando $R_k = \max(0, A_k - D_k)$.
         2. **Traslado ($t\% \in [0, 100]$) vs Repitencia ($100 - t\%$)**: De los que quedan ($R_k$), $P_k = \text{round}(R_k \times \frac{t}{100})$ pasan al ciclo siguiente ($k + 1$), mientras que los que no pasan ($M_k = R_k - P_k$) repiten y continúan en el mismo ciclo ($k$).
-        3. **Proyectado por Ciclo**: $\text{Proyectado}(k) = M_k + (k > 1 ? P_{k-1} : 0)$. Para Ciclo 1, al no tener cohorte institucional previa, $\text{Proyectado}(1) = M_1$ (exclusivamente sus repitentes).
+        3. **Proyectado por Ciclo**: $\text{Proyectado}(k) = M_k + (k > 1 ? P_{k-1} : A_1)$. Para Ciclo 1 ($k = 1$), se proyecta la llegada de la nueva cohorte de ingresantes en la misma proporción que los ingresantes actuales ($A_1$), sumándose a los repitentes del ciclo ($M_1$), resultando en $\text{Proyectado}(1) = M_1 + A_1$. Para los ciclos superiores ($k > 1$), se reciben los promovidos del ciclo anterior ($P_{k-1}$) más los repitentes propios ($M_k$).
       - Catalog Cycle Provisioning: `forecast-service.ts` includes all 12 institutional catalog cycles in `sortedCycles` (CICLO 1 to 12), ensuring target cycles (e.g. Ciclo 3 receiving from Ciclo 2) automatically have column definitions and reactive aggregation.
       - Initial Period Filter Default: In `forecast-service.ts`, when no `periodoIds` is passed (initial page load), the filter defaults to selecting strictly a single period (`[periodos[0].id]`), avoiding initial multi-period clutter.
       - Modalidad and Turno Resolution & Dynamic Scope Filtering:
