@@ -23,6 +23,7 @@
   - [4. Side-by-Side Comparison Workspace (`/#comparison`)](#4-side-by-side-comparison-workspace-comparison)
   - [5. Canvas LMS REST API Inspector (`/#canvas`)](#5-canvas-lms-rest-api-inspector-canvas)
 - [Canvas LMS SIS Specifications & Normalization](#canvas-lms-sis-specifications--normalization)
+- [Database Architecture & Data Dictionary](#database-architecture--data-dictionary)
 - [Technology Stack](#technology-stack)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
@@ -226,6 +227,17 @@ The system strictly adheres to the official **Instructure Canvas SIS Import CSV 
   - `login_id`: Institutional student email address.
 - **Class Sections**:
   - `section_id`: Compound key `<seccion_id>-<course_id>` (e.g., `7115-CUR006380`) to guarantee uniqueness across multiple groups and study terms.
+
+---
+
+## Database Architecture & Data Dictionary
+
+Comprehensive technical documentation, relational schemas, and data lineage are available in dedicated guides:
+
+- **[Diagramas de Arquitectura y Modelo Entidad-Relación (ER)](docs/DIAGRAMAS_ER_BD_ACADEMICO.md)**: Conceptual, logical, and detailed Mermaid diagrams covering Curricular Design, Academic Load, Matriculation, Cross-listing, and Identity Authentication.
+- **[Diccionario de Datos Maestro](docs/DICCIONARIO_DATOS_BD_ACADEMICO.md)**: Exhaustive data dictionary covering all 371 tables in `BDACADEMICO6` and 14 tables in `BDAUTENTICACION5` with every column, data types, nullability, PKs, FKs, and business descriptions.
+- **[Canvas SIS Specifications & Reference](docs/CANVAS_REFERENCE.md)**: Instructure Canvas CSV formatting, teacher DNI normalization, and API synchronization details.
+- **[Auditoría Global de Aulas Compartidas y Cross-listing](docs/CURSOS_GRUPOS_COMPLETOS.md)**: Audit of 269 multi-section clusters and 1,246 course-sections across all modalities and careers.
 
 ---
 
