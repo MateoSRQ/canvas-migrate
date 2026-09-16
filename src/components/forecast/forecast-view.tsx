@@ -3,7 +3,6 @@ import {
   TrendingUp,
   TrendingDown,
   RefreshCw,
-  UserMinus,
   Users,
   BookOpen,
   ChevronRight,
@@ -16,12 +15,11 @@ import {
   Layers,
   Loader2,
   ChevronsUpDown,
-  Check,
   X,
   Sparkles,
   ArrowRight,
-  Sliders,
-  RotateCcw,
+  Table as TableIcon,
+  BarChart3,
 } from 'lucide-react'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
@@ -33,8 +31,8 @@ import { getForecastDataFn } from '#/server/functions/forecast'
 import type {
   ForecastResult,
   ForecastCareerRow,
-  ForecastCourseItem,
 } from '#/server/services/forecast-service'
+import { ForecastChartView } from '#/components/forecast/forecast-chart-view'
 
 interface ForecastViewProps {
   initialCaseId?: string
@@ -47,6 +45,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
   const [isPeriodInitialized, setIsPeriodInitialized] = React.useState<boolean>(false)
   const [selectedSedeId, setSelectedSedeId] = React.useState<number | 'all'>('all')
   const [metricMode, setMetricMode] = React.useState<'alumnos' | 'matriculas'>('alumnos')
+  const [activeTab, setActiveTab] = React.useState<'table' | 'chart'>('table')
   const [searchQuery, setSearchQuery] = React.useState<string>('')
   const [periodFilterSearch, setPeriodFilterSearch] = React.useState<string>('')
   const [isPeriodDropdownOpen, setIsPeriodDropdownOpen] = React.useState<boolean>(false)
@@ -61,7 +60,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
   const [enablePrediction, setEnablePrediction] = React.useState<boolean>(true)
   const [desercionRate, setDesercionRate] = React.useState<number>(0) // 0% a 100%
   const [retentionRate, setRetentionRate] = React.useState<number>(100) // 100% a 0%
-  const [showEmptyCycles, setShowEmptyCycles] = React.useState<boolean>(false)
+  const [showEmptyCycles] = React.useState<boolean>(false)
 
   const periodDropdownRef = React.useRef<HTMLDivElement>(null)
 
@@ -532,8 +531,36 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
             </p>
           </div>
 
-          {/* Action buttons: Metric switcher & CSV export */}
+          {/* Action buttons: Tab switcher, Metric switcher & CSV export */}
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Tab View Switcher: Tabla Matricial vs Gráfico de Barras */}
+            <div className="flex items-center rounded-lg border border-border bg-muted/60 p-0.5 text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => setActiveTab('table')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-all ${
+                  activeTab === 'table'
+                    ? 'bg-background text-foreground shadow-xs font-semibold'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <TableIcon className="size-3.5" />
+                <span>Tabla Matricial</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('chart')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-all ${
+                  activeTab === 'chart'
+                    ? 'bg-background text-foreground shadow-xs font-semibold text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <BarChart3 className="size-3.5" />
+                <span>Gráfico de Barras</span>
+              </button>
+            </div>
+
             <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5 text-xs font-medium">
               <button
                 type="button"
@@ -1071,29 +1098,31 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
               )}
             </div>
 
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={expandAllCarreras}
-                className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-              >
-                Expandir Todo
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={collapseAllCarreras}
-                className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-              >
-                Plegar Todo
-              </Button>
-            </div>
+            {activeTab === 'table' && (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={expandAllCarreras}
+                  className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Expandir Todo
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={collapseAllCarreras}
+                  className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Plegar Todo
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Main Table Content Panel */}
+      {/* Main Content Panel: Table View or Bar Chart View */}
       <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden flex flex-col min-h-[420px]">
         {loading ? (
           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-3">
@@ -1113,6 +1142,17 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                 : 'Intenta seleccionar otro conjunto de periodos o sede institucional.'}
             </p>
           </div>
+        ) : activeTab === 'chart' ? (
+          <ForecastChartView
+            data={data}
+            filteredCarreras={filteredCarreras}
+            visibleCycles={visibleCycles}
+            metricMode={metricMode}
+            enablePrediction={enablePrediction}
+            desercionRate={desercionRate}
+            retentionRate={retentionRate}
+            getProjectedForCycle={getProjectedForCycle}
+          />
         ) : (
           <div className="w-full overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">

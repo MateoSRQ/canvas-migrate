@@ -178,6 +178,16 @@
     - Instant client-side text filtering across career names, faculties, course names, and codes.
     - Summary footer row calculating total students and total enrollments per cycle and overall total.
     - CSV export engine (`handleExportCsv`) generating downloadable spreadsheet with dual Actual/Projected columns, deserción rate, and retention rate metadata.
+  - [x] **TanStack Charts Integration: Visual Bar Chart Tab (`ForecastChartView`) (Completed)**:
+    - Installed official `@tanstack/charts` and `@tanstack/react-charts` (v0.18.0).
+    - Modular chart component (`src/components/forecast/forecast-chart-view.tsx`):
+      - **Gráfico por Ciclo Académico (`barY`)**: Grouped vertical bars with `layout: group({ padding: 0.18 })` and rounded tops (`radius: { end: 4 }`) comparing Actual (Slate `#64748b`) vs Proyectado (Emerald `#10b981`).
+      - **Gráfico por Carrera / Programa (`barX`)**: Grouped horizontal bars for high legibility of long career names, with adaptive responsive container height (`Math.max(340, displayedCareers.length * 38 + 90)`), volume sorting, and display limit selector (Top 10, Top 15, Top 20, Todas).
+      - **Interactive Sub-view Switcher**: "Por Ciclo", "Por Carrera", and "Ambos" (vista dual).
+      - **Summary KPI Bar**: Displays Total Actual, Total Proyectado, Variación Neta ($+/-$), $\%$, and active simulation parameter badges (Deserción and Traslado).
+      - **Granular Cycle Metrics Table**: Sub-chart data table detailing numerical Actual, Proyectado, Net Difference, and Percentage Change per academic cycle.
+    - **Tab Switcher Toolbar**: Segmented control in `ForecastView` header toggling between **"Tabla Matricial"** (`TableIcon`) and **"Gráfico de Barras"** (`BarChart3`).
+    - Full reactivity: Syncs in real time with Database Cases, Multi-Period Popover, Campus filter, Metric Switcher ("Alumnos Únicos" vs "Matrículas-Curso"), Search query, and both Deserción/Traslado sliders.
   - [x] Navigation integration: Added top header tab and left drawer menu item (`Previsión de Matrícula (Forecast)`) with `#forecast` hash routing in `app-layout.tsx` and `routes/index.tsx`.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
@@ -205,6 +215,8 @@ The application is a full-stack React application built on **TanStack Start**, l
 
 ### Technology Stack
 - **Framework**: TanStack Start (`@tanstack/react-start`, `@tanstack/react-router`)
+- **Data Table**: TanStack Table (`@tanstack/react-table` v8)
+- **Charts / Visualizations**: TanStack Charts (`@tanstack/charts`, `@tanstack/react-charts` v0.18.0)
 - **Runtime / Bundler**: Vite 8 with `@vitejs/plugin-react`
 - **Language**: TypeScript 5+ (Strict mode, verbatim module syntax, bundler resolution)
 - **Database**: SQLite (`dev.db`)
@@ -240,6 +252,7 @@ canvas-migrate/
     │   │   ├── sql-server.ts # MSSQL connection pool manager & table extractor
     │   │   ├── importer.ts   # Case extraction, batch ingestion & normalization engine
     │   │   ├── hierarchy-service.ts # Academic tree assembler, teacher resolver, LRU & lazy student map
+    │   │   ├── forecast-service.ts  # Enrollment matrix & cohort advancement prediction engine
     │   │   ├── canvas-exporter.ts # Canvas SIS CSV exporter, hierarchy writer & zip packager
     │   │   ├── canvas-importer.ts # Canvas API client, live accounts & course ingestion
     │   │   ├── canvas-audit-service.ts # Audit service against Canvas REST API
@@ -248,6 +261,7 @@ canvas-migrate/
     │   └── functions/
     │       ├── cases.ts      # TanStack Start server functions for cases & comparison (RPC)
     │       ├── hierarchy.ts  # TanStack Start server functions for hierarchy & students (RPC)
+    │       ├── forecast.ts   # TanStack Start server functions for enrollment forecasting (RPC)
     │       ├── canvas.ts     # TanStack Start server functions for Canvas API (RPC)
     │       └── migrations.ts # TanStack Start server functions for migration packages (RPC)
     ├── components/
@@ -257,6 +271,9 @@ canvas-migrate/
     │   │   └── canvas-case-manager.tsx # Live Canvas LMS account and course visualizer
     │   ├── comparison/
     │   │   └── case-comparison-view.tsx # Side-by-side comparison screen (Migration vs Canvas) with filters
+    │   ├── forecast/
+    │   │   ├── forecast-view.tsx       # Previsión de matrícula workspace with Table & Chart tabs
+    │   │   └── forecast-chart-view.tsx # Visual grouped bar charts (TanStack Charts barY & barX)
     │   ├── hierarchy/
     │   │   ├── modals/
     │   │   │   ├── student-inspector-dialog.tsx # Enrolled student inspection modal with Loader2
@@ -496,6 +513,22 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Instant Search Filter**: Instant client-side text filtering across career names, faculties, course names, and codes.
   - **Mass Batch Controls**: "Expandir Todo" and "Plegar Todo" buttons for unfolding all careers simultaneously.
   - **Export to CSV**: Client-side CSV generator compiling both the high-level Career x Cycle matrix and the exhaustive course breakdown, with dynamic filename reflecting selected period(s), dual `Actual` and `Proyectado` columns, and complete simulation metadata (Tasa Deserción, Tasa Traslado, Tasa Repitencia).
+  - **Dual-View Workspace Tabs: "Tabla Matricial" vs "Gráfico de Barras" (`activeTab: 'table' | 'chart'`)**:
+    - Clean segmented pill switcher in the top right actions toolbar allowing seamless switching between tabular and graphical analysis without losing active simulation or filter states.
+    - **TanStack Charts Bar Visualization (`ForecastChartView`)**:
+      - **Grouped Vertical Bars by Cycle (`barY`)**:
+        - Displays side-by-side grouped bars for each academic cycle (Ciclo 1 to 12).
+        - Color tokens: Slate gray (`#64748b`) for "Actual" and Emerald green (`#10b981`) for "Proyectado".
+        - Bar geometry: Rounded bar tops (`radius: { end: 4 }`) and explicit group spacing (`layout: group({ padding: 0.18 })`).
+        - Interactive tooltip showing cycle name, series type, and exact metric count.
+        - Numerical data table below chart detailing Actual, Proyectado, Net Difference ($+/-$), and percentage change ($\%$) per cycle.
+      - **Grouped Horizontal Bars by Career (`barX`)**:
+        - High-readability horizontal layout for long academic program names.
+        - Dynamic adaptive height (`Math.max(340, displayedCareers.length * 38 + 90)`) preventing vertical label collision.
+        - Career display controls: limit selector ("Top 10", "Top 15", "Top 20", "Todas") and sorting selector ("Mayor Volumen", "Alfabético").
+      - **Sub-View Switcher**: Quick toggle between "Por Ciclo", "Por Carrera", and "Ambos" (dual stacked view).
+      - **Summary KPI Metric Cards**: Visual counter cards for Total Actual, Total Proyectado, Net Variation ($+/-$ and $\%$), and active simulation parameters.
+      - **Strict Component Policy**: Pure SVG rendering via TanStack Charts with zero unrequested third-party dashboard widgets.
 - **GitHub Interface & Visual Architecture Documentation (`README.md`)**:
   - ASCII visual layout of navigation header, drawer, and 4 core workspaces.
   - Mermaid architecture flowchart representing the full data pipeline.

@@ -139,7 +139,6 @@ export function getForecastData(
   const raw = loadRawForecastData(caseId)
 
   // Fast maps
-  const catalogoMap = new Map<number, any>(raw.catalogos.map((c) => [c.id, c]))
   const carreraMap = new Map<number, any>(raw.carreras.map((c) => [c.id, c]))
   const facultadMap = new Map<number, any>(raw.facultades.map((f) => [f.id, f]))
   const planMap = new Map<number, any>(raw.planes.map((p) => [p.id, p]))
