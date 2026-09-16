@@ -33,6 +33,7 @@ export interface ForecastPrintReportProps {
   expandedCarreras?: Set<number>
   includeCourses?: boolean
   columnLayout?: 'compact' | 'expanded'
+  paperSize?: 'A3' | 'A4'
   getProjectedForCycle: (
     carr: ForecastCareerRow,
     cy: { nombre: string; orden: number }
@@ -58,6 +59,7 @@ export function ForecastPrintReport({
   expandedCarreras = new Set(),
   includeCourses = false,
   columnLayout = 'compact',
+  paperSize = 'A3',
   getProjectedForCycle,
 }: ForecastPrintReportProps) {
   // Timestamp de emisión
@@ -141,7 +143,11 @@ export function ForecastPrintReport({
   }, [visibleCycles, filteredCarreras, metricMode, enablePrediction, getProjectedForCycle])
 
   return (
-    <div className="forecast-print-document font-sans text-slate-900 bg-white p-4 max-w-[297mm] mx-auto">
+    <div
+      className={`forecast-print-document font-sans text-slate-900 bg-white p-4 sm:p-6 mx-auto w-full ${
+        paperSize === 'A3' ? 'max-w-[420mm]' : 'max-w-[297mm]'
+      }`}
+    >
       {/* -------------------------------------------------------------
           1. Encabezado Oficial Institucional
           ------------------------------------------------------------- */}
@@ -172,6 +178,12 @@ export function ForecastPrintReport({
               <strong className="text-slate-900">
                 {metricMode === 'alumnos' ? 'Alumnos Únicos' : 'Matrículas-Curso (Cupos)'}
               </strong>
+            </div>
+            <div>
+              <span className="font-semibold text-slate-800">Formato:</span>{' '}
+              <span className="font-medium text-purple-700 bg-purple-50 px-1 py-0.5 rounded text-[10px] border border-purple-200">
+                Hoja {paperSize} Horizontal ({paperSize === 'A3' ? '420 × 297 mm' : '297 × 210 mm'})
+              </span>
             </div>
           </div>
         </div>
@@ -260,12 +272,14 @@ export function ForecastPrintReport({
           4. Matriz de Previsión por Carrera y Ciclo Curricular
           ------------------------------------------------------------- */}
       <div className="border border-slate-200 rounded overflow-hidden mb-4">
-        <table className="w-full text-left border-collapse text-[10px]">
+        <table className={`w-full text-left border-collapse ${paperSize === 'A3' ? 'text-[11px]' : 'text-[10px]'}`}>
           <thead>
-            <tr className="bg-slate-100 text-slate-800 border-b border-slate-200 font-semibold uppercase tracking-wider text-[9px]">
-              <th className="py-2 px-2.5 w-16 border-r border-slate-200">Cód.</th>
-              <th className="py-2 px-2.5 min-w-[140px] border-r border-slate-200">Carrera Profesional</th>
-              <th className="py-2 px-2 w-28 border-r border-slate-200">Facultad</th>
+            <tr className={`bg-slate-100 text-slate-800 border-b border-slate-200 font-semibold uppercase tracking-wider ${paperSize === 'A3' ? 'text-[10px]' : 'text-[9px]'}`}>
+              <th className={`w-16 border-r border-slate-200 ${paperSize === 'A3' ? 'py-2.5 px-3' : 'py-2 px-2.5'}`}>Cód.</th>
+              <th className={`border-r border-slate-200 ${paperSize === 'A3' ? 'py-2.5 px-3 min-w-[200px]' : 'py-2 px-2.5 min-w-[140px]'}`}>
+                Carrera Profesional
+              </th>
+              <th className={`border-r border-slate-200 ${paperSize === 'A3' ? 'py-2.5 px-2.5 w-36' : 'py-2 px-2 w-28'}`}>Facultad</th>
 
               {columnLayout === 'compact' ? (
                 // Modo Compacto: 1 columna por ciclo (Actual → Proyectado)

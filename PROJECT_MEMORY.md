@@ -221,10 +221,11 @@
     - Inclusión de los nuevos ingresantes al Ciclo 1 en la misma proporción que los ingresantes actuales ($A_1$).
     - Fórmula actualizada: $\text{Proyectado}(1) = M_1 + A_1$ (repitentes que quedan del ciclo actual + nueva cohorte de ingresantes).
     - Actualización integral de tooltips informativos, insignias en la leyenda de flujo, proyecciones proporcionales de asignaturas y exportaciones CSV / Excel.
-  - [x] **Presentación y Exportación en PDF**:
-    - Vista ejecutiva de impresión apaisada (Landscape A4/Letter) con `@media print` en `src/styles.css`, orientación horizontal automática (`@page { size: landscape; margin: 8mm 8mm 10mm 8mm; }`), forzado de colores vectoriales exactos (`-webkit-print-color-adjust: exact`) y corte de página limpio (`page-break-inside: avoid`).
-    - Componente oficial de reporte impreso `ForecastPrintReport` (`src/components/forecast/forecast-print-report.tsx`): Membrete oficial institucional, fecha de emisión, ficha técnica de filtros (Periodo, Sede, Modalidad, Turno, Parámetros de simulación), 4 tarjetas KPI de resumen ejecutivo, tabla matricial apaisada en formato compacto (`Actual → Proyectado`) o expandido, subtabla de asignaturas para carreras con cursos y totales generales al pie.
-    - Modal de previsualización y configuración `ForecastPrintDialog` (`src/components/forecast/modals/forecast-print-dialog.tsx`): Previsualización en hoja apaisada realista, selector de formato de columnas (Compacto / Expandido), selector de inclusión de cursos, y disparador limpio `window.print()` ("Imprimir / Guardar en PDF").
+  - [x] **Presentación y Exportación en PDF (Hoja A3 Horizontal / Landscape)**:
+    - Vista ejecutiva de impresión apaisada en **formato A3 (420 × 297 mm)** con `@media print` en `src/styles.css` (`@page { size: A3 landscape; margin: 8mm 8mm 10mm 8mm; }`), asegurando 400 mm de ancho útil para que todas las carreras, 12 ciclos y desgloses de cursos alcancen con máxima holgura y sin cortes.
+    - Forzado de colores vectoriales exactos (`-webkit-print-color-adjust: exact`) y corte de página limpio (`page-break-inside: avoid`).
+    - Componente oficial de reporte impreso `ForecastPrintReport` (`src/components/forecast/forecast-print-report.tsx`): Soporta `paperSize="A3" | "A4"` (por defecto A3), membrete oficial institucional UTP / Vicerrectorado Académico, fecha de emisión, ficha técnica de filtros (Periodo, Sede, Modalidad, Turno, Parámetros de simulación), 4 tarjetas KPI de resumen ejecutivo, tabla matricial apaisada en formato compacto (`Actual → Proyectado`) o expandido (2 columnas por ciclo), subtabla de asignaturas para carreras con cursos y totales generales al pie.
+    - Modal de previsualización y configuración `ForecastPrintDialog` (`src/components/forecast/modals/forecast-print-dialog.tsx`): Previsualización en hoja A3 horizontal realista (`max-w-[1360px]`), selector de tamaño de hoja (A3 Horizontal 420 × 297 mm por defecto vs A4), selector de formato de columnas (Compacto / Expandido), selector de inclusión de cursos, e inyección dinámica de reglas `@page` para imprimir directamente en el tamaño de hoja elegido vía `window.print()` ("Imprimir / Guardar en PDF").
     - Botón de acción rápida en la barra de exportación de `ForecastView` junto a Excel y CSV con diseño púrpura distintivo (`Printer className="text-purple-600"`).
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
@@ -591,26 +592,28 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Presentación Ejecutiva y Exportación a PDF (`ForecastPrintReport` & `ForecastPrintDialog`)**:
     - **Botón de Acción Rápida en Barra de Exportación**:
       - Botón púrpura (`Printer className="text-purple-600"`, `bg-purple-50/50 text-purple-700 border-purple-300`) ubicado junto a "Exportar Excel" y "Exportar CSV".
-    - **Estilos Apaisados (@media print)**:
-      - `@page { size: landscape; margin: 8mm 8mm 10mm 8mm; }` configurado en `src/styles.css`.
+    - **Estilos Apaisados en Formato A3 (@media print)**:
+      - `@page { size: A3 landscape; margin: 8mm 8mm 10mm 8mm; }` configurado en `src/styles.css`, garantizando 400 mm de ancho útil para impresión nativa y exportación a PDF.
       - Ocultamiento de la interfaz de pantalla (`print:hidden`) que esconde selectores, inputs, sliders, cajón lateral y barra de navegación.
       - Despliegue del contenedor de informe oficial mediante `hidden print:block`.
       - Forzado de colores vectoriales exactos (`-webkit-print-color-adjust: exact`, `print-color-adjust: exact`).
       - Manejo de saltos de página limpios con `page-break-inside: avoid` en filas y subtablas.
     - **Estructura del Informe Oficial (`ForecastPrintReport`)**:
-      1. **Membrete Oficial**: Título institucional "UNIVERSIDAD TECNOLÓGICA DEL PERÚ", Vicerrectorado Académico, Título formal "INFORME EJECUTIVO: PREVISIÓN Y PROYECCIÓN DE MATRÍCULA", fecha y hora de emisión exacta y caso de origen.
+      1. **Membrete Oficial**: Título institucional "UNIVERSIDAD TECNOLÓGICA DEL PERÚ", Vicerrectorado Académico, Título formal "INFORME EJECUTIVO: PREVISIÓN Y PROYECCIÓN DE MATRÍCULA", fecha y hora de emisión exacta, caso de origen e indicador de formato (`Hoja A3 Horizontal 420 × 297 mm`).
       2. **Ficha Técnica de Filtros**: Bloque estructurado con Periodo(s), Sede, Modalidad, Turno y Parámetros de Simulación (Deserción %, Traslado %, Repitencia %, Cohorte Ciclo 1).
       3. **Tarjetas KPI Ejecutivas**: Total Actual, Total Proyectado, Variación Neta ($+/-$ y $\%$) y Total de Programas Académicos evaluados.
-      4. **Matriz Apaisada de Previsión**:
-         - Modo Compacto: Células con formato `Actual → Proyectado` optimizadas para entrar en los 277 mm de una hoja A4 horizontal sin cortes ni scrollbars.
-         - Modo Expandido: Columnas separadas de Actual y Proyectado.
+      4. **Matriz Apaisada de Previsión en A3**:
+         - Ancho extendido (`max-w-[420mm]`) con tipografía optimizada (`text-[11px]`, celdas de ciclo amplias, columna de carrera `min-w-[200px]`).
+         - Modo Compacto: Células con formato `Actual → Proyectado` con máxima holgura.
+         - Modo Expandido: 2 columnas completas por cada ciclo (24 columnas en total) que entran holgadamente dentro de los 400 mm de ancho útil sin superposiciones.
          - Subtabla de Asignaturas: Desglose curricular anidado para carreras seleccionadas con Código, Asignatura, Ciclo, Plan, Créditos, Secciones, Matriculados Actuales y Proyección Estimada.
          - Pie de Totales Generales Institucionales.
       5. **Pie de Página Institucional**: Declaración de documento oficial confidencial de uso interno y numeración de página.
     - **Modal de Configuración y Previsualización (`ForecastPrintDialog`)**:
-      - Diálogo modal de ancho extendido (`max-w-6xl`) con previsualización realista de la hoja apaisada.
+      - Diálogo modal de ancho extendido (`max-w-[95vw] lg:max-w-7xl`) con previsualización realista de la hoja apaisada en contenedor de hasta 1360px.
+      - **Selector de Tamaño de Hoja**: A3 Horizontal (420 × 297 mm) por defecto conmutador a A4.
       - Selectores de formato de columnas (Compacto / Expandido) y conmutador para incluir asignaturas.
-      - Disparador limpio `window.print()` con cierre previo del diálogo Radix para evitar interferencias en el DOM.
+      - Inyección dinámica de estilo `@page` según el tamaño de hoja elegido y disparo limpio de `window.print()`.
 - **GitHub Interface & Visual Architecture Documentation (`README.md`)**:
   - ASCII visual layout of navigation header, drawer, and 4 core workspaces.
   - Mermaid architecture flowchart representing the full data pipeline.

@@ -1929,6 +1929,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
     {data && (
       <div className="hidden print:block">
         <ForecastPrintReport
+          paperSize="A3"
           data={data}
           filteredCarreras={filteredCarreras}
           visibleCycles={visibleCycles}
