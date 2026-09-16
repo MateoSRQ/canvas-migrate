@@ -210,6 +210,11 @@
         - Exportación CSV enriquecida con metadatos de Modalidad y Turno y sufijos dinámicos en el nombre del archivo.
         - Reactividad completa: Recomputa en tiempo real tanto la **Tabla Matricial** como los gráficos de **TanStack Charts** (agregados y detallados).
   - [x] Navigation integration: Added top header tab and left drawer menu item (`Previsión de Matrícula (Forecast)`) with `#forecast` hash routing in `app-layout.tsx` and `routes/index.tsx`.
+  - [x] **Exportación a Excel nativo (.xlsx)**:
+    - Generación de libro de trabajo con múltiples hojas vía `xlsx` (`Matriz Previsión`, `Detalle Asignaturas`, `Parámetros y Filtros`).
+    - Valores numéricos nativos para compatibilidad total con fórmulas Excel (`SUMA`, etc.).
+    - Ajuste automático de anchos de columna (`!cols`) y cálculo de variación neta y porcentual.
+  - [ ] **Presentación y Exportación en PDF**: Vista ejecutiva de impresión apaisada (Landscape A4/Letter) con `@media print`, membrete institucional, badges de filtros activos, saltos de página limpios y gráficos vectoriales de TanStack Charts / descarga de archivo `.pdf`.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
 - [ ] Theory vs. Practice Session Modeling: Badges and indicators in Tree/Table and selective cross-listing support for decoupled theory and practice schedules.
@@ -238,6 +243,7 @@ The application is a full-stack React application built on **TanStack Start**, l
 - **Framework**: TanStack Start (`@tanstack/react-start`, `@tanstack/react-router`)
 - **Data Table**: TanStack Table (`@tanstack/react-table` v8)
 - **Charts / Visualizations**: TanStack Charts (`@tanstack/charts`, `@tanstack/react-charts` v0.18.0)
+- **Spreadsheet Engine**: SheetJS (`xlsx` v0.18.5)
 - **Runtime / Bundler**: Vite 8 with `@vitejs/plugin-react`
 - **Language**: TypeScript 5+ (Strict mode, verbatim module syntax, bundler resolution)
 - **Database**: SQLite (`dev.db`)
@@ -562,6 +568,12 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
       - Modalidad activa: Badge azul (`bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800`) con icono `Laptop` y botón `×`.
       - Turno activo: Badge ámbar (`bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800`) con icono `Clock` y botón `×`.
     - **Sincronización Total en Tiempo Real**: La selección de Modalidad o Turno filtra de inmediato la Tabla Matricial, los cursos expandibles, los gráficos agregados por ciclo (`barY`) y los gráficos detallados por curso (`barX`).
+  - **Exportación a Excel Nativo (.xlsx) con Múltiples Hojas (`handleExportExcel`)**:
+    - Botón de acción con estilo esmeralda institucional (`FileSpreadsheet className="text-emerald-600"`, `bg-emerald-50/50 border-emerald-300`) colocado junto al botón de CSV.
+    - Genera un archivo `.xlsx` binario estructurado con 3 hojas independientes:
+      1. **`Matriz Previsión`**: Cabecera con Código, Carrera, Facultad, columnas dinámicas de Ciclos (Actual vs Proyectado), Totales, Variación Neta y Variación Porcentual, con fila de Totales Generales y anchos de columna automáticos (`!cols`).
+      2. **`Detalle Asignaturas`**: Catálogo curricular exhaustivo de todas las asignaturas desplegadas con Carrera, Ciclo, Código Curso, Asignatura, Plan de Estudios, Créditos, Secciones Abiertas, Matriculados Actuales y Proyección Estimada.
+      3. **`Parámetros y Filtros`**: Ficha técnica de auditoría con Caso de BD, Periodo(s), Sede, Modalidad, Turno, Métrica (Alumnos Únicos / Cupos), Estado de Simulación, Tasa de Deserción %, Tasa de Traslado %, Tasa de Repitencia %, Totales Generales y Marca de tiempo de emisión.
 - **GitHub Interface & Visual Architecture Documentation (`README.md`)**:
   - ASCII visual layout of navigation header, drawer, and 4 core workspaces.
   - Mermaid architecture flowchart representing the full data pipeline.

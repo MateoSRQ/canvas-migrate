@@ -22,7 +22,9 @@ import {
   BarChart3,
   Laptop,
   Clock,
+  FileSpreadsheet,
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
@@ -554,6 +556,242 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
     URL.revokeObjectURL(url)
   }
 
+  // Exportar matriz a archivo Excel nativo (.xlsx) con hojas separadas
+  const handleExportExcel = () => {
+    if (!data) return
+
+    let periodLabel = 'PERIODOS'
+    if (selectedPeriodoIds.length === 0) {
+      periodLabel = 'SIN_PERIODOS'
+    } else if (selectedPeriodoIds.length === data.periodos.length) {
+      periodLabel = 'TODOS_LOS_PERIODOS'
+    } else if (selectedPeriodoIds.length === 1) {
+      const p = data.periodos.find((x) => x.id === selectedPeriodoIds[0])
+      periodLabel = p
+        ? p.nombre.replace(/\s+/g, '_')
+        : String(selectedPeriodoIds[0])
+    } else {
+      periodLabel = `${selectedPeriodoIds.length}_PERIODOS`
+    }
+
+    const sedeLabel =
+      selectedSedeId === 'all'
+        ? 'Todas las Sedes'
+        : (data.sedes.find((s) => s.id === selectedSedeId)?.nombre || String(selectedSedeId))
+    const modalidadLabel =
+      selectedModalidadId === 'all'
+        ? 'Todas las Modalidades'
+        : (data.modalidades.find((m) => m.id === selectedModalidadId)?.nombre || String(selectedModalidadId))
+    const turnoLabel =
+      selectedTurno === 'all'
+        ? 'Todos los Turnos'
+        : (data.turnos.find((t) => t.codigo === selectedTurno)?.nombre || selectedTurno)
+
+    const wb = XLSX.utils.book_new()
+
+    // ----------------------------------------------------
+    // HOJA 1: Matriz de Previsión por Carrera y Ciclo
+    // ----------------------------------------------------
+    const matrixHeader: string[] = ['CÓDIGO', 'CARRERA', 'FACULTAD']
+    if (enablePrediction) {
+      visibleCycles.forEach((cy) => {
+        matrixHeader.push(`${cy.nombre} Actual`, `${cy.nombre} Proyectado`)
+      })
+      matrixHeader.push('TOTAL ACTUAL', 'TOTAL PROYECTADO', 'VARIACIÓN NETA', 'VARIACIÓN %')
+    } else {
+      visibleCycles.forEach((cy) => {
+        matrixHeader.push(cy.nombre)
+      })
+      matrixHeader.push('TOTAL GENERAL')
+    }
+
+    const matrixRows: any[][] = [matrixHeader]
+
+    filteredCarreras.forEach((c) => {
+      const totalActual =
+        metricMode === 'alumnos' ? c.totalAlumnos : c.totalMatriculas
+      const totalProj = visibleCycles.reduce(
+        (acc, cy) => acc + getProjectedForCycle(c, cy),
+        0
+      )
+
+      const row: any[] = [c.carreraCodigo, c.carreraNombre, c.facultadNombre]
+
+      if (enablePrediction) {
+        visibleCycles.forEach((cy) => {
+          const act =
+            metricMode === 'alumnos'
+              ? c.byCycle[cy.nombre]?.alumnos || 0
+              : c.byCycle[cy.nombre]?.matriculas || 0
+          const prj = getProjectedForCycle(c, cy)
+          row.push(act, prj)
+        })
+        const varNeta = totalProj - totalActual
+        const varPct = totalActual > 0 ? ((varNeta / totalActual) * 100).toFixed(1) + '%' : '0.0%'
+        row.push(totalActual, totalProj, varNeta, varPct)
+      } else {
+        visibleCycles.forEach((cy) => {
+          const act =
+            metricMode === 'alumnos'
+              ? c.byCycle[cy.nombre]?.alumnos || 0
+              : c.byCycle[cy.nombre]?.matriculas || 0
+          row.push(act)
+        })
+        row.push(totalActual)
+      }
+
+      matrixRows.push(row)
+    })
+
+    // Fila de Totales Generales
+    const grandActual =
+      metricMode === 'alumnos'
+        ? data.totals.totalAlumnosGeneral
+        : data.totals.totalMatriculasGeneral
+    const grandRow: any[] = ['TOTAL', 'TOTAL GENERAL', '']
+
+    if (enablePrediction) {
+      visibleCycles.forEach((cy) => {
+        const act =
+          metricMode === 'alumnos'
+            ? data.totals.byCycle[cy.nombre]?.alumnos || 0
+            : data.totals.byCycle[cy.nombre]?.matriculas || 0
+        const prj = projectedTotalsByCycle[cy.nombre] || 0
+        grandRow.push(act, prj)
+      })
+      const grandVarNeta = projectedGrandTotal - grandActual
+      const grandVarPct = grandActual > 0 ? ((grandVarNeta / grandActual) * 100).toFixed(1) + '%' : '0.0%'
+      grandRow.push(grandActual, projectedGrandTotal, grandVarNeta, grandVarPct)
+    } else {
+      visibleCycles.forEach((cy) => {
+        const act =
+          metricMode === 'alumnos'
+            ? data.totals.byCycle[cy.nombre]?.alumnos || 0
+            : data.totals.byCycle[cy.nombre]?.matriculas || 0
+        grandRow.push(act)
+      })
+      grandRow.push(grandActual)
+    }
+    matrixRows.push(grandRow)
+
+    const wsMatrix = XLSX.utils.aoa_to_sheet(matrixRows)
+
+    // Ajustar anchos de columnas automáticamente
+    wsMatrix['!cols'] = matrixHeader.map((header, idx) => {
+      let maxLen = header.length
+      matrixRows.forEach((r) => {
+        const cellVal = String(r[idx] ?? '')
+        if (cellVal.length > maxLen) maxLen = Math.min(45, cellVal.length)
+      })
+      return { wch: Math.max(12, maxLen + 2) }
+    })
+
+    XLSX.utils.book_append_sheet(wb, wsMatrix, 'Matriz Previsión')
+
+    // ----------------------------------------------------
+    // HOJA 2: Detalle de Cursos y Asignaturas
+    // ----------------------------------------------------
+    const courseHeader: string[] = [
+      'CARRERA',
+      'FACULTAD',
+      'CICLO',
+      'CÓDIGO CURSO',
+      'ASIGNATURA',
+      'PLAN DE ESTUDIOS',
+      'CRÉDITOS',
+      'SECCIONES ABIERTAS',
+      'MATRICULADOS ACTUALES',
+    ]
+    if (enablePrediction) {
+      courseHeader.push('PROYECCIÓN ESTIMADA', 'VARIACIÓN ESTIMADA')
+    }
+
+    const courseRows: any[][] = [courseHeader]
+
+    for (const c of filteredCarreras) {
+      for (const cr of c.courses) {
+        const row: any[] = [
+          c.carreraNombre,
+          c.facultadNombre,
+          cr.cicloNombre,
+          cr.codCurso,
+          cr.nombre,
+          cr.planNombre,
+          cr.creditos,
+          cr.seccionesCount,
+          cr.alumnosCount,
+        ]
+
+        if (enablePrediction) {
+          const cyObj = data.ciclos.find((x) => x.orden === cr.cicloOrden)
+          const cycleActual = cyObj
+            ? metricMode === 'alumnos'
+              ? c.byCycle[cyObj.nombre]?.alumnos || 0
+              : c.byCycle[cyObj.nombre]?.matriculas || 0
+            : 0
+          const cycleProj = cyObj ? getProjectedForCycle(c, cyObj) : 0
+          const courseProjected =
+            cycleActual > 0
+              ? Math.round(cr.alumnosCount * (cycleProj / cycleActual))
+              : (cr.alumnosCount > 0 ? Math.max(0, Math.round(cr.alumnosCount * ((100 - desercionRate) / 100))) : 0)
+
+          row.push(courseProjected, courseProjected - cr.alumnosCount)
+        }
+
+        courseRows.push(row)
+      }
+    }
+
+    const wsCourses = XLSX.utils.aoa_to_sheet(courseRows)
+    wsCourses['!cols'] = courseHeader.map((header, idx) => {
+      let maxLen = header.length
+      courseRows.slice(0, 100).forEach((r) => {
+        const cellVal = String(r[idx] ?? '')
+        if (cellVal.length > maxLen) maxLen = Math.min(50, cellVal.length)
+      })
+      return { wch: Math.max(12, maxLen + 2) }
+    })
+
+    XLSX.utils.book_append_sheet(wb, wsCourses, 'Detalle Asignaturas')
+
+    // ----------------------------------------------------
+    // HOJA 3: Parámetros y Filtros de Simulación
+    // ----------------------------------------------------
+    const paramsRows: any[][] = [
+      ['PARÁMETRO / FILTRO', 'VALOR CONFIGURADO', 'DESCRIPCIÓN TÉCNICA'],
+      ['Caso de Base de Datos', data.caseName, data.caseId],
+      ['Periodos Académicos', periodSelectorLabel, `${selectedPeriodoIds.length} seleccionados`],
+      ['Sede Institucional', sedeLabel, selectedSedeId === 'all' ? 'Todas las Sedes' : `ID: ${selectedSedeId}`],
+      ['Modalidad de Estudio', modalidadLabel, selectedModalidadId === 'all' ? 'Todas las Modalidades' : `ID: ${selectedModalidadId}`],
+      ['Turno de Clases', turnoLabel, selectedTurno === 'all' ? 'Todos los Turnos' : `Código: ${selectedTurno}`],
+      ['Métrica Analizada', metricMode === 'alumnos' ? 'Alumnos Únicos (Headcount)' : 'Matrículas-Curso (Cupos)', metricMode],
+      ['Simulación Siguiente Semestre', enablePrediction ? 'Activa' : 'Inactiva', 'Motor de predicción por avance de cohortes'],
+      ['Tasa de Deserción', enablePrediction ? `${desercionRate}%` : 'N/A', 'Alumnos que abandonan y se restan primero'],
+      ['Tasa de Traslado', enablePrediction ? `${retentionRate}%` : 'N/A', 'Alumnos que avanzan al siguiente ciclo (k + 1)'],
+      ['Tasa de Repitencia', enablePrediction ? `${100 - retentionRate}%` : 'N/A', 'Alumnos que no pasan y repiten en el mismo ciclo'],
+      ['Carreras Analizadas', filteredCarreras.length, 'Total de carreras en el alcance'],
+      ['Total Actual General', grandActual, metricMode === 'alumnos' ? 'Alumnos únicos' : 'Cupos'],
+      ['Total Proyectado General', enablePrediction ? projectedGrandTotal : 'N/A', 'Proyección estimada'],
+      ['Fecha y Hora de Emisión', new Date().toLocaleString('es-PE'), 'Timestamp de generación'],
+    ]
+
+    const wsParams = XLSX.utils.aoa_to_sheet(paramsRows)
+    wsParams['!cols'] = [
+      { wch: 30 },
+      { wch: 36 },
+      { wch: 45 },
+    ]
+
+    XLSX.utils.book_append_sheet(wb, wsParams, 'Parámetros y Filtros')
+
+    // Generar y descargar archivo Excel
+    const modSuffix = selectedModalidadId !== 'all' ? `_mod${selectedModalidadId}` : ''
+    const turnoSuffix = selectedTurno !== 'all' ? `_turno${selectedTurno}` : ''
+    const fileName = `prevision_matricula_${data.caseId}_${periodLabel}${modSuffix}${turnoSuffix}_${enablePrediction ? `prediccion_t${retentionRate}_d${desercionRate}` : 'actual'}.xlsx`
+
+    XLSX.writeFile(wb, fileName)
+  }
+
   return (
     <div className="w-full flex-1 flex flex-col space-y-5">
       {/* Top Filter & Command Bar */}
@@ -573,7 +811,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
             </p>
           </div>
 
-          {/* Action buttons: Tab switcher, Metric switcher & CSV export */}
+          {/* Action buttons: Tab switcher, Metric switcher, Excel export & CSV export */}
           <div className="flex items-center gap-2 flex-wrap">
             {/* Tab View Switcher: Tabla Matricial vs Gráfico de Barras */}
             <div className="flex items-center rounded-lg border border-border bg-muted/60 p-0.5 text-xs font-medium">
@@ -629,6 +867,18 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                 <span>Matrículas-Curso (Cupos)</span>
               </button>
             </div>
+
+            {/* Export buttons: Native Excel (.xlsx) & Plain CSV */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportExcel}
+              disabled={!data || loading}
+              className="gap-1.5 text-xs h-8 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/30 hover:bg-emerald-100/60 dark:hover:bg-emerald-900/40"
+            >
+              <FileSpreadsheet className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Exportar Excel (.xlsx)</span>
+            </Button>
 
             <Button
               variant="outline"
