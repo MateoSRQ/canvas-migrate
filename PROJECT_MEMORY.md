@@ -180,14 +180,24 @@
     - CSV export engine (`handleExportCsv`) generating downloadable spreadsheet with dual Actual/Projected columns, deserción rate, and retention rate metadata.
   - [x] **TanStack Charts Integration: Visual Bar Chart Tab (`ForecastChartView`) (Completed)**:
     - Installed official `@tanstack/charts` and `@tanstack/react-charts` (v0.18.0).
-    - Modular chart component (`src/components/forecast/forecast-chart-view.tsx`):
-      - **Gráfico por Ciclo Académico (`barY`)**: Grouped vertical bars with `layout: group({ padding: 0.18 })` and rounded tops (`radius: { end: 4 }`) comparing Actual (Slate `#64748b`) vs Proyectado (Emerald `#10b981`).
-      - **Gráfico por Carrera / Programa (`barX`)**: Grouped horizontal bars for high legibility of long career names, with adaptive responsive container height (`Math.max(340, displayedCareers.length * 38 + 90)`), volume sorting, and display limit selector (Top 10, Top 15, Top 20, Todas).
-      - **Interactive Sub-view Switcher**: "Por Ciclo", "Por Carrera", and "Ambos" (vista dual).
-      - **Summary KPI Bar**: Displays Total Actual, Total Proyectado, Variación Neta ($+/-$), $\%$, and active simulation parameter badges (Deserción and Traslado).
-      - **Granular Cycle Metrics Table**: Sub-chart data table detailing numerical Actual, Proyectado, Net Difference, and Percentage Change per academic cycle.
-    - **Tab Switcher Toolbar**: Segmented control in `ForecastView` header toggling between **"Tabla Matricial"** (`TableIcon`) and **"Gráfico de Barras"** (`BarChart3`).
-    - Full reactivity: Syncs in real time with Database Cases, Multi-Period Popover, Campus filter, Metric Switcher ("Alumnos Únicos" vs "Matrículas-Curso"), Search query, and both Deserción/Traslado sliders.
+    - **Dual Aggregated & Expandable Detail Architecture (Matching Table View)**:
+      - **Nivel Agregado por Carrera (`CareerExpandableBarCard`)**:
+        - Cada carrera se presenta como una tarjeta interactiva con su cabecera, código, facultad, número de cursos, totales Actual vs Proyectado y chevron de despliegue.
+        - Muestra un gráfico de barras verticales (`barY`) de distribución por ciclo curricular (Ciclo 1 al 12) comparando Actual (Gris Slate `#64748b`) vs Proyectado (Verde Esmeralda `#10b981`).
+      - **Despliegue en Detalle por Asignatura / Curso (`isExpanded`)**:
+        - Al desplegar cualquier carrera (o mediante "Expandir Todo"), se despliega un gráfico de barras horizontales (`barX`) que visualiza cada curso/asignatura con su código institucional y nombre, comparando alumnos matriculados actuales vs proyección estimada.
+        - Fórmula de proyección de curso proporcional al avance de cohortes y tasa de deserción del ciclo correspondiente.
+        - Altura adaptativa dinámica según la cantidad de asignaturas (`carr.courses.length * 36 + 70`) para máxima legibilidad.
+        - Tabla compacta de desglose de asignaturas debajo del gráfico.
+      - **Sincronización Bidireccional de Expansión**:
+        - El estado de expansión (`expandedCarreras: Set<number>`) y los botones por lote "Expandir Todo" / "Plegar Todo" se comparten y sincronizan entre la Tabla Matricial y el Gráfico de Barras.
+      - **Sub-vistas Adicionales**:
+        - `Por Carreras y Cursos (Expandible)`: Vista principal idéntica a la tabla en formato de barras.
+        - `Consolidado por Ciclos`: Gráfico institucional macro de todos los ciclos combinados.
+        - `Comparativa de Carreras`: Gráfico horizontal de todas las carreras con selectores de límite y ordenación.
+      - **Resumen KPI Global**: Total Actual, Total Proyectado, Variación Neta ($+/-$ y $\%$) y parámetros activos de simulación.
+    - **Tab Switcher Toolbar**: Segmented control en la barra de herramientas de `ForecastView` para alternar entre **"Tabla Matricial"** (`TableIcon`) y **"Gráfico de Barras"** (`BarChart3`).
+    - Full reactivity: Sincronizado en tiempo real con Casos SQL, Filtro Multi-Periodo, Sede, Selector métrico ("Alumnos Únicos" vs "Cupos"), Buscador de texto y Sliders de Deserción y Traslado.
   - [x] Navigation integration: Added top header tab and left drawer menu item (`Previsión de Matrícula (Forecast)`) with `#forecast` hash routing in `app-layout.tsx` and `routes/index.tsx`.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
@@ -516,19 +526,17 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Dual-View Workspace Tabs: "Tabla Matricial" vs "Gráfico de Barras" (`activeTab: 'table' | 'chart'`)**:
     - Clean segmented pill switcher in the top right actions toolbar allowing seamless switching between tabular and graphical analysis without losing active simulation or filter states.
     - **TanStack Charts Bar Visualization (`ForecastChartView`)**:
-      - **Grouped Vertical Bars by Cycle (`barY`)**:
-        - Displays side-by-side grouped bars for each academic cycle (Ciclo 1 to 12).
-        - Color tokens: Slate gray (`#64748b`) for "Actual" and Emerald green (`#10b981`) for "Proyectado".
-        - Bar geometry: Rounded bar tops (`radius: { end: 4 }`) and explicit group spacing (`layout: group({ padding: 0.18 })`).
-        - Interactive tooltip showing cycle name, series type, and exact metric count.
-        - Numerical data table below chart detailing Actual, Proyectado, Net Difference ($+/-$), and percentage change ($\%$) per cycle.
-      - **Grouped Horizontal Bars by Career (`barX`)**:
-        - High-readability horizontal layout for long academic program names.
-        - Dynamic adaptive height (`Math.max(340, displayedCareers.length * 38 + 90)`) preventing vertical label collision.
-        - Career display controls: limit selector ("Top 10", "Top 15", "Top 20", "Todas") and sorting selector ("Mayor Volumen", "Alfabético").
-      - **Sub-View Switcher**: Quick toggle between "Por Ciclo", "Por Carrera", and "Ambos" (dual stacked view).
-      - **Summary KPI Metric Cards**: Visual counter cards for Total Actual, Total Proyectado, Net Variation ($+/-$ and $\%$), and active simulation parameters.
-      - **Strict Component Policy**: Pure SVG rendering via TanStack Charts with zero unrequested third-party dashboard widgets.
+      - **Hierarchical Career-to-Course Expandable Bar Charts**:
+        - Cada carrera se representa como un contenedor `CareerExpandableBarCard` interactivo.
+        - **Nivel Agregado (Ciclos)**: Gráfico de barras verticales (`barY`) de Ciclo 1 al 12 para la carrera, comparando Actual (Slate `#64748b`) vs Proyectado (Emerald `#10b981`), con fila de chips de resumen por ciclo.
+        - **Nivel Detalle Desplegado (Cursos)**: Al hacer clic en el chevron o en "Desplegar Detalle", se despliega un gráfico de barras horizontales (`barX`) que compara los alumnos matriculados actuales vs proyección estimada de cada asignatura, con altura adaptativa (`carr.courses.length * 36 + 70`) y tabla detallada.
+        - **Sincronización Total de Expansión**: La expansión interactúa de forma coordinada con la variable de estado `expandedCarreras` y los botones "Expandir Todo" / "Plegar Todo".
+      - **Sub-View Switcher**:
+        - `Por Carreras y Cursos (Expandible)`: Vista principal por agregados desplegables en detalle.
+        - `Consolidado por Ciclos`: Macro-gráfico de todos los ciclos institucionales.
+        - `Comparativa de Carreras`: Gráfico horizontal de todas las carreras con selectores de límite y ordenación.
+      - **Summary KPI Metric Cards**: Tarjetas superiores con Total Actual, Total Proyectado, Variación Neta ($+/-$ y $\%$), y parámetros activos.
+      - **Strict Component Policy**: Gráficos SVG puros de TanStack Charts sin widgets superfluos de dashboard.
 - **GitHub Interface & Visual Architecture Documentation (`README.md`)**:
   - ASCII visual layout of navigation header, drawer, and 4 core workspaces.
   - Mermaid architecture flowchart representing the full data pipeline.

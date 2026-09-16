@@ -1098,26 +1098,24 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
               )}
             </div>
 
-            {activeTab === 'table' && (
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={expandAllCarreras}
-                  className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-                >
-                  Expandir Todo
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={collapseAllCarreras}
-                  className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-                >
-                  Plegar Todo
-                </Button>
-              </div>
-            )}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={expandAllCarreras}
+                className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                Expandir Todo
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={collapseAllCarreras}
+                className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                Plegar Todo
+              </Button>
+            </div>
           </div>
         )}
       </div>
@@ -1151,6 +1149,10 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
             enablePrediction={enablePrediction}
             desercionRate={desercionRate}
             retentionRate={retentionRate}
+            expandedCarreras={expandedCarreras}
+            toggleCarreraExpand={toggleCarreraExpand}
+            expandAllCarreras={expandAllCarreras}
+            collapseAllCarreras={collapseAllCarreras}
             getProjectedForCycle={getProjectedForCycle}
           />
         ) : (
