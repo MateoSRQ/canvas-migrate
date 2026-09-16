@@ -20,6 +20,8 @@ import {
   ArrowRight,
   Table as TableIcon,
   BarChart3,
+  Laptop,
+  Clock,
 } from 'lucide-react'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
@@ -44,6 +46,8 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
   const [selectedPeriodoIds, setSelectedPeriodoIds] = React.useState<number[]>([])
   const [isPeriodInitialized, setIsPeriodInitialized] = React.useState<boolean>(false)
   const [selectedSedeId, setSelectedSedeId] = React.useState<number | 'all'>('all')
+  const [selectedModalidadId, setSelectedModalidadId] = React.useState<number | 'all'>('all')
+  const [selectedTurno, setSelectedTurno] = React.useState<string | 'all'>('all')
   const [metricMode, setMetricMode] = React.useState<'alumnos' | 'matriculas'>('alumnos')
   const [activeTab, setActiveTab] = React.useState<'table' | 'chart'>('table')
   const [searchQuery, setSearchQuery] = React.useState<string>('')
@@ -103,10 +107,12 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
     }
   }, [selectedCaseId])
 
-  // Resetear inicialización de periodos cuando cambie el caso
+  // Resetear inicialización de periodos y filtros cuando cambie el caso
   React.useEffect(() => {
     setIsPeriodInitialized(false)
     setSelectedPeriodoIds([])
+    setSelectedModalidadId('all')
+    setSelectedTurno('all')
   }, [selectedCaseId])
 
   // 2. Cargar datos de previsión para el caso y filtros seleccionados
@@ -122,6 +128,8 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
             caseId: selectedCaseId,
             periodoIds: isPeriodInitialized ? selectedPeriodoIds : null,
             sedeId: selectedSedeId === 'all' ? null : selectedSedeId,
+            modalidadId: selectedModalidadId === 'all' ? null : selectedModalidadId,
+            turno: selectedTurno === 'all' ? null : selectedTurno,
           },
         })
         if (active && res) {
@@ -143,7 +151,26 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
     return () => {
       active = false
     }
-  }, [selectedCaseId, selectedPeriodoIds, selectedSedeId, isPeriodInitialized])
+  }, [selectedCaseId, selectedPeriodoIds, selectedSedeId, selectedModalidadId, selectedTurno, isPeriodInitialized])
+
+  // Auto-ajustar filtros si la opción seleccionada ya no existe en el scope activo
+  React.useEffect(() => {
+    if (data && selectedModalidadId !== 'all') {
+      const exists = data.modalidades.some((m) => m.id === selectedModalidadId)
+      if (!exists) {
+        setSelectedModalidadId('all')
+      }
+    }
+  }, [data, selectedModalidadId])
+
+  React.useEffect(() => {
+    if (data && selectedTurno !== 'all') {
+      const exists = data.turnos.some((t) => t.codigo === selectedTurno)
+      if (!exists) {
+        setSelectedTurno('all')
+      }
+    }
+  }, [data, selectedTurno])
 
   // Alternar selección de un periodo
   const togglePeriod = (periodId: number) => {
@@ -495,16 +522,31 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
       }
     }
 
-    const metadataHeader = `"PREVISIÓN DE MATRÍCULA Y PROYECCIÓN DE COHORTES"\n"CASO","${data.caseName}"\n"PERIODOS","${periodLabel}"\n"TASA DESERCIÓN","${enablePrediction ? `${desercionRate}%` : 'N/A'}"\n"TASA TRASLADO","${enablePrediction ? `${retentionRate}%` : 'N/A'}"\n"TASA REPITENCIA","${enablePrediction ? `${100 - retentionRate}%` : 'N/A'}"\n\n`
+    const sedeLabel =
+      selectedSedeId === 'all'
+        ? 'TODAS'
+        : (data.sedes.find((s) => s.id === selectedSedeId)?.nombre || String(selectedSedeId))
+    const modalidadLabel =
+      selectedModalidadId === 'all'
+        ? 'TODAS'
+        : (data.modalidades.find((m) => m.id === selectedModalidadId)?.nombre || String(selectedModalidadId))
+    const turnoLabel =
+      selectedTurno === 'all'
+        ? 'TODOS'
+        : (data.turnos.find((t) => t.codigo === selectedTurno)?.nombre || selectedTurno)
+
+    const metadataHeader = `"PREVISIÓN DE MATRÍCULA Y PROYECCIÓN DE COHORTES"\n"CASO","${data.caseName}"\n"PERIODOS","${periodLabel}"\n"SEDE","${sedeLabel}"\n"MODALIDAD","${modalidadLabel}"\n"TURNO","${turnoLabel}"\n"TASA DESERCIÓN","${enablePrediction ? `${desercionRate}%` : 'N/A'}"\n"TASA TRASLADO","${enablePrediction ? `${retentionRate}%` : 'N/A'}"\n"TASA REPITENCIA","${enablePrediction ? `${100 - retentionRate}%` : 'N/A'}"\n\n`
 
     const csvContent = [metadataHeader, headerRow, ...rows, totalRow, coursesHeader, ...courseRows].join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
+    const modSuffix = selectedModalidadId !== 'all' ? `_mod${selectedModalidadId}` : ''
+    const turnoSuffix = selectedTurno !== 'all' ? `_turno${selectedTurno}` : ''
     link.setAttribute(
       'download',
-      `prevision_matricula_${data.caseId}_${periodLabel}_${enablePrediction ? `prediccion_t${retentionRate}_d${desercionRate}` : 'actual'}.csv`
+      `prevision_matricula_${data.caseId}_${periodLabel}${modSuffix}${turnoSuffix}_${enablePrediction ? `prediccion_t${retentionRate}_d${desercionRate}` : 'actual'}.csv`
     )
     document.body.appendChild(link)
     link.click()
@@ -602,12 +644,12 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
         </div>
 
         {/* Filter Controls Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-border/60">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 pt-2 border-t border-border/60">
           {/* Case Selector */}
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
               <Layers className="size-3 text-muted-foreground" />
-              <span>Caso de Base de Datos</span>
+              <span>Caso de BD</span>
             </label>
             <select
               value={selectedCaseId}
@@ -630,15 +672,15 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
             <label className="text-[11px] font-medium text-muted-foreground flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Calendar className="size-3 text-muted-foreground" />
-                <span>Periodos Académicos</span>
+                <span>Periodos</span>
               </span>
               {data && (
                 <span className="text-[10px] text-muted-foreground">
                   {selectedPeriodoIds.length === 0
-                    ? 'Ninguno seleccionado'
+                    ? 'Ninguno'
                     : selectedPeriodoIds.length === data.periodos.length
-                    ? 'Todos activos'
-                    : `${selectedPeriodoIds.length} de ${data.periodos.length}`}
+                    ? 'Todos'
+                    : `${selectedPeriodoIds.length}/${data.periodos.length}`}
                 </span>
               )}
             </label>
@@ -783,7 +825,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
               <Building2 className="size-3 text-muted-foreground" />
-              <span>Sede Institucional</span>
+              <span>Sede</span>
             </label>
             <select
               value={selectedSedeId}
@@ -803,15 +845,63 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
             </select>
           </div>
 
+          {/* Modalidad Selector */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
+              <Laptop className="size-3 text-muted-foreground" />
+              <span>Modalidad</span>
+            </label>
+            <select
+              value={selectedModalidadId}
+              onChange={(e) => {
+                const val = e.target.value
+                setSelectedModalidadId(val === 'all' ? 'all' : Number(val))
+              }}
+              disabled={!data || loading}
+              className="w-full text-xs h-9 rounded-md border border-input bg-background px-2.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="all">Todas ({data?.modalidades.length || 0})</option>
+              {data?.modalidades.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.nombre} ({m.totalAlumnos.toLocaleString()} alm.)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Turno Selector */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
+              <Clock className="size-3 text-muted-foreground" />
+              <span>Turno</span>
+            </label>
+            <select
+              value={selectedTurno}
+              onChange={(e) => {
+                const val = e.target.value
+                setSelectedTurno(val === 'all' ? 'all' : val)
+              }}
+              disabled={!data || loading}
+              className="w-full text-xs h-9 rounded-md border border-input bg-background px-2.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="all">Todos ({data?.turnos.length || 0})</option>
+              {data?.turnos.map((t) => (
+                <option key={t.codigo} value={t.codigo}>
+                  {t.nombre} ({t.totalAlumnos.toLocaleString()} alm.)
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Search text input */}
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
               <Search className="size-3 text-muted-foreground" />
-              <span>Filtrar Carrera o Asignatura</span>
+              <span>Buscar Carrera / Curso</span>
             </label>
             <div className="relative">
               <Input
-                placeholder="Buscar carrera, curso o código..."
+                placeholder="Buscar carrera o código..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-9 text-xs pr-7"
@@ -1094,6 +1184,75 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                       )
                     })}
                   </div>
+                </>
+              )}
+
+              {/* Active Campus / Sede badge */}
+              {selectedSedeId !== 'all' && (
+                <>
+                  <span>•</span>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] py-0 px-1.5 gap-1 bg-muted/60 text-foreground border-border"
+                  >
+                    <Building2 className="size-2.5 text-muted-foreground" />
+                    <span>
+                      Sede: {data.sedes.find((s) => s.id === selectedSedeId)?.nombre || selectedSedeId}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSedeId('all')}
+                      className="hover:text-destructive transition-colors ml-0.5"
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                </>
+              )}
+
+              {/* Active Modalidad badge */}
+              {selectedModalidadId !== 'all' && (
+                <>
+                  <span>•</span>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] py-0 px-1.5 gap-1 bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                  >
+                    <Laptop className="size-2.5" />
+                    <span>
+                      Modalidad: {data.modalidades.find((m) => m.id === selectedModalidadId)?.nombre || selectedModalidadId}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedModalidadId('all')}
+                      className="hover:text-destructive transition-colors ml-0.5"
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                </>
+              )}
+
+              {/* Active Turno badge */}
+              {selectedTurno !== 'all' && (
+                <>
+                  <span>•</span>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] py-0 px-1.5 gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+                  >
+                    <Clock className="size-2.5" />
+                    <span>
+                      Turno: {data.turnos.find((t) => t.codigo === selectedTurno)?.nombre || selectedTurno}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTurno('all')}
+                      className="hover:text-destructive transition-colors ml-0.5"
+                    >
+                      ×
+                    </button>
+                  </Badge>
                 </>
               )}
             </div>

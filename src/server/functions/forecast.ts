@@ -8,6 +8,8 @@ export const getForecastDataFn = createServerFn({ method: 'GET' })
       periodoId?: number | null
       periodoIds?: number[] | null
       sedeId?: number | null
+      modalidadId?: number | 'all' | null
+      turno?: string | 'all' | null
     }) => payload
   )
   .handler(async ({ data }) => {
@@ -15,5 +17,7 @@ export const getForecastDataFn = createServerFn({ method: 'GET' })
       periodoId: data.periodoId,
       periodoIds: data.periodoIds,
       sedeId: data.sedeId,
+      modalidadId: data.modalidadId,
+      turno: data.turno,
     })
   })

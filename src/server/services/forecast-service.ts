@@ -49,6 +49,20 @@ export interface ForecastSedeOption {
   codigo: string
 }
 
+export interface ForecastModalidadOption {
+  id: number
+  nombre: string
+  totalMatriculas: number
+  totalAlumnos: number
+}
+
+export interface ForecastTurnoOption {
+  codigo: string
+  nombre: string
+  totalMatriculas: number
+  totalAlumnos: number
+}
+
 export interface ForecastCycleColumn {
   id: number
   nombre: string
@@ -66,12 +80,16 @@ export interface ForecastResult {
   caseName: string
   periodos: ForecastPeriodOption[]
   sedes: ForecastSedeOption[]
+  modalidades: ForecastModalidadOption[]
+  turnos: ForecastTurnoOption[]
   ciclos: ForecastCycleColumn[]
   carreras: ForecastCareerRow[]
   totals: ForecastTotals
   selectedPeriodoId: number | null
   selectedPeriodoIds: number[]
   selectedSedeId: number | null
+  selectedModalidadId: number | null
+  selectedTurno: string | null
 }
 
 interface CachedRawForecastData {
@@ -82,6 +100,7 @@ interface CachedRawForecastData {
   facultades: any[]
   planes: any[]
   cursos: any[]
+  alumnos: any[]
   catalogos: any[]
   matAlumnos: any[]
   matCursos: any[]
@@ -113,6 +132,7 @@ function loadRawForecastData(caseId: string): CachedRawForecastData {
     facultades: getTableFromDb(caseId, 'General.Facultad'),
     planes: getTableFromDb(caseId, 'Academico.Plan'),
     cursos: getTableFromDb(caseId, 'Academico.Curso'),
+    alumnos: getTableFromDb(caseId, 'Academico.Alumno'),
     catalogos: getTableFromDb(caseId, 'General.Catalogo'),
     matAlumnos: getTableFromDb(caseId, 'Matricula.Matricula_Alumno'),
     matCursos: getTableFromDb(caseId, 'Matricula.Matricula_Alumno_Curso'),
@@ -134,6 +154,8 @@ export function getForecastData(
     periodoId?: number | null
     periodoIds?: number[] | null
     sedeId?: number | null
+    modalidadId?: number | 'all' | null
+    turno?: string | 'all' | null
   }
 ): ForecastResult {
   const raw = loadRawForecastData(caseId)
@@ -143,6 +165,7 @@ export function getForecastData(
   const facultadMap = new Map<number, any>(raw.facultades.map((f) => [f.id, f]))
   const planMap = new Map<number, any>(raw.planes.map((p) => [p.id, p]))
   const cursoMap = new Map<number, any>(raw.cursos.map((c) => [c.id, c]))
+  const alumnoMap = new Map<number, any>(raw.alumnos.map((a) => [a.id, a]))
   const matAlumnoMap = new Map<number, any>(raw.matAlumnos.map((m) => [m.id, m]))
   const horarioMap = new Map<number, any>(raw.cargaHorarios.map((h) => [h.id, h]))
   const cargaCursoMap = new Map<number, any>(raw.cargaCursos.map((cc) => [cc.id, cc]))
@@ -152,6 +175,14 @@ export function getForecastData(
   const periodoMap = new Map<number, any>(raw.periodos.map((p) => [p.id, p]))
   const sedeMap = new Map<number, any>(raw.sedes.map((s) => [s.id, s]))
   const sedeCarreraMap = new Map<number, any>(raw.sedeCarreras.map((sc) => [sc.id, sc]))
+
+  // Modalidad catalog lookup (catalogo_tipo_id = 1)
+  const modalidadMetaMap = new Map<number, string>()
+  for (const cat of raw.catalogos) {
+    if (cat.catalogo_tipo_id === 1) {
+      modalidadMetaMap.set(cat.id, String(cat.descripcion || '').trim())
+    }
+  }
 
   // Cycle catalog lookup & order
   const cycleMetaMap = new Map<
@@ -253,6 +284,26 @@ export function getForecastData(
   }
 
   const activeSedeId = typeof options?.sedeId === 'number' ? options.sedeId : null
+  const activeModalidadId =
+    typeof options?.modalidadId === 'number'
+      ? options.modalidadId
+      : options?.modalidadId && options.modalidadId !== 'all'
+      ? Number(options.modalidadId)
+      : null
+  const activeTurno =
+    options?.turno && options.turno !== 'all'
+      ? String(options.turno).trim()
+      : null
+
+  // Dynamic Modalidades & Turnos stats tracking for active Period & Sede scope
+  const modalidadStatsMap = new Map<
+    number,
+    { matriculas: number; students: Set<string> }
+  >()
+  const turnoStatsMap = new Map<
+    string,
+    { matriculas: number; students: Set<string> }
+  >()
 
   // Aggregation containers
   // carreraId -> Set<studentCode>
@@ -309,6 +360,46 @@ export function getForecastData(
       continue
     }
 
+    // Resolve Student
+    const ma = matAlumnoMap.get(mc.matricula_alumno_id)
+    const studentCode = ma ? String(ma.codalumno || ma.alumno_id || ma.id) : String(mc.matricula_alumno_id)
+
+    // Resolve Modalidad (Carga Curso > Sede Carrera)
+    const modId = (cc.cat_modalidad_id || sc?.cat_modalidad_id || null) as number | null
+
+    // Resolve Turno (Sección > Alumno)
+    const al = ma?.alumno_id ? alumnoMap.get(ma.alumno_id) : null
+    const secT = sec.turno ? String(sec.turno).trim() : null
+    const alT = (al && al.turno) ? String(al.turno).trim() : null
+    const effectiveTurno = secT || alT || 'SIN_TURNO'
+
+    // Accumulate stats for available Modalidades & Turnos within active Period & Sede
+    if (modId) {
+      if (!modalidadStatsMap.has(modId)) {
+        modalidadStatsMap.set(modId, { matriculas: 0, students: new Set() })
+      }
+      const mStat = modalidadStatsMap.get(modId)!
+      mStat.matriculas++
+      mStat.students.add(studentCode)
+    }
+
+    if (!turnoStatsMap.has(effectiveTurno)) {
+      turnoStatsMap.set(effectiveTurno, { matriculas: 0, students: new Set() })
+    }
+    const tStat = turnoStatsMap.get(effectiveTurno)!
+    tStat.matriculas++
+    tStat.students.add(studentCode)
+
+    // Modalidad filter
+    if (activeModalidadId !== null && modId !== activeModalidadId) {
+      continue
+    }
+
+    // Turno filter
+    if (activeTurno !== null && effectiveTurno !== activeTurno) {
+      continue
+    }
+
     const curso = cursoMap.get(cc.curso_id)
     if (!curso) continue
 
@@ -329,10 +420,6 @@ export function getForecastData(
         orden: cicloOrden,
       })
     }
-
-    // Resolve Student
-    const ma = matAlumnoMap.get(mc.matricula_alumno_id)
-    const studentCode = ma ? String(ma.codalumno || ma.alumno_id || ma.id) : String(mc.matricula_alumno_id)
 
     // Update Carrera aggregations
     if (!carreraStudentsMap.has(carreraId)) carreraStudentsMap.set(carreraId, new Set())
@@ -375,6 +462,35 @@ export function getForecastData(
 
     globalCycleMatriculasMap.set(cicloNombre, (globalCycleMatriculasMap.get(cicloNombre) || 0) + 1)
   }
+
+  // Build sorted list of available Modalidades
+  const modalidades: ForecastModalidadOption[] = Array.from(modalidadStatsMap.entries())
+    .map(([id, stat]) => ({
+      id,
+      nombre: modalidadMetaMap.get(id) || `Modalidad ${id}`,
+      totalMatriculas: stat.matriculas,
+      totalAlumnos: stat.students.size,
+    }))
+    .sort((a, b) => b.totalMatriculas - a.totalMatriculas)
+
+  // Build sorted list of available Turnos
+  const turnos: ForecastTurnoOption[] = Array.from(turnoStatsMap.entries())
+    .map(([code, stat]) => {
+      let nombre = code
+      if (code === 'D') nombre = 'Diurno'
+      else if (code === 'N') nombre = 'Nocturno'
+      else if (code === 'SIN_TURNO') nombre = 'Sin Turno'
+      return {
+        codigo: code,
+        nombre,
+        totalMatriculas: stat.matriculas,
+        totalAlumnos: stat.students.size,
+      }
+    })
+    .sort((a, b) => {
+      const order: Record<string, number> = { D: 1, N: 2, SIN_TURNO: 3 }
+      return (order[a.codigo] || 9) - (order[b.codigo] || 9)
+    })
 
   // Sorted list of all institutional cycles (CICLO 1 to CICLO 12) from catalog
   // Ensures cohort advancement forecast (Ciclo N -> Ciclo N+1) always has next cycle available
@@ -469,6 +585,8 @@ export function getForecastData(
     caseName: raw.caseName,
     periodos,
     sedes,
+    modalidades,
+    turnos,
     ciclos: sortedCycles,
     carreras,
     totals,
@@ -478,5 +596,7 @@ export function getForecastData(
         : null,
     selectedPeriodoIds: Array.from(activePeriodoIdsSet),
     selectedSedeId: activeSedeId,
+    selectedModalidadId: activeModalidadId,
+    selectedTurno: activeTurno,
   }
 }

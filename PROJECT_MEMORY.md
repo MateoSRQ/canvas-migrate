@@ -197,7 +197,18 @@
         - `Comparativa de Carreras`: Gráfico horizontal de todas las carreras con selectores de límite y ordenación.
       - **Resumen KPI Global**: Total Actual, Total Proyectado, Variación Neta ($+/-$ y $\%$) y parámetros activos de simulación.
     - **Tab Switcher Toolbar**: Segmented control en la barra de herramientas de `ForecastView` para alternar entre **"Tabla Matricial"** (`TableIcon`) y **"Gráfico de Barras"** (`BarChart3`).
-    - Full reactivity: Sincronizado en tiempo real con Casos SQL, Filtro Multi-Periodo, Sede, Selector métrico ("Alumnos Únicos" vs "Cupos"), Buscador de texto y Sliders de Deserción y Traslado.
+    - [x] **Filtros por Modalidad de Estudio y Turno de Clases**:
+      - Data lineage & relational resolution:
+        - **Modalidad**: `Carga_Academica_Sede_Curso.cat_modalidad_id` y `General.SedeCarrera.cat_modalidad_id` vinculados a `General.Catalogo` (`catalogo_tipo_id = 1`): ID 57 ("Presencial"), ID 5 ("Semi Presencial"), ID 2264 ("A Distancia").
+        - **Turno**: Resuelto combinando la sección y el alumno (`Carga_Academica_Sede_Seccion.turno` || `Academico.Alumno.turno`): `'D'` ("Diurno"), `'N'` ("Nocturno"), y `'SIN_TURNO'` para registros no clasificados.
+      - Dynamic scope calculation: `forecast-service.ts` compila dinámicamente las modalidades y turnos presentes en el periodo y sede activos con conteos de matrículas y alumnos únicos.
+      - Full-stack RPC integration: `getForecastDataFn` acepta `modalidadId` (`number | 'all' | null`) y `turno` (`string | 'all' | null`).
+      - UI integration in `ForecastView`:
+        - Barra de filtros ampliada a 6 columnas responsivas: Caso BD, Periodos, Sede, Modalidad (`Laptop`), Turno (`Clock`), Buscador (`Search`).
+        - Badges interactivos de filtros activos (Sede, Modalidad azul, Turno ámbar) con eliminación de un clic (`×`).
+        - Auto-ajuste de filtros al cambiar de periodo/caso si la opción ya no existe en el nuevo alcance.
+        - Exportación CSV enriquecida con metadatos de Modalidad y Turno y sufijos dinámicos en el nombre del archivo.
+        - Reactividad completa: Recomputa en tiempo real tanto la **Tabla Matricial** como los gráficos de **TanStack Charts** (agregados y detallados).
   - [x] Navigation integration: Added top header tab and left drawer menu item (`Previsión de Matrícula (Forecast)`) with `#forecast` hash routing in `app-layout.tsx` and `routes/index.tsx`.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
@@ -372,6 +383,10 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
         3. **Proyectado por Ciclo**: $\text{Proyectado}(k) = M_k + (k > 1 ? P_{k-1} : 0)$. Para Ciclo 1, al no tener cohorte institucional previa, $\text{Proyectado}(1) = M_1$ (exclusivamente sus repitentes).
       - Catalog Cycle Provisioning: `forecast-service.ts` includes all 12 institutional catalog cycles in `sortedCycles` (CICLO 1 to 12), ensuring target cycles (e.g. Ciclo 3 receiving from Ciclo 2) automatically have column definitions and reactive aggregation.
       - Initial Period Filter Default: In `forecast-service.ts`, when no `periodoIds` is passed (initial page load), the filter defaults to selecting strictly a single period (`[periodos[0].id]`), avoiding initial multi-period clutter.
+      - Modalidad and Turno Resolution & Dynamic Scope Filtering:
+        - **Modalidad**: Resuelta vía `Carga_Academica_Sede_Curso.cat_modalidad_id` con respaldo de `General.SedeCarrera.cat_modalidad_id`, mapeada a `General.Catalogo` (`catalogo_tipo_id = 1`) -> `57` ("Presencial"), `5` ("Semi Presencial"), `2264` ("A Distancia"). Cobertura de datos del 100% en la base institucional.
+        - **Turno**: Resuelto combinando la sección y la ficha del alumno (`Carga_Academica_Sede_Seccion.turno` || `Academico.Alumno.turno`) -> `'D'` ("Diurno"), `'N'` ("Nocturno"), o `'SIN_TURNO'` para registros no especificados. Cobertura del 99.8% (solo 215 registros sin turno en 95,656 registros).
+        - **Cálculo Dinámico de Alcance**: Las listas de opciones y conteos de matrículas/alumnos únicos para Modalidad y Turno se calculan en memoria a partir del periodo(s) y campus activos, garantizando que el usuario solo visualice opciones reales sin listas muertas.
 
 ---
 
@@ -537,6 +552,16 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
         - `Comparativa de Carreras`: Gráfico horizontal de todas las carreras con selectores de límite y ordenación.
       - **Summary KPI Metric Cards**: Tarjetas superiores con Total Actual, Total Proyectado, Variación Neta ($+/-$ y $\%$), y parámetros activos.
       - **Strict Component Policy**: Gráficos SVG puros de TanStack Charts sin widgets superfluos de dashboard.
+  - **Filtros Dinámicos de Modalidad y Turno (`ForecastView`)**:
+    - **Barra de Herramientas de 6 Columnas Responsiva**:
+      - `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3` garantizando que Caso, Periodos, Sede, Modalidad, Turno y Buscador se organicen con balance visual óptimo en cualquier pantalla.
+      - Selector de Modalidad con icono `Laptop` y conteo de alumnos únicos por opción.
+      - Selector de Turno con icono `Clock` y conteo de alumnos únicos por opción.
+    - **Chips / Badges de Filtros Activos**:
+      - Sede activa: Badge neutro con icono `Building2` y botón `×`.
+      - Modalidad activa: Badge azul (`bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800`) con icono `Laptop` y botón `×`.
+      - Turno activo: Badge ámbar (`bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800`) con icono `Clock` y botón `×`.
+    - **Sincronización Total en Tiempo Real**: La selección de Modalidad o Turno filtra de inmediato la Tabla Matricial, los cursos expandibles, los gráficos agregados por ciclo (`barY`) y los gráficos detallados por curso (`barX`).
 - **GitHub Interface & Visual Architecture Documentation (`README.md`)**:
   - ASCII visual layout of navigation header, drawer, and 4 core workspaces.
   - Mermaid architecture flowchart representing the full data pipeline.
