@@ -157,19 +157,27 @@
   - [x] Implemented TanStack Start server function RPC (`src/server/functions/forecast.ts` with `getForecastDataFn`).
   - [x] Full-width Previsión de Matrícula (Forecast) workspace (`src/components/forecast/forecast-view.tsx`):
     - Case directory switcher, institutional campus (Sede) filter, and **Multi-Period Selection Popover (`periodoIds: number[]`)**:
+      - Default on initial load: **exactly one item marked** (the primary period with the highest enrollment count, e.g. `2026-2 PREGRADO`), avoiding unsolicited all-period clutter.
       - Interactive popover dropdown with checkboxes, search filter, "Todos" / "Limpiar" batch buttons, and instant "Solo este" 1-click focus button.
       - Displays active period badges with quick removal (×) and multi-period aggregation (e.g. combining regular + convalidation periods like `2026-2 PREGRADO` + `2026-2 CONVALIDANTES`).
     - Dynamic metric switcher: "Alumnos Únicos" vs "Matrículas-Curso (Cupos)".
     - **Next-Semester Cohort Advancement Simulation (`enablePrediction`)**:
-      - Mathematical advancement rule: `Proyectado[Ciclo N+1] = Actual[Ciclo N] * (retentionRate / 100)`.
-      - Interactive retention rate slider from 100% down to 0% with value indicator badge and preset chips (`100% (Pase total)`, `95%`, `90%`, `85%`, `75%`, `0%`).
-      - Dual cell rendering: Displays the current value next to the projected value in distinctive Emerald Green styling (`Actual → Proyectado`).
+      - **3-Step Mathematical Prediction Model**:
+        1. **Deserción / Abandono ($d\% \in [0, 100]$)**: Personas que abandonan la universidad y se restan antes de cualquier otro cálculo: $D_k = \text{round}(A_k \times \frac{d}{100})$, quedando $R_k = \max(0, A_k - D_k)$.
+        2. **Traslado ($t\% \in [0, 100]$) vs Repitencia ($100 - t\%$)**: De los que quedan ($R_k$):
+           - Pasan al ciclo siguiente: $P_k = \text{round}(R_k \times \frac{t}{100})$.
+           - No pasan (repiten y continúan en el mismo ciclo): $M_k = \max(0, R_k - P_k)$.
+        3. **Proyectado por Ciclo**: $\text{Proyectado}(k) = M_k + (k > 1 ? P_{k-1} : 0)$.
+      - **Dual Interactive Sliders**:
+        - Slider 1: **Tasa de Deserción** (0% a 100%, color Rosa/Rojo, nunca negativo, con presets: 0%, 5%, 10%, 15%, 20%, 30%).
+        - Slider 2: **Tasa de Traslado** (0% a 100%, color Púrpura, con presets: 100%, 90%, 85%, 75%, 50%, 0%).
+      - Dual cell rendering: Displays the current value next to the projected value in distinctive Emerald Green styling (`Actual → Proyectado`) with comprehensive breakdown tooltip.
       - Side-by-side totals across every cycle column, total column, and overall general summary footer.
     - Interactive matrix table (Pivot table) displaying career rows across cycle columns (Ciclo 1 to 12) with sticky headers and sticky career column.
-    - Expandable nested course catalog under every career showing Course Code, Name, Curricular Plan, Credits, Open Sections count, enrolled students count, and estimated course projection.
+    - Expandable nested course catalog under every career showing Course Code, Name, Curricular Plan, Credits, Open Sections count, enrolled students count, and estimated course projection proportional to cycle dynamics.
     - Instant client-side text filtering across career names, faculties, course names, and codes.
     - Summary footer row calculating total students and total enrollments per cycle and overall total.
-    - CSV export engine (`handleExportCsv`) generating downloadable spreadsheet with dual Actual/Projected columns and complete course breakdown.
+    - CSV export engine (`handleExportCsv`) generating downloadable spreadsheet with dual Actual/Projected columns, deserción rate, and retention rate metadata.
   - [x] Navigation integration: Added top header tab and left drawer menu item (`Previsión de Matrícula (Forecast)`) with `#forecast` hash routing in `app-layout.tsx` and `routes/index.tsx`.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
@@ -331,9 +339,12 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
     - Multi-cohort Academic Progression: Lower cycles (Ciclo 1-2) dominate regular undergraduate admissions in 2026-2 PREGRADO (e.g. Estomatología: 24 in Ciclo 1, 35 in Ciclo 2), upper cycles (Ciclos 5-12) dominate convalidation programs in 2026-2 CONVALIDANTES, and posgrado (Maestrías) populate separate terms.
     - Aggregation Engine (`forecast-service.ts`): Computes dual metrics: unique students (`totalAlumnos`) and total course-level registrations (`totalMatriculas`), with bounded LRU caching (`LruCache`), cascading period/sede filtering, and full course catalogs with credit hours and section counts.
     - Cohort Advancement Predictive Modeling:
-      - Simulates student migration between consecutive semesters: `Proyectado[Ciclo N+1] = Math.round(Actual[Ciclo N] * (retentionRate / 100))`.
-      - Cycle 1 (Nuevo Ingreso) starts at 0 since incoming cohorts have no prior institutional semester record.
+      - 3-Step Mathematical Prediction Engine:
+        1. **Deserción ($d\% \in [0, 100]$)**: Alumnos que abandonan se restan primero antes de cualquier otro cálculo: $D_k = \text{round}(A_k \times \frac{d}{100})$, quedando $R_k = \max(0, A_k - D_k)$.
+        2. **Traslado ($t\% \in [0, 100]$) vs Repitencia ($100 - t\%$)**: De los que quedan ($R_k$), $P_k = \text{round}(R_k \times \frac{t}{100})$ pasan al ciclo siguiente ($k + 1$), mientras que los que no pasan ($M_k = R_k - P_k$) repiten y continúan en el mismo ciclo ($k$).
+        3. **Proyectado por Ciclo**: $\text{Proyectado}(k) = M_k + (k > 1 ? P_{k-1} : 0)$. Para Ciclo 1, al no tener cohorte institucional previa, $\text{Proyectado}(1) = M_1$ (exclusivamente sus repitentes).
       - Catalog Cycle Provisioning: `forecast-service.ts` includes all 12 institutional catalog cycles in `sortedCycles` (CICLO 1 to 12), ensuring target cycles (e.g. Ciclo 3 receiving from Ciclo 2) automatically have column definitions and reactive aggregation.
+      - Initial Period Filter Default: In `forecast-service.ts`, when no `periodoIds` is passed (initial page load), the filter defaults to selecting strictly a single period (`[periodos[0].id]`), avoiding initial multi-period clutter.
 
 ---
 
@@ -458,27 +469,33 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Full-Width Interactive Pivot Table**: Displays Careers on the Y-axis and Academic Cycles (Ciclo 1 to 12) on the X-axis, with sticky column for Career names and sticky header for cycle labels.
   - **Dual Metric Toggle**: Smooth switcher between "Alumnos Únicos" (distinct student headcount per career/cycle) and "Matrículas-Curso (Cupos)" (total enrollments / class seat occupancy).
   - **Next-Semester Predictive Simulation Engine (`enablePrediction`)**:
-    - Toggle action button with `Sparkles` icon (`Simular Próximo Semestre` / `Ocultar Simulación`).
-    - Interactive **Retention Rate Slider** (`src/components/ui/slider.tsx`): Built with Radix UI Slider primitive, styled with purple gradient track, white thumb with focus ring, sliding smoothly from 100% down to 0%.
-    - Preset chips for 1-click rate selection: `100% (Pase total)`, `95%`, `90%`, `85%`, `75%`, `0%`.
-    - Mathematical cohort advancement: Cycle $N+1$ receives students from Cycle $N$ scaled by retention percentage. Cycle 1 starts at 0 (no predecessor in institutional catalog).
+    - Toggle action button with `Sparkles` icon (`Simular Próximo Semestre` / `Ocultar Proyección`).
+    - **Dual Interactive Sliders** (`src/components/ui/slider.tsx`):
+      1. **Tasa de Deserción (Abandono)**: Rose/Red theme (`bg-rose-500`), range 0% to 100% (never negative), with quick presets: `0% (Sin deserción)`, `5%`, `10%`, `15%`, `20%`, `30%`. Alumnos que abandonan se restan primero antes de cualquier otro cálculo.
+      2. **Tasa de Traslado (Avance de Ciclo)**: Purple theme (`bg-purple-600`), range 0% to 100%, with quick presets: `100% (Pasan todos)`, `90%`, `85%`, `75%`, `50%`, `0% (Todos repiten)`. De los alumnos que quedan tras deserción, define quiénes avanzan al ciclo $N+1$ y quiénes repiten ($100 - t\%$) quedándose en el ciclo actual $N$.
+    - **Simulation Pipeline Flow & Legend Banner**: Displays 3 clear summary badges:
+      - Deserción: `${desercionRate}%` (se restan)
+      - Repitencia: `${100 - retentionRate}%` de los que quedan (mismo ciclo)
+      - Traslado: `${retentionRate}%` de los que quedan (siguiente ciclo)
     - **Dual-Value Cell Rendering (Side-by-Side Dual Color Display)**:
       - Current value: Neutral foreground text (`text-foreground font-semibold`).
       - Projected value: High-contrast Emerald Green badge (`bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 font-bold px-1.5 py-0.5 rounded shadow-2xs`), separated by transition arrow `→`.
-      - When projected value is 0, rendered in subdued gray font (`text-muted-foreground/50`).
+      - Cell breakdown tooltip on hover: Reveals exact arithmetic: `Proyección Ciclo N: {total} ({promovidos} promovidos de Ciclo anterior + {repitentes} repitentes de este ciclo | {desertores} desertores)`.
+      - When projected value is 0, rendered in subdued gray font (`text-muted-foreground/30`).
     - **Dual Totals**:
       - Career total column: `Actual` (muted gray badge `bg-muted text-foreground`) `→` `Proyectado` (prominent emerald badge `bg-emerald-600 text-white font-bold px-2 py-0.5 rounded shadow-xs`).
       - Column footer totals: Dual sums per cycle with subtle separator.
       - Grand total badge: Dual aggregate sum across all careers and cycles.
-    - Nested course catalog breakdown: Shows both actual enrolled students and estimated course projection based on cycle transition rate.
+    - Nested course catalog breakdown: Shows both actual enrolled students and estimated course projection scaled proportionally to parent cycle projection dynamics.
   - **Nested Course Roster Expansion**: Clicking any career row reveals the granular curricular breakdown of open courses for that career: Ciclo, Course Code, Asignatura, Curricular Plan, Credits, Section count, enrolled students, and projected enrollment badge.
   - **Cascading Filter Bar & Multi-Period Popover**: Seamless switching between SQL Cases, Institutional Campuses (Sedes), and **Multi-Period Selection**:
+    - Default on initial load: **Only one single item checked** (e.g. `2026-2 PREGRADO`), avoiding massive initial multi-period overfetch.
     - Interactive popover trigger with period count badge and dynamic labels (`Todos los Periodos`, individual period name, or `N periodos seleccionados`).
     - Internal period search filter, `Todos` and `Limpiar` actions, individual checkboxes, and quick `Solo este` button per period.
     - Removable active period pill badges (`Badge`) with `×` button for instant scope adjustment.
   - **Instant Search Filter**: Instant client-side text filtering across career names, faculties, course names, and codes.
   - **Mass Batch Controls**: "Expandir Todo" and "Plegar Todo" buttons for unfolding all careers simultaneously.
-  - **Export to CSV**: Client-side CSV generator compiling both the high-level Career x Cycle matrix and the exhaustive course breakdown, with dynamic filename reflecting selected period(s), dual `Actual` and `Proyectado` columns, and retention percentage metadata.
+  - **Export to CSV**: Client-side CSV generator compiling both the high-level Career x Cycle matrix and the exhaustive course breakdown, with dynamic filename reflecting selected period(s), dual `Actual` and `Proyectado` columns, and complete simulation metadata (Tasa Deserción, Tasa Traslado, Tasa Repitencia).
 - **GitHub Interface & Visual Architecture Documentation (`README.md`)**:
   - ASCII visual layout of navigation header, drawer, and 4 core workspaces.
   - Mermaid architecture flowchart representing the full data pipeline.

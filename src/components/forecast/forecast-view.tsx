@@ -1,6 +1,9 @@
 import * as React from 'react'
 import {
   TrendingUp,
+  TrendingDown,
+  RefreshCw,
+  UserMinus,
   Users,
   BookOpen,
   ChevronRight,
@@ -41,6 +44,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
   const [cases, setCases] = React.useState<any[]>([])
   const [selectedCaseId, setSelectedCaseId] = React.useState<string>(initialCaseId || '')
   const [selectedPeriodoIds, setSelectedPeriodoIds] = React.useState<number[]>([])
+  const [isPeriodInitialized, setIsPeriodInitialized] = React.useState<boolean>(false)
   const [selectedSedeId, setSelectedSedeId] = React.useState<number | 'all'>('all')
   const [metricMode, setMetricMode] = React.useState<'alumnos' | 'matriculas'>('alumnos')
   const [searchQuery, setSearchQuery] = React.useState<string>('')
@@ -50,8 +54,12 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
   const [loading, setLoading] = React.useState<boolean>(true)
   const [data, setData] = React.useState<ForecastResult | null>(null)
 
-  // Predicción del siguiente semestre (Avance de Cohortes Ciclo N -> Ciclo N+1)
+  // Predicción del siguiente semestre:
+  // 1. Tasa de Deserción: personas que abandonan y se restan primero (0% a 100%, nunca negativo)
+  // 2. Tasa de Traslado: de los que quedan, % que pasa al siguiente ciclo (100% a 0%)
+  // 3. Tasa de Repitencia: (100 - traslado)%, se suma al ciclo actual pues repiten
   const [enablePrediction, setEnablePrediction] = React.useState<boolean>(true)
+  const [desercionRate, setDesercionRate] = React.useState<number>(0) // 0% a 100%
   const [retentionRate, setRetentionRate] = React.useState<number>(100) // 100% a 0%
   const [showEmptyCycles, setShowEmptyCycles] = React.useState<boolean>(false)
 
@@ -96,6 +104,12 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
     }
   }, [selectedCaseId])
 
+  // Resetear inicialización de periodos cuando cambie el caso
+  React.useEffect(() => {
+    setIsPeriodInitialized(false)
+    setSelectedPeriodoIds([])
+  }, [selectedCaseId])
+
   // 2. Cargar datos de previsión para el caso y filtros seleccionados
   React.useEffect(() => {
     if (!selectedCaseId) return
@@ -107,14 +121,16 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
         const res = await getForecastDataFn({
           data: {
             caseId: selectedCaseId,
-            periodoIds: selectedPeriodoIds.length === 0 ? null : selectedPeriodoIds,
+            periodoIds: isPeriodInitialized ? selectedPeriodoIds : null,
             sedeId: selectedSedeId === 'all' ? null : selectedSedeId,
           },
         })
         if (active && res) {
           setData(res)
-          if (selectedPeriodoIds.length === 0 && res.selectedPeriodoIds.length > 0) {
+          // Al inicio se marca UN SOLO periodo (el principal con más matrículas)
+          if (!isPeriodInitialized && res.selectedPeriodoIds.length > 0) {
             setSelectedPeriodoIds(res.selectedPeriodoIds)
+            setIsPeriodInitialized(true)
           }
         }
       } catch (err) {
@@ -128,10 +144,11 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
     return () => {
       active = false
     }
-  }, [selectedCaseId, selectedPeriodoIds, selectedSedeId])
+  }, [selectedCaseId, selectedPeriodoIds, selectedSedeId, isPeriodInitialized])
 
   // Alternar selección de un periodo
   const togglePeriod = (periodId: number) => {
+    setIsPeriodInitialized(true)
     setSelectedPeriodoIds((prev) => {
       if (prev.includes(periodId)) {
         return prev.filter((id) => id !== periodId)
@@ -143,17 +160,20 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
 
   // Seleccionar únicamente un periodo
   const selectOnlyPeriod = (periodId: number) => {
+    setIsPeriodInitialized(true)
     setSelectedPeriodoIds([periodId])
   }
 
   // Seleccionar todos los periodos
   const selectAllPeriods = () => {
     if (!data) return
+    setIsPeriodInitialized(true)
     setSelectedPeriodoIds(data.periodos.map((p) => p.id))
   }
 
   // Limpiar / deseleccionar periodos
   const clearPeriods = () => {
+    setIsPeriodInitialized(true)
     setSelectedPeriodoIds([])
   }
 
@@ -178,21 +198,71 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
     setExpandedCarreras(new Set())
   }
 
-  // Cálculo del valor proyectado para un ciclo dado de una carrera
-  // Regla: Ciclo N+1 recibe los alumnos del Ciclo N con la tasa de retención (retentionRate / 100)
+  // Cálculo del desglose y valor proyectado para un ciclo dado de una carrera
+  // Reglas:
+  // 1. Deserción (desercionRate): Se restan primero los alumnos que abandonan (0% a 100%, nunca negativo).
+  // 2. Traslado vs Repitencia:
+  //    De los que quedan tras deserción:
+  //    - Traslado (retentionRate): Pasan al siguiente ciclo (k + 1).
+  //    - Repitencia (100 - retentionRate): No pasan; repiten y se quedan en el ciclo actual (k).
+  // 3. Proyectado para el Ciclo k:
+  //    Repitentes del Ciclo k + Promovidos del Ciclo anterior (k - 1)
+  const getProjectedBreakdownForCycle = React.useCallback(
+    (
+      carr: ForecastCareerRow,
+      cy: { nombre: string; orden: number }
+    ): { projected: number; repitentes: number; promovidos: number; desercion: number } => {
+      if (!data) return { projected: 0, repitentes: 0, promovidos: 0, desercion: 0 }
+
+      const actualCurrent =
+        metricMode === 'alumnos'
+          ? carr.byCycle[cy.nombre]?.alumnos || 0
+          : carr.byCycle[cy.nombre]?.matriculas || 0
+
+      const dRate = Math.max(0, Math.min(100, desercionRate))
+      const tRate = Math.max(0, Math.min(100, retentionRate))
+
+      // 1. Deserción del ciclo actual (se resta primero antes de cualquier otro cálculo)
+      const dCurrent = Math.round(actualCurrent * (dRate / 100))
+      const remainCurrent = Math.max(0, actualCurrent - dCurrent)
+
+      // 2. De los que quedan: el porcentaje que no pasa repite el ciclo actual
+      const pasanSiguienteCurrent = Math.round(remainCurrent * (tRate / 100))
+      const repitentesCurrent = Math.max(0, remainCurrent - pasanSiguienteCurrent)
+
+      // 3. Alumnos que avanzan desde el ciclo anterior (k - 1)
+      let promovidosFromPrev = 0
+      if (cy.orden > 1) {
+        const prevCycle = data.ciclos.find((c) => c.orden === cy.orden - 1)
+        if (prevCycle) {
+          const actualPrev =
+            metricMode === 'alumnos'
+              ? carr.byCycle[prevCycle.nombre]?.alumnos || 0
+              : carr.byCycle[prevCycle.nombre]?.matriculas || 0
+
+          const dPrev = Math.round(actualPrev * (dRate / 100))
+          const remainPrev = Math.max(0, actualPrev - dPrev)
+          promovidosFromPrev = Math.round(remainPrev * (tRate / 100))
+        }
+      }
+
+      const projected = repitentesCurrent + promovidosFromPrev
+
+      return {
+        projected,
+        repitentes: repitentesCurrent,
+        promovidos: promovidosFromPrev,
+        desercion: dCurrent,
+      }
+    },
+    [data, metricMode, desercionRate, retentionRate]
+  )
+
   const getProjectedForCycle = React.useCallback(
     (carr: ForecastCareerRow, cy: { nombre: string; orden: number }): number => {
-      if (cy.orden <= 1) return 0 // Ciclo 1 es nuevo ingreso; no tiene cohorte previa
-      if (!data) return 0
-      const prevCycle = data.ciclos.find((c) => c.orden === cy.orden - 1)
-      if (!prevCycle) return 0
-      const sourceActual =
-        metricMode === 'alumnos'
-          ? carr.byCycle[prevCycle.nombre]?.alumnos || 0
-          : carr.byCycle[prevCy.nombre]?.matriculas || 0
-      return Math.round(sourceActual * (retentionRate / 100))
+      return getProjectedBreakdownForCycle(carr, cy).projected
     },
-    [data, metricMode, retentionRate]
+    [getProjectedBreakdownForCycle]
   )
 
   // Filtrado reactivo por texto
@@ -293,10 +363,10 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
   // Texto amigable para el selector de periodos
   const periodSelectorLabel = React.useMemo(() => {
     if (!data || data.periodos.length === 0) return 'Sin periodos'
-    if (
-      selectedPeriodoIds.length === 0 ||
-      selectedPeriodoIds.length === data.periodos.length
-    ) {
+    if (selectedPeriodoIds.length === 0) {
+      return 'Sin periodos seleccionados'
+    }
+    if (selectedPeriodoIds.length === data.periodos.length) {
       return `Todos los Periodos (${data.periodos.length})`
     }
     if (selectedPeriodoIds.length === 1) {
@@ -311,10 +381,9 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
     if (!data) return
 
     let periodLabel = 'PERIODOS'
-    if (
-      selectedPeriodoIds.length === 0 ||
-      selectedPeriodoIds.length === data.periodos.length
-    ) {
+    if (selectedPeriodoIds.length === 0) {
+      periodLabel = 'SIN_PERIODOS'
+    } else if (selectedPeriodoIds.length === data.periodos.length) {
       periodLabel = 'TODOS_LOS_PERIODOS'
     } else if (selectedPeriodoIds.length === 1) {
       const p = data.periodos.find((x) => x.id === selectedPeriodoIds[0])
@@ -331,7 +400,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
     if (enablePrediction) {
       const cycleCols: string[] = []
       visibleCycles.forEach((cy) => {
-        cycleCols.push(`"${cy.nombre} Actual"`, `"${cy.nombre} Proyectado (${retentionRate}%)"`)
+        cycleCols.push(`"${cy.nombre} Actual"`, `"${cy.nombre} Proyectado"`)
       })
       headerRow = `"CÓDIGO","CARRERA","FACULTAD",${cycleCols.join(',')},"TOTAL ACTUAL","TOTAL PROYECTADO"`
     } else {
@@ -391,11 +460,11 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
           ? data.totals.byCycle[cy.nombre]?.alumnos || 0
           : data.totals.byCycle[cy.nombre]?.matriculas || 0
       })
-      const grandTotal =
+      const grandActual =
         metricMode === 'alumnos'
           ? data.totals.totalAlumnosGeneral
           : data.totals.totalMatriculasGeneral
-      totalRow = `"TOTAL","TOTAL GENERAL","",${totalCycleValues.join(',')},${grandTotal}`
+      totalRow = `"TOTAL","TOTAL GENERAL","",${totalCycleValues.join(',')},${grandActual}`
     }
 
     // Detalle de cursos
@@ -405,12 +474,17 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
       for (const cr of c.courses) {
         if (enablePrediction) {
           const cyObj = data.ciclos.find((x) => x.orden === cr.cicloOrden)
-          const courseProjected = cyObj
-            ? Math.round(
-                (c.byCycle[data.ciclos.find((x) => x.orden === cr.cicloOrden - 1)?.nombre || '']?.alumnos || 0) *
-                  (retentionRate / 100)
-              )
+          const cycleActual = cyObj
+            ? metricMode === 'alumnos'
+              ? c.byCycle[cyObj.nombre]?.alumnos || 0
+              : c.byCycle[cyObj.nombre]?.matriculas || 0
             : 0
+          const cycleProj = cyObj ? getProjectedForCycle(c, cyObj) : 0
+          const courseProjected =
+            cycleActual > 0
+              ? Math.round(cr.alumnosCount * (cycleProj / cycleActual))
+              : (cr.alumnosCount > 0 ? Math.max(0, Math.round(cr.alumnosCount * ((100 - desercionRate) / 100))) : 0)
+
           courseRows.push(
             `"${c.carreraNombre}","${cr.cicloNombre}","${cr.codCurso}","${cr.nombre}","${cr.planNombre}",${cr.creditos},${cr.seccionesCount},${cr.alumnosCount},${courseProjected}`
           )
@@ -422,7 +496,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
       }
     }
 
-    const metadataHeader = `"PREVISIÓN DE MATRÍCULA Y PROYECCIÓN DE COHORTES"\n"CASO","${data.caseName}"\n"PERIODOS","${periodLabel}"\n"TASA RETENCIÓN/TRASLADO","${enablePrediction ? `${retentionRate}%` : 'N/A'}"\n\n`
+    const metadataHeader = `"PREVISIÓN DE MATRÍCULA Y PROYECCIÓN DE COHORTES"\n"CASO","${data.caseName}"\n"PERIODOS","${periodLabel}"\n"TASA DESERCIÓN","${enablePrediction ? `${desercionRate}%` : 'N/A'}"\n"TASA TRASLADO","${enablePrediction ? `${retentionRate}%` : 'N/A'}"\n"TASA REPITENCIA","${enablePrediction ? `${100 - retentionRate}%` : 'N/A'}"\n\n`
 
     const csvContent = [metadataHeader, headerRow, ...rows, totalRow, coursesHeader, ...courseRows].join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -431,7 +505,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
     link.href = url
     link.setAttribute(
       'download',
-      `prevision_matricula_${data.caseId}_${periodLabel}_${enablePrediction ? `prediccion_${retentionRate}pct` : 'actual'}.csv`
+      `prevision_matricula_${data.caseId}_${periodLabel}_${enablePrediction ? `prediccion_t${retentionRate}_d${desercionRate}` : 'actual'}.csv`
     )
     document.body.appendChild(link)
     link.click()
@@ -533,8 +607,9 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
               </span>
               {data && (
                 <span className="text-[10px] text-muted-foreground">
-                  {selectedPeriodoIds.length === 0 ||
-                  selectedPeriodoIds.length === data.periodos.length
+                  {selectedPeriodoIds.length === 0
+                    ? 'Ninguno seleccionado'
+                    : selectedPeriodoIds.length === data.periodos.length
                     ? 'Todos activos'
                     : `${selectedPeriodoIds.length} de ${data.periodos.length}`}
                 </span>
@@ -773,88 +848,157 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
           </div>
 
           {enablePrediction && (
-            <div className="pt-2 border-t border-border/40 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-              {/* Slider Controls (7 cols) */}
-              <div className="md:col-span-7 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
-                    <Sliders className="size-3.5 text-purple-600 dark:text-purple-400" />
-                    <span>Tasa de Traslado / Retención:</span>
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-mono text-sm font-bold text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-950/70 border border-purple-300 dark:border-purple-800 px-2 py-0.5 rounded-md shadow-2xs">
-                      {retentionRate}%
+            <div className="pt-3 border-t border-border/40 space-y-3">
+              {/* Dual Sliders Grid: Deserción (Abandono) y Traslado (Pase de Ciclo) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 1. Slider Deserción (Rose accent) */}
+                <div className="rounded-lg border border-rose-200 dark:border-rose-950/60 bg-rose-50/40 dark:bg-rose-950/20 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-rose-900 dark:text-rose-200 flex items-center gap-1.5">
+                      <TrendingDown className="size-3.5 text-rose-600 dark:text-rose-400" />
+                      <span>1. Tasa de Deserción (Abandono):</span>
                     </span>
-                    <span className="text-[11px] text-muted-foreground">de alumnos pasan de ciclo</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-xs font-bold text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-950/80 border border-rose-300 dark:border-rose-800 px-2 py-0.5 rounded-md shadow-2xs">
+                        {desercionRate}%
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-medium">se restan primero</span>
+                    </div>
+                  </div>
+
+                  {/* Slider component from 0% to 100% */}
+                  <div className="flex items-center gap-2.5 pt-0.5">
+                    <span className="text-[10px] font-mono text-muted-foreground">0%</span>
+                    <Slider
+                      value={[desercionRate]}
+                      min={0}
+                      max={100}
+                      step={1}
+                      onValueChange={(val) => setDesercionRate(Math.max(0, Math.min(100, val[0])))}
+                      rangeClassName="bg-rose-500 dark:bg-rose-600"
+                      thumbClassName="border-rose-500 focus-visible:ring-rose-500/50"
+                      className="flex-1"
+                    />
+                    <span className="text-[10px] font-mono text-muted-foreground">100%</span>
+                  </div>
+
+                  {/* Preset Chips */}
+                  <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                    <span className="text-[10px] text-muted-foreground font-medium mr-1">Preajustes:</span>
+                    {[
+                      { label: '0% (Sin deserción)', val: 0 },
+                      { label: '5%', val: 5 },
+                      { label: '10%', val: 10 },
+                      { label: '15%', val: 15 },
+                      { label: '20%', val: 20 },
+                      { label: '30%', val: 30 },
+                    ].map((p) => (
+                      <button
+                        key={p.val}
+                        type="button"
+                        onClick={() => setDesercionRate(p.val)}
+                        className={`text-[10px] px-2 py-0.5 rounded-full border transition-all ${
+                          desercionRate === p.val
+                            ? 'bg-rose-600 text-white border-rose-600 font-bold shadow-2xs'
+                            : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Slider component from 100% to 0% */}
-                <div className="flex items-center gap-3 pt-0.5">
-                  <span className="text-[10px] font-mono text-muted-foreground">0%</span>
-                  <Slider
-                    value={[retentionRate]}
-                    min={0}
-                    max={100}
-                    step={1}
-                    onValueChange={(val) => setRetentionRate(val[0])}
-                    className="flex-1"
-                  />
-                  <span className="text-[10px] font-mono text-muted-foreground">100%</span>
-                </div>
+                {/* 2. Slider Traslado / Retención (Purple accent) */}
+                <div className="rounded-lg border border-purple-200 dark:border-purple-950/60 bg-purple-50/40 dark:bg-purple-950/20 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                      <ArrowRight className="size-3.5 text-purple-600 dark:text-purple-400" />
+                      <span>2. Tasa de Traslado (Pase de Ciclo):</span>
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-950/80 border border-purple-300 dark:border-purple-800 px-2 py-0.5 rounded-md shadow-2xs">
+                        {retentionRate}%
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-medium">pasan de ciclo</span>
+                    </div>
+                  </div>
 
-                {/* Preset Chips */}
-                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                  <span className="text-[10px] text-muted-foreground font-medium mr-1">Preajustes:</span>
-                  {[
-                    { label: '100% (Pase total)', val: 100 },
-                    { label: '95% (Alta)', val: 95 },
-                    { label: '90% (Estándar)', val: 90 },
-                    { label: '85%', val: 85 },
-                    { label: '75%', val: 75 },
-                    { label: '0%', val: 0 },
-                  ].map((p) => (
-                    <button
-                      key={p.val}
-                      type="button"
-                      onClick={() => setRetentionRate(p.val)}
-                      className={`text-[10px] px-2 py-0.5 rounded-full border transition-all ${
-                        retentionRate === p.val
-                          ? 'bg-purple-600 text-white border-purple-600 font-bold shadow-2xs'
-                          : 'bg-background hover:bg-muted text-muted-foreground border-border'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
+                  {/* Slider component from 0% to 100% */}
+                  <div className="flex items-center gap-2.5 pt-0.5">
+                    <span className="text-[10px] font-mono text-muted-foreground">0%</span>
+                    <Slider
+                      value={[retentionRate]}
+                      min={0}
+                      max={100}
+                      step={1}
+                      onValueChange={(val) => setRetentionRate(Math.max(0, Math.min(100, val[0])))}
+                      rangeClassName="bg-purple-600 dark:bg-purple-500"
+                      thumbClassName="border-purple-600 dark:border-purple-500 focus-visible:ring-purple-500/50"
+                      className="flex-1"
+                    />
+                    <span className="text-[10px] font-mono text-muted-foreground">100%</span>
+                  </div>
+
+                  {/* Preset Chips */}
+                  <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                    <span className="text-[10px] text-muted-foreground font-medium mr-1">Preajustes:</span>
+                    {[
+                      { label: '100% (Pasan todos)', val: 100 },
+                      { label: '90%', val: 90 },
+                      { label: '85%', val: 85 },
+                      { label: '75%', val: 75 },
+                      { label: '50%', val: 50 },
+                      { label: '0% (Todos repiten)', val: 0 },
+                    ].map((p) => (
+                      <button
+                        key={p.val}
+                        type="button"
+                        onClick={() => setRetentionRate(p.val)}
+                        className={`text-[10px] px-2 py-0.5 rounded-full border transition-all ${
+                          retentionRate === p.val
+                            ? 'bg-purple-600 text-white border-purple-600 font-bold shadow-2xs'
+                            : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              {/* Visual Color Legend & Explanation (5 cols) */}
-              <div className="md:col-span-5 md:border-l md:border-border/60 md:pl-4 space-y-2">
-                <span className="text-[11px] font-medium text-muted-foreground block">
-                  Guía visual de comparación en tabla:
-                </span>
+              {/* Explanatory Pipeline Flow and Visual Legend Banner */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 rounded-lg bg-muted/40 border border-border/70 text-xs">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] font-semibold text-foreground">Regla de simulación:</span>
+                  <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 gap-1 font-medium">
+                    <TrendingDown className="size-2.5" />
+                    Deserción: {desercionRate}% (abandonan)
+                  </Badge>
+                  <span className="text-muted-foreground/40 font-mono text-[10px]">→</span>
+                  <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 gap-1 font-medium">
+                    <RefreshCw className="size-2.5" />
+                    Repiten mismo ciclo: {100 - retentionRate}%
+                  </Badge>
+                  <span className="text-muted-foreground/40 font-mono text-[10px]">+</span>
+                  <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800 gap-1 font-medium">
+                    <ArrowRight className="size-2.5" />
+                    Pasan a sgte. ciclo: {retentionRate}%
+                  </Badge>
+                </div>
 
-                <div className="flex items-center gap-2 text-xs">
-                  {/* Actual pill */}
-                  <div className="flex items-center gap-1.5 bg-background border border-border px-2 py-1 rounded-md">
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1 bg-background border border-border px-2 py-0.5 rounded text-[11px]">
                     <span className="size-2 rounded-full bg-muted-foreground/60" />
                     <span className="font-semibold text-foreground">Actual</span>
                   </div>
-
-                  <ArrowRight className="size-3.5 text-muted-foreground/40 shrink-0" />
-
-                  {/* Predicted pill in Emerald Green */}
-                  <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 px-2 py-1 rounded-md text-emerald-700 dark:text-emerald-300">
+                  <span className="text-muted-foreground/40 text-[10px]">→</span>
+                  <div className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded text-[11px] text-emerald-700 dark:text-emerald-300 font-bold">
                     <span className="size-2 rounded-full bg-emerald-500" />
-                    <span className="font-bold">Proyectado ({retentionRate}%)</span>
+                    <span>Proyectado</span>
                   </div>
                 </div>
-
-                <p className="text-[10px] text-muted-foreground leading-relaxed">
-                  Los valores del siguiente semestre se muestran al lado en color <strong className="text-emerald-600 dark:text-emerald-400">verde esmeralda</strong>. Ciclo 1 refleja 0 por carecer de cohorte previa.
-                </p>
               </div>
             </div>
           )}
@@ -995,7 +1139,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                       <div>
                         <span className="block font-bold">Total {metricMode === 'alumnos' ? 'Alumnos' : 'Cupos'}</span>
                         <span className="text-[10px] font-normal text-muted-foreground block">
-                          Actual <span className="text-emerald-600 dark:text-emerald-400 font-medium">| Proy ({retentionRate}%)</span>
+                          Actual <span className="text-emerald-600 dark:text-emerald-400 font-medium">| Proy</span>
                         </span>
                       </div>
                     ) : (
@@ -1061,7 +1205,8 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                             metricMode === 'alumnos'
                               ? cycleData?.alumnos || 0
                               : cycleData?.matriculas || 0
-                          const projectedVal = getProjectedForCycle(carr, cy)
+                          const breakdown = getProjectedBreakdownForCycle(carr, cy)
+                          const projectedVal = breakdown.projected
 
                           return (
                             <td
@@ -1086,7 +1231,8 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
 
                                   {/* Projected Value in Emerald Green */}
                                   <span
-                                    className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold transition-colors ${
+                                    title={`Proyección ${cy.nombre}: ${projectedVal} (${breakdown.promovidos} promovidos de Ciclo anterior + ${breakdown.repitentes} repitentes de ${cy.nombre} | ${breakdown.desercion} desertores)`}
+                                    className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold transition-colors cursor-help ${
                                       projectedVal > 0
                                         ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-2xs'
                                         : 'text-muted-foreground/30 font-light'
@@ -1157,23 +1303,26 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                                     </th>
                                     {enablePrediction && (
                                       <th className="py-1.5 px-3 text-right text-emerald-600 dark:text-emerald-400">
-                                        Proyección ({retentionRate}%)
+                                        Proyección Estimada
                                       </th>
                                     )}
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border/30">
                                   {carr.courses.map((cr) => {
-                                    // Cálculo de proyección de la asignatura basada en la cohorte que avanza
-                                    const prevCyObj = data.ciclos.find(
-                                      (x) => x.orden === cr.cicloOrden - 1
+                                    const courseCyObj = data.ciclos.find(
+                                      (x) => x.orden === cr.cicloOrden
                                     )
-                                    const courseCohortBase = prevCyObj
-                                      ? carr.byCycle[prevCyObj.nombre]?.alumnos || 0
+                                    const cycleActual = courseCyObj
+                                      ? metricMode === 'alumnos'
+                                        ? carr.byCycle[courseCyObj.nombre]?.alumnos || 0
+                                        : carr.byCycle[courseCyObj.nombre]?.matriculas || 0
                                       : 0
-                                    const courseProjected = Math.round(
-                                      courseCohortBase * (retentionRate / 100)
-                                    )
+                                    const cycleProj = courseCyObj ? getProjectedForCycle(carr, courseCyObj) : 0
+                                    const courseProjected =
+                                      cycleActual > 0
+                                        ? Math.round(cr.alumnosCount * (cycleProj / cycleActual))
+                                        : (cr.alumnosCount > 0 ? Math.max(0, Math.round(cr.alumnosCount * ((100 - desercionRate) / 100))) : 0)
 
                                     return (
                                       <tr

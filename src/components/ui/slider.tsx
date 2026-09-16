@@ -2,6 +2,11 @@ import * as React from "react"
 import { Slider as SliderPrimitive } from "radix-ui"
 import { cn } from "#/lib/utils"
 
+export interface SliderProps extends React.ComponentProps<typeof SliderPrimitive.Root> {
+  rangeClassName?: string
+  thumbClassName?: string
+}
+
 export function Slider({
   className,
   defaultValue,
@@ -9,8 +14,10 @@ export function Slider({
   min = 0,
   max = 100,
   step = 1,
+  rangeClassName,
+  thumbClassName,
   ...props
-}: React.ComponentProps<typeof SliderPrimitive.Root>) {
+}: SliderProps) {
   return (
     <SliderPrimitive.Root
       data-slot="slider"
@@ -31,12 +38,18 @@ export function Slider({
       >
         <SliderPrimitive.Range
           data-slot="slider-range"
-          className="bg-purple-600 dark:bg-purple-500 absolute h-full"
+          className={cn(
+            "bg-purple-600 dark:bg-purple-500 absolute h-full",
+            rangeClassName
+          )}
         />
       </SliderPrimitive.Track>
       <SliderPrimitive.Thumb
         data-slot="slider-thumb"
-        className="border-2 border-purple-600 dark:border-purple-500 bg-background block size-4 shrink-0 rounded-full shadow-md transition-shadow hover:scale-110 focus-visible:ring-2 focus-visible:ring-purple-500/50 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
+        className={cn(
+          "border-2 border-purple-600 dark:border-purple-500 bg-background block size-4 shrink-0 rounded-full shadow-md transition-shadow hover:scale-110 focus-visible:ring-2 focus-visible:ring-purple-500/50 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
+          thumbClassName
+        )}
       />
     </SliderPrimitive.Root>
   )

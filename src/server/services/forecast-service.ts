@@ -240,22 +240,17 @@ export function getForecastData(
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
 
   // Determine active period filter:
-  // Can be multiple periods, a single period, or all periods (null)
+  // Default on initial load is ONLY the first period (single item marked)
   let activePeriodoIdsSet: Set<number> | null = null
   if (Array.isArray(options?.periodoIds)) {
-    if (options!.periodoIds.length === 0) {
-      activePeriodoIdsSet = null // Empty array means all periods
-    } else {
-      activePeriodoIdsSet = new Set(options!.periodoIds)
-    }
-  } else if (options?.periodoIds === null) {
-    activePeriodoIdsSet = null // All periods
-  } else if (options?.periodoId === null) {
-    activePeriodoIdsSet = null // All periods
+    activePeriodoIdsSet = new Set(options!.periodoIds)
   } else if (typeof options?.periodoId === 'number') {
     activePeriodoIdsSet = new Set([options.periodoId])
   } else if (periodos.length > 0) {
+    // Initial default: exactly one period marked
     activePeriodoIdsSet = new Set([periodos[0].id])
+  } else {
+    activePeriodoIdsSet = new Set()
   }
 
   const activeSedeId = typeof options?.sedeId === 'number' ? options.sedeId : null
@@ -482,9 +477,7 @@ export function getForecastData(
       activePeriodoIdsSet && activePeriodoIdsSet.size === 1
         ? Array.from(activePeriodoIdsSet)[0]
         : null,
-    selectedPeriodoIds: activePeriodoIdsSet
-      ? Array.from(activePeriodoIdsSet)
-      : periodos.map((p) => p.id),
+    selectedPeriodoIds: Array.from(activePeriodoIdsSet),
     selectedSedeId: activeSedeId,
   }
 }
