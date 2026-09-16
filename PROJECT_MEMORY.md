@@ -160,11 +160,16 @@
       - Interactive popover dropdown with checkboxes, search filter, "Todos" / "Limpiar" batch buttons, and instant "Solo este" 1-click focus button.
       - Displays active period badges with quick removal (×) and multi-period aggregation (e.g. combining regular + convalidation periods like `2026-2 PREGRADO` + `2026-2 CONVALIDANTES`).
     - Dynamic metric switcher: "Alumnos Únicos" vs "Matrículas-Curso (Cupos)".
+    - **Next-Semester Cohort Advancement Simulation (`enablePrediction`)**:
+      - Mathematical advancement rule: `Proyectado[Ciclo N+1] = Actual[Ciclo N] * (retentionRate / 100)`.
+      - Interactive retention rate slider from 100% down to 0% with value indicator badge and preset chips (`100% (Pase total)`, `95%`, `90%`, `85%`, `75%`, `0%`).
+      - Dual cell rendering: Displays the current value next to the projected value in distinctive Emerald Green styling (`Actual → Proyectado`).
+      - Side-by-side totals across every cycle column, total column, and overall general summary footer.
     - Interactive matrix table (Pivot table) displaying career rows across cycle columns (Ciclo 1 to 12) with sticky headers and sticky career column.
-    - Expandable nested course catalog under every career showing Course Code, Name, Curricular Plan, Credits, Open Sections count, and enrolled students count.
+    - Expandable nested course catalog under every career showing Course Code, Name, Curricular Plan, Credits, Open Sections count, enrolled students count, and estimated course projection.
     - Instant client-side text filtering across career names, faculties, course names, and codes.
     - Summary footer row calculating total students and total enrollments per cycle and overall total.
-    - CSV export engine (`handleExportCsv`) generating downloadable spreadsheet with matrix and complete course breakdown.
+    - CSV export engine (`handleExportCsv`) generating downloadable spreadsheet with dual Actual/Projected columns and complete course breakdown.
   - [x] Navigation integration: Added top header tab and left drawer menu item (`Previsión de Matrícula (Forecast)`) with `#forecast` hash routing in `app-layout.tsx` and `routes/index.tsx`.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
@@ -325,6 +330,10 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
     - Career Alignment: Curricular plans (`Academico.Plan.carrera_id`) and course sections (`Carga_Academica_Sede` -> `General.SedeCarrera.carrera_id`) match 100% across all 95,656 enrollments in the database (`matches: 95656, diffs: 0`).
     - Multi-cohort Academic Progression: Lower cycles (Ciclo 1-2) dominate regular undergraduate admissions in 2026-2 PREGRADO (e.g. Estomatología: 24 in Ciclo 1, 35 in Ciclo 2), upper cycles (Ciclos 5-12) dominate convalidation programs in 2026-2 CONVALIDANTES, and posgrado (Maestrías) populate separate terms.
     - Aggregation Engine (`forecast-service.ts`): Computes dual metrics: unique students (`totalAlumnos`) and total course-level registrations (`totalMatriculas`), with bounded LRU caching (`LruCache`), cascading period/sede filtering, and full course catalogs with credit hours and section counts.
+    - Cohort Advancement Predictive Modeling:
+      - Simulates student migration between consecutive semesters: `Proyectado[Ciclo N+1] = Math.round(Actual[Ciclo N] * (retentionRate / 100))`.
+      - Cycle 1 (Nuevo Ingreso) starts at 0 since incoming cohorts have no prior institutional semester record.
+      - Catalog Cycle Provisioning: `forecast-service.ts` includes all 12 institutional catalog cycles in `sortedCycles` (CICLO 1 to 12), ensuring target cycles (e.g. Ciclo 3 receiving from Ciclo 2) automatically have column definitions and reactive aggregation.
 
 ---
 
@@ -448,14 +457,28 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
 - **Enrollment Forecast Workspace (`ForecastView` - `src/components/forecast/forecast-view.tsx`)**:
   - **Full-Width Interactive Pivot Table**: Displays Careers on the Y-axis and Academic Cycles (Ciclo 1 to 12) on the X-axis, with sticky column for Career names and sticky header for cycle labels.
   - **Dual Metric Toggle**: Smooth switcher between "Alumnos Únicos" (distinct student headcount per career/cycle) and "Matrículas-Curso (Cupos)" (total enrollments / class seat occupancy).
-  - **Nested Course Roster Expansion**: Clicking any career row reveals the granular curricular breakdown of open courses for that career: Ciclo, Course Code, Asignatura, Curricular Plan, Credits, Section count, and Enrolled student count.
+  - **Next-Semester Predictive Simulation Engine (`enablePrediction`)**:
+    - Toggle action button with `Sparkles` icon (`Simular Próximo Semestre` / `Ocultar Simulación`).
+    - Interactive **Retention Rate Slider** (`src/components/ui/slider.tsx`): Built with Radix UI Slider primitive, styled with purple gradient track, white thumb with focus ring, sliding smoothly from 100% down to 0%.
+    - Preset chips for 1-click rate selection: `100% (Pase total)`, `95%`, `90%`, `85%`, `75%`, `0%`.
+    - Mathematical cohort advancement: Cycle $N+1$ receives students from Cycle $N$ scaled by retention percentage. Cycle 1 starts at 0 (no predecessor in institutional catalog).
+    - **Dual-Value Cell Rendering (Side-by-Side Dual Color Display)**:
+      - Current value: Neutral foreground text (`text-foreground font-semibold`).
+      - Projected value: High-contrast Emerald Green badge (`bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 font-bold px-1.5 py-0.5 rounded shadow-2xs`), separated by transition arrow `→`.
+      - When projected value is 0, rendered in subdued gray font (`text-muted-foreground/50`).
+    - **Dual Totals**:
+      - Career total column: `Actual` (muted gray badge `bg-muted text-foreground`) `→` `Proyectado` (prominent emerald badge `bg-emerald-600 text-white font-bold px-2 py-0.5 rounded shadow-xs`).
+      - Column footer totals: Dual sums per cycle with subtle separator.
+      - Grand total badge: Dual aggregate sum across all careers and cycles.
+    - Nested course catalog breakdown: Shows both actual enrolled students and estimated course projection based on cycle transition rate.
+  - **Nested Course Roster Expansion**: Clicking any career row reveals the granular curricular breakdown of open courses for that career: Ciclo, Course Code, Asignatura, Curricular Plan, Credits, Section count, enrolled students, and projected enrollment badge.
   - **Cascading Filter Bar & Multi-Period Popover**: Seamless switching between SQL Cases, Institutional Campuses (Sedes), and **Multi-Period Selection**:
     - Interactive popover trigger with period count badge and dynamic labels (`Todos los Periodos`, individual period name, or `N periodos seleccionados`).
     - Internal period search filter, `Todos` and `Limpiar` actions, individual checkboxes, and quick `Solo este` button per period.
     - Removable active period pill badges (`Badge`) with `×` button for instant scope adjustment.
   - **Instant Search Filter**: Instant client-side text filtering across career names, faculties, course names, and codes.
   - **Mass Batch Controls**: "Expandir Todo" and "Plegar Todo" buttons for unfolding all careers simultaneously.
-  - **Export to CSV**: Client-side CSV generator compiling both the high-level Career x Cycle matrix and the exhaustive course breakdown, with dynamic filename reflecting selected period(s).
+  - **Export to CSV**: Client-side CSV generator compiling both the high-level Career x Cycle matrix and the exhaustive course breakdown, with dynamic filename reflecting selected period(s), dual `Actual` and `Proyectado` columns, and retention percentage metadata.
 - **GitHub Interface & Visual Architecture Documentation (`README.md`)**:
   - ASCII visual layout of navigation header, drawer, and 4 core workspaces.
   - Mermaid architecture flowchart representing the full data pipeline.

@@ -382,8 +382,9 @@ export function getForecastData(
     globalCycleMatriculasMap.set(cicloNombre, (globalCycleMatriculasMap.get(cicloNombre) || 0) + 1)
   }
 
-  // Sorted list of cycles (e.g. CICLO 1, CICLO 2, ..., CICLO 12)
-  const sortedCycles = Array.from(usedCyclesMap.values()).sort((a, b) => {
+  // Sorted list of all institutional cycles (CICLO 1 to CICLO 12) from catalog
+  // Ensures cohort advancement forecast (Ciclo N -> Ciclo N+1) always has next cycle available
+  const sortedCycles = Array.from(cycleMetaMap.values()).sort((a, b) => {
     if (a.orden !== b.orden) return a.orden - b.orden
     return a.nombre.localeCompare(b.nombre)
   })

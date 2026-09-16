@@ -15,11 +15,16 @@ import {
   ChevronsUpDown,
   Check,
   X,
+  Sparkles,
+  ArrowRight,
+  Sliders,
+  RotateCcw,
 } from 'lucide-react'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Checkbox } from '#/components/ui/checkbox'
+import { Slider } from '#/components/ui/slider'
 import { getCasesFn } from '#/server/functions/cases'
 import { getForecastDataFn } from '#/server/functions/forecast'
 import type {
@@ -45,9 +50,14 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
   const [loading, setLoading] = React.useState<boolean>(true)
   const [data, setData] = React.useState<ForecastResult | null>(null)
 
+  // Predicción del siguiente semestre (Avance de Cohortes Ciclo N -> Ciclo N+1)
+  const [enablePrediction, setEnablePrediction] = React.useState<boolean>(true)
+  const [retentionRate, setRetentionRate] = React.useState<number>(100) // 100% a 0%
+  const [showEmptyCycles, setShowEmptyCycles] = React.useState<boolean>(false)
+
   const periodDropdownRef = React.useRef<HTMLDivElement>(null)
 
-  // Click outside to close period dropdown
+  // Click outside para cerrar el selector de periodos
   React.useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
@@ -72,7 +82,6 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
         if (mounted) {
           setCases(list)
           if (!selectedCaseId && list.length > 0) {
-            // Seleccionar el caso más reciente completado o el primero
             const completed = list.find((c: any) => c.status === 'completed') || list[0]
             setSelectedCaseId(completed.id)
           }
@@ -104,7 +113,6 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
         })
         if (active && res) {
           setData(res)
-          // Si no había periodos seleccionados, inicializar con los asignados por el backend
           if (selectedPeriodoIds.length === 0 && res.selectedPeriodoIds.length > 0) {
             setSelectedPeriodoIds(res.selectedPeriodoIds)
           }
@@ -126,9 +134,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
   const togglePeriod = (periodId: number) => {
     setSelectedPeriodoIds((prev) => {
       if (prev.includes(periodId)) {
-        // Evitar deseleccionar todos si se desea mantener al menos uno, o permitir vacío para "todos"
-        const next = prev.filter((id) => id !== periodId)
-        return next
+        return prev.filter((id) => id !== periodId)
       } else {
         return [...prev, periodId]
       }
@@ -172,7 +178,24 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
     setExpandedCarreras(new Set())
   }
 
-  // Filtrado reactivo por texto (nombre de carrera, código de curso o nombre de curso)
+  // Cálculo del valor proyectado para un ciclo dado de una carrera
+  // Regla: Ciclo N+1 recibe los alumnos del Ciclo N con la tasa de retención (retentionRate / 100)
+  const getProjectedForCycle = React.useCallback(
+    (carr: ForecastCareerRow, cy: { nombre: string; orden: number }): number => {
+      if (cy.orden <= 1) return 0 // Ciclo 1 es nuevo ingreso; no tiene cohorte previa
+      if (!data) return 0
+      const prevCycle = data.ciclos.find((c) => c.orden === cy.orden - 1)
+      if (!prevCycle) return 0
+      const sourceActual =
+        metricMode === 'alumnos'
+          ? carr.byCycle[prevCycle.nombre]?.alumnos || 0
+          : carr.byCycle[prevCy.nombre]?.matriculas || 0
+      return Math.round(sourceActual * (retentionRate / 100))
+    },
+    [data, metricMode, retentionRate]
+  )
+
+  // Filtrado reactivo por texto
   const filteredCarreras = React.useMemo(() => {
     if (!data) return []
     const q = searchQuery.trim().toLowerCase()
@@ -205,6 +228,60 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
       .filter((c): c is ForecastCareerRow => c !== null)
   }, [data, searchQuery])
 
+  // Ciclos visibles en la tabla (filtrados para que solo aparezcan ciclos con datos o proyecciones activas)
+  const visibleCycles = React.useMemo(() => {
+    if (!data) return []
+    if (showEmptyCycles) return data.ciclos
+
+    return data.ciclos.filter((cy) => {
+      const hasActual = filteredCarreras.some((c) => {
+        const val =
+          metricMode === 'alumnos'
+            ? c.byCycle[cy.nombre]?.alumnos || 0
+            : c.byCycle[cy.nombre]?.matriculas || 0
+        return val > 0
+      })
+      if (hasActual) return true
+
+      if (enablePrediction) {
+        const hasProjected = filteredCarreras.some(
+          (c) => getProjectedForCycle(c, cy) > 0
+        )
+        if (hasProjected) return true
+      }
+
+      return false
+    })
+  }, [
+    data,
+    showEmptyCycles,
+    filteredCarreras,
+    metricMode,
+    enablePrediction,
+    getProjectedForCycle,
+  ])
+
+  // Totales de proyección por ciclo
+  const projectedTotalsByCycle = React.useMemo(() => {
+    const res: Record<string, number> = {}
+    if (!data) return res
+    for (const cy of data.ciclos) {
+      res[cy.nombre] = filteredCarreras.reduce(
+        (acc, c) => acc + getProjectedForCycle(c, cy),
+        0
+      )
+    }
+    return res
+  }, [data, filteredCarreras, getProjectedForCycle])
+
+  // Gran total proyectado (suma de todas las proyecciones de ciclos visibles)
+  const projectedGrandTotal = React.useMemo(() => {
+    return visibleCycles.reduce(
+      (acc, cy) => acc + (projectedTotalsByCycle[cy.nombre] || 0),
+      0
+    )
+  }, [visibleCycles, projectedTotalsByCycle])
+
   // Filtrar periodos para el selector modal
   const filteredPeriodsForDropdown = React.useMemo(() => {
     if (!data) return []
@@ -216,7 +293,10 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
   // Texto amigable para el selector de periodos
   const periodSelectorLabel = React.useMemo(() => {
     if (!data || data.periodos.length === 0) return 'Sin periodos'
-    if (selectedPeriodoIds.length === 0 || selectedPeriodoIds.length === data.periodos.length) {
+    if (
+      selectedPeriodoIds.length === 0 ||
+      selectedPeriodoIds.length === data.periodos.length
+    ) {
       return `Todos los Periodos (${data.periodos.length})`
     }
     if (selectedPeriodoIds.length === 1) {
@@ -226,56 +306,133 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
     return `${selectedPeriodoIds.length} periodos seleccionados`
   }, [data, selectedPeriodoIds])
 
-  // Exportar matriz a archivo CSV
+  // Exportar matriz a archivo CSV con soporte para Proyección
   const handleExportCsv = () => {
     if (!data) return
 
     let periodLabel = 'PERIODOS'
-    if (selectedPeriodoIds.length === 0 || selectedPeriodoIds.length === data.periodos.length) {
+    if (
+      selectedPeriodoIds.length === 0 ||
+      selectedPeriodoIds.length === data.periodos.length
+    ) {
       periodLabel = 'TODOS_LOS_PERIODOS'
     } else if (selectedPeriodoIds.length === 1) {
       const p = data.periodos.find((x) => x.id === selectedPeriodoIds[0])
-      periodLabel = p ? p.nombre.replace(/\s+/g, '_') : String(selectedPeriodoIds[0])
+      periodLabel = p
+        ? p.nombre.replace(/\s+/g, '_')
+        : String(selectedPeriodoIds[0])
     } else {
       periodLabel = `${selectedPeriodoIds.length}_PERIODOS`
     }
 
-    const cyclesHeaders = data.ciclos.map((c) => `"${c.nombre}"`).join(',')
-    const headerRow = `"CÓDIGO","CARRERA","FACULTAD",${cyclesHeaders},"TOTAL GENERAL"`
+    const metricLabel = metricMode === 'alumnos' ? 'ALUMNOS' : 'CUPOS'
+
+    let headerRow = ''
+    if (enablePrediction) {
+      const cycleCols: string[] = []
+      visibleCycles.forEach((cy) => {
+        cycleCols.push(`"${cy.nombre} Actual"`, `"${cy.nombre} Proyectado (${retentionRate}%)"`)
+      })
+      headerRow = `"CÓDIGO","CARRERA","FACULTAD",${cycleCols.join(',')},"TOTAL ACTUAL","TOTAL PROYECTADO"`
+    } else {
+      const cyclesHeaders = visibleCycles.map((c) => `"${c.nombre}"`).join(',')
+      headerRow = `"CÓDIGO","CARRERA","FACULTAD",${cyclesHeaders},"TOTAL GENERAL"`
+    }
 
     const rows = filteredCarreras.map((c) => {
-      const cycleValues = data.ciclos.map((cy) => {
-        const val = metricMode === 'alumnos' ? c.byCycle[cy.nombre]?.alumnos || 0 : c.byCycle[cy.nombre]?.matriculas || 0
-        return val
-      })
-      const total = metricMode === 'alumnos' ? c.totalAlumnos : c.totalMatriculas
-      return `"${c.carreraCodigo}","${c.carreraNombre}","${c.facultadNombre}",${cycleValues.join(',')},${total}`
+      const totalActual =
+        metricMode === 'alumnos' ? c.totalAlumnos : c.totalMatriculas
+      const totalProj = visibleCycles.reduce(
+        (acc, cy) => acc + getProjectedForCycle(c, cy),
+        0
+      )
+
+      if (enablePrediction) {
+        const cycleValues: (number | string)[] = []
+        visibleCycles.forEach((cy) => {
+          const act =
+            metricMode === 'alumnos'
+              ? c.byCycle[cy.nombre]?.alumnos || 0
+              : c.byCycle[cy.nombre]?.matriculas || 0
+          const prj = getProjectedForCycle(c, cy)
+          cycleValues.push(act, prj)
+        })
+        return `"${c.carreraCodigo}","${c.carreraNombre}","${c.facultadNombre}",${cycleValues.join(',')},${totalActual},${totalProj}`
+      } else {
+        const cycleValues = visibleCycles.map((cy) => {
+          return metricMode === 'alumnos'
+            ? c.byCycle[cy.nombre]?.alumnos || 0
+            : c.byCycle[cy.nombre]?.matriculas || 0
+        })
+        return `"${c.carreraCodigo}","${c.carreraNombre}","${c.facultadNombre}",${cycleValues.join(',')},${totalActual}`
+      }
     })
 
     // Fila de totales
-    const totalCycleValues = data.ciclos.map((cy) => {
-      return metricMode === 'alumnos' ? data.totals.byCycle[cy.nombre]?.alumnos || 0 : data.totals.byCycle[cy.nombre]?.matriculas || 0
-    })
-    const grandTotal = metricMode === 'alumnos' ? data.totals.totalAlumnosGeneral : data.totals.totalMatriculasGeneral
-    const totalRow = `"TOTAL","TOTAL GENERAL","",${totalCycleValues.join(',')},${grandTotal}`
+    let totalRow = ''
+    if (enablePrediction) {
+      const totalCycleValues: (number | string)[] = []
+      visibleCycles.forEach((cy) => {
+        const act =
+          metricMode === 'alumnos'
+            ? data.totals.byCycle[cy.nombre]?.alumnos || 0
+            : data.totals.byCycle[cy.nombre]?.matriculas || 0
+        const prj = projectedTotalsByCycle[cy.nombre] || 0
+        totalCycleValues.push(act, prj)
+      })
+      const grandActual =
+        metricMode === 'alumnos'
+          ? data.totals.totalAlumnosGeneral
+          : data.totals.totalMatriculasGeneral
+      totalRow = `"TOTAL","TOTAL GENERAL","",${totalCycleValues.join(',')},${grandActual},${projectedGrandTotal}`
+    } else {
+      const totalCycleValues = visibleCycles.map((cy) => {
+        return metricMode === 'alumnos'
+          ? data.totals.byCycle[cy.nombre]?.alumnos || 0
+          : data.totals.byCycle[cy.nombre]?.matriculas || 0
+      })
+      const grandTotal =
+        metricMode === 'alumnos'
+          ? data.totals.totalAlumnosGeneral
+          : data.totals.totalMatriculasGeneral
+      totalRow = `"TOTAL","TOTAL GENERAL","",${totalCycleValues.join(',')},${grandTotal}`
+    }
 
-    // Sección de cursos detallados
-    const coursesHeader = `\n\n"DETALLE DE CURSOS POR CARRERA Y CICLO"\n"CARRERA","CICLO","CÓDIGO CURSO","ASIGNATURA","PLAN","CRÉDITOS","SECCIONES","MATRICULADOS"`
+    // Detalle de cursos
+    const coursesHeader = `\n\n"DETALLE DE CURSOS POR CARRERA Y CICLO (MÉTRICA: ${metricLabel})"\n"CARRERA","CICLO","CÓDIGO CURSO","ASIGNATURA","PLAN","CRÉDITOS","SECCIONES","MATRICULADOS ACTUALES"${enablePrediction ? ',"PROYECCIÓN ESTIMADA"' : ''}`
     const courseRows: string[] = []
     for (const c of filteredCarreras) {
       for (const cr of c.courses) {
-        courseRows.push(
-          `"${c.carreraNombre}","${cr.cicloNombre}","${cr.codCurso}","${cr.nombre}","${cr.planNombre}",${cr.creditos},${cr.seccionesCount},${cr.alumnosCount}`
-        )
+        if (enablePrediction) {
+          const cyObj = data.ciclos.find((x) => x.orden === cr.cicloOrden)
+          const courseProjected = cyObj
+            ? Math.round(
+                (c.byCycle[data.ciclos.find((x) => x.orden === cr.cicloOrden - 1)?.nombre || '']?.alumnos || 0) *
+                  (retentionRate / 100)
+              )
+            : 0
+          courseRows.push(
+            `"${c.carreraNombre}","${cr.cicloNombre}","${cr.codCurso}","${cr.nombre}","${cr.planNombre}",${cr.creditos},${cr.seccionesCount},${cr.alumnosCount},${courseProjected}`
+          )
+        } else {
+          courseRows.push(
+            `"${c.carreraNombre}","${cr.cicloNombre}","${cr.codCurso}","${cr.nombre}","${cr.planNombre}",${cr.creditos},${cr.seccionesCount},${cr.alumnosCount}`
+          )
+        }
       }
     }
 
-    const csvContent = [headerRow, ...rows, totalRow, coursesHeader, ...courseRows].join('\n')
+    const metadataHeader = `"PREVISIÓN DE MATRÍCULA Y PROYECCIÓN DE COHORTES"\n"CASO","${data.caseName}"\n"PERIODOS","${periodLabel}"\n"TASA RETENCIÓN/TRASLADO","${enablePrediction ? `${retentionRate}%` : 'N/A'}"\n\n`
+
+    const csvContent = [metadataHeader, headerRow, ...rows, totalRow, coursesHeader, ...courseRows].join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.setAttribute('download', `prevision_matricula_${data.caseId}_${periodLabel}.csv`)
+    link.setAttribute(
+      'download',
+      `prevision_matricula_${data.caseId}_${periodLabel}_${enablePrediction ? `prediccion_${retentionRate}pct` : 'actual'}.csv`
+    )
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -297,7 +454,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
               </h2>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Matriz consolidada de alumnos matriculados por carrera, ciclo y desglose curricular con soporte multi-periodo.
+              Matriz comparativa de matriculados por carrera y ciclo con motor de predicción del siguiente semestre por avance de cohortes.
             </p>
           </div>
 
@@ -355,7 +512,7 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
               value={selectedCaseId}
               onChange={(e) => {
                 setSelectedCaseId(e.target.value)
-                setSelectedPeriodoIds([]) // Resetear para que el nuevo caso use su periodo por defecto
+                setSelectedPeriodoIds([])
               }}
               className="w-full text-xs h-9 rounded-md border border-input bg-background px-2.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             >
@@ -376,7 +533,8 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
               </span>
               {data && (
                 <span className="text-[10px] text-muted-foreground">
-                  {selectedPeriodoIds.length === 0 || selectedPeriodoIds.length === data.periodos.length
+                  {selectedPeriodoIds.length === 0 ||
+                  selectedPeriodoIds.length === data.periodos.length
                     ? 'Todos activos'
                     : `${selectedPeriodoIds.length} de ${data.periodos.length}`}
                 </span>
@@ -394,11 +552,15 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                 <span className="truncate">{periodSelectorLabel}</span>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                {selectedPeriodoIds.length > 1 && selectedPeriodoIds.length < (data?.periodos.length || 0) && (
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-semibold">
-                    {selectedPeriodoIds.length}
-                  </Badge>
-                )}
+                {selectedPeriodoIds.length > 1 &&
+                  selectedPeriodoIds.length < (data?.periodos.length || 0) && (
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-1.5 py-0 h-4 font-semibold"
+                    >
+                      {selectedPeriodoIds.length}
+                    </Badge>
+                  )}
                 <ChevronsUpDown className="size-3.5 text-muted-foreground opacity-60" />
               </div>
             </button>
@@ -406,7 +568,6 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
             {/* Dropdown Popover Card */}
             {isPeriodDropdownOpen && data && (
               <div className="absolute z-50 left-0 top-full mt-1 w-full sm:w-[360px] rounded-xl border border-border bg-popover text-popover-foreground p-3 shadow-xl space-y-2.5">
-                {/* Search in periods */}
                 <div className="relative">
                   <Search className="size-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
                   <Input
@@ -426,7 +587,6 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                   )}
                 </div>
 
-                {/* Batch controls */}
                 <div className="flex items-center justify-between text-xs border-b border-border/50 pb-2">
                   <span className="text-[11px] text-muted-foreground font-medium">
                     {filteredPeriodsForDropdown.length} periodos disponibles
@@ -450,7 +610,6 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                   </div>
                 </div>
 
-                {/* Checkbox list */}
                 <div className="max-h-60 overflow-y-auto space-y-0.5 pr-1 divide-y divide-border/30">
                   {filteredPeriodsForDropdown.map((p) => {
                     const isChecked = selectedPeriodoIds.includes(p.id)
@@ -472,18 +631,20 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                           <div className="flex flex-col min-w-0">
                             <span
                               className={`text-xs font-medium truncate ${
-                                isChecked ? 'text-primary font-semibold' : 'text-foreground'
+                                isChecked
+                                  ? 'text-primary font-semibold'
+                                  : 'text-foreground'
                               }`}
                             >
                               {p.nombre}
                             </span>
                             <span className="text-[10px] text-muted-foreground">
-                              {p.totalAlumnos.toLocaleString()} alumnos • {p.totalMatriculas.toLocaleString()} matrículas
+                              {p.totalAlumnos.toLocaleString()} alumnos •{' '}
+                              {p.totalMatriculas.toLocaleString()} matrículas
                             </span>
                           </div>
                         </div>
 
-                        {/* Solo button */}
                         <button
                           type="button"
                           onClick={(e) => {
@@ -499,7 +660,6 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                   })}
                 </div>
 
-                {/* Footer action */}
                 <div className="pt-2 border-t border-border/50 flex items-center justify-between">
                   <span className="text-[11px] text-muted-foreground">
                     {selectedPeriodoIds.length} seleccionados
@@ -567,6 +727,139 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
           </div>
         </div>
 
+        {/* Dedicated Cohort Advancement Forecast Card with Slider */}
+        <div className="rounded-xl border border-purple-200 dark:border-purple-900/60 bg-gradient-to-r from-purple-500/[0.04] via-emerald-500/[0.04] to-transparent p-3.5 sm:p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center p-1.5 rounded-lg bg-purple-600 text-white shadow-2xs">
+                <Sparkles className="size-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-foreground tracking-tight">
+                    Predicción del Siguiente Semestre (Avance de Cohortes)
+                  </h3>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] py-0 px-2 font-medium bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                  >
+                    Activa
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Proyección: <span className="font-semibold text-foreground">Ciclo 2 ← Ciclo 1</span>,{' '}
+                  <span className="font-semibold text-foreground">Ciclo 3 ← Ciclo 2</span>,{' '}
+                  <span className="font-semibold text-foreground">Ciclo 4 ← Ciclo 3</span>... aplicando la tasa de traslado.
+                </p>
+              </div>
+            </div>
+
+            {/* Toggle button to enable/disable projection view */}
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <Button
+                size="sm"
+                variant={enablePrediction ? 'default' : 'outline'}
+                onClick={() => setEnablePrediction((prev) => !prev)}
+                className={`h-7 px-3 text-xs gap-1.5 ${
+                  enablePrediction
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                    : 'text-muted-foreground'
+                }`}
+              >
+                <Sparkles className="size-3" />
+                <span>{enablePrediction ? 'Ocultar Proyección' : 'Mostrar Proyección'}</span>
+              </Button>
+            </div>
+          </div>
+
+          {enablePrediction && (
+            <div className="pt-2 border-t border-border/40 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+              {/* Slider Controls (7 cols) */}
+              <div className="md:col-span-7 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                    <Sliders className="size-3.5 text-purple-600 dark:text-purple-400" />
+                    <span>Tasa de Traslado / Retención:</span>
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-sm font-bold text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-950/70 border border-purple-300 dark:border-purple-800 px-2 py-0.5 rounded-md shadow-2xs">
+                      {retentionRate}%
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">de alumnos pasan de ciclo</span>
+                  </div>
+                </div>
+
+                {/* Slider component from 100% to 0% */}
+                <div className="flex items-center gap-3 pt-0.5">
+                  <span className="text-[10px] font-mono text-muted-foreground">0%</span>
+                  <Slider
+                    value={[retentionRate]}
+                    min={0}
+                    max={100}
+                    step={1}
+                    onValueChange={(val) => setRetentionRate(val[0])}
+                    className="flex-1"
+                  />
+                  <span className="text-[10px] font-mono text-muted-foreground">100%</span>
+                </div>
+
+                {/* Preset Chips */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  <span className="text-[10px] text-muted-foreground font-medium mr-1">Preajustes:</span>
+                  {[
+                    { label: '100% (Pase total)', val: 100 },
+                    { label: '95% (Alta)', val: 95 },
+                    { label: '90% (Estándar)', val: 90 },
+                    { label: '85%', val: 85 },
+                    { label: '75%', val: 75 },
+                    { label: '0%', val: 0 },
+                  ].map((p) => (
+                    <button
+                      key={p.val}
+                      type="button"
+                      onClick={() => setRetentionRate(p.val)}
+                      className={`text-[10px] px-2 py-0.5 rounded-full border transition-all ${
+                        retentionRate === p.val
+                          ? 'bg-purple-600 text-white border-purple-600 font-bold shadow-2xs'
+                          : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Visual Color Legend & Explanation (5 cols) */}
+              <div className="md:col-span-5 md:border-l md:border-border/60 md:pl-4 space-y-2">
+                <span className="text-[11px] font-medium text-muted-foreground block">
+                  Guía visual de comparación en tabla:
+                </span>
+
+                <div className="flex items-center gap-2 text-xs">
+                  {/* Actual pill */}
+                  <div className="flex items-center gap-1.5 bg-background border border-border px-2 py-1 rounded-md">
+                    <span className="size-2 rounded-full bg-muted-foreground/60" />
+                    <span className="font-semibold text-foreground">Actual</span>
+                  </div>
+
+                  <ArrowRight className="size-3.5 text-muted-foreground/40 shrink-0" />
+
+                  {/* Predicted pill in Emerald Green */}
+                  <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 px-2 py-1 rounded-md text-emerald-700 dark:text-emerald-300">
+                    <span className="size-2 rounded-full bg-emerald-500" />
+                    <span className="font-bold">Proyectado ({retentionRate}%)</span>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  Los valores del siguiente semestre se muestran al lado en color <strong className="text-emerald-600 dark:text-emerald-400">verde esmeralda</strong>. Ciclo 1 refleja 0 por carecer de cohorte previa.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Global Key Metrics Summary Bar & Active Filter Badges */}
         {data && !loading && (
           <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/40 text-xs text-muted-foreground flex-wrap">
@@ -576,25 +869,32 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
               </span>
               <span>•</span>
               <span>
-                Total Alumnos:{' '}
+                Actual General:{' '}
                 <strong className="text-foreground">
-                  {data.totals.totalAlumnosGeneral.toLocaleString()}
-                </strong>
-              </span>
-              <span>•</span>
-              <span>
-                Total Matrículas:{' '}
-                <strong className="text-foreground">
-                  {data.totals.totalMatriculasGeneral.toLocaleString()}
-                </strong>
-              </span>
-              <span>•</span>
-              <span>
-                Ciclos Activos:{' '}
-                <strong className="text-foreground">{data.ciclos.length}</strong>
+                  {data.totals.totalAlumnosGeneral.toLocaleString()} alumnos
+                </strong>{' '}
+                ({data.totals.totalMatriculasGeneral.toLocaleString()} matrículas)
               </span>
 
-              {/* Active period badges */}
+              {enablePrediction && (
+                <>
+                  <span>•</span>
+                  <span>
+                    Proyectado General:{' '}
+                    <strong className="text-emerald-600 dark:text-emerald-400 font-bold">
+                      {projectedGrandTotal.toLocaleString()} {metricMode === 'alumnos' ? 'alumnos' : 'cupos'}
+                    </strong>
+                  </span>
+                </>
+              )}
+
+              <span>•</span>
+              <span>
+                Ciclos Visibles:{' '}
+                <strong className="text-foreground">{visibleCycles.length}</strong>
+              </span>
+
+              {/* Active period badges with removal option */}
               {selectedPeriodoIds.length > 0 && selectedPeriodoIds.length < data.periodos.length && (
                 <>
                   <span>•</span>
@@ -654,9 +954,9 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
         {loading ? (
           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-3">
             <Loader2 className="size-8 text-primary animate-spin" />
-            <p className="text-sm font-medium text-foreground">Calculando previsión de matrícula...</p>
+            <p className="text-sm font-medium text-foreground">Calculando previsión y proyección de matrícula...</p>
             <p className="text-xs text-muted-foreground max-w-sm">
-              Procesando matriz consolidada para {selectedPeriodoIds.length === 0 ? 'todos los periodos' : `${selectedPeriodoIds.length} periodos seleccionados`}.
+              Procesando avance de cohortes para {selectedPeriodoIds.length === 0 ? 'todos los periodos' : `${selectedPeriodoIds.length} periodos seleccionados`}.
             </p>
           </div>
         ) : !data || filteredCarreras.length === 0 ? (
@@ -677,24 +977,42 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                   <th className="py-3 px-4 font-semibold text-foreground min-w-[280px] sticky left-0 z-20 bg-muted/95 backdrop-blur">
                     Carrera / Programa Académico
                   </th>
-                  {data.ciclos.map((cy) => (
+                  {visibleCycles.map((cy) => (
                     <th
                       key={cy.nombre}
-                      className="py-3 px-3 font-semibold text-foreground text-center min-w-[84px]"
+                      className="py-2.5 px-3 font-semibold text-foreground text-center min-w-[105px]"
                     >
-                      {cy.nombre}
+                      <span className="block font-bold">{cy.nombre}</span>
+                      {enablePrediction && (
+                        <span className="text-[10px] font-normal text-muted-foreground block whitespace-nowrap">
+                          Actual <span className="text-emerald-600 dark:text-emerald-400 font-medium">| Proy</span>
+                        </span>
+                      )}
                     </th>
                   ))}
-                  <th className="py-3 px-4 font-semibold text-foreground text-right min-w-[110px] bg-muted/60">
-                    Total {metricMode === 'alumnos' ? 'Alumnos' : 'Cupos'}
+                  <th className="py-3 px-4 font-semibold text-foreground text-right min-w-[130px] bg-muted/60">
+                    {enablePrediction ? (
+                      <div>
+                        <span className="block font-bold">Total {metricMode === 'alumnos' ? 'Alumnos' : 'Cupos'}</span>
+                        <span className="text-[10px] font-normal text-muted-foreground block">
+                          Actual <span className="text-emerald-600 dark:text-emerald-400 font-medium">| Proy ({retentionRate}%)</span>
+                        </span>
+                      </div>
+                    ) : (
+                      <span>Total {metricMode === 'alumnos' ? 'Alumnos' : 'Cupos'}</span>
+                    )}
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
                 {filteredCarreras.map((carr) => {
                   const isExpanded = expandedCarreras.has(carr.carreraId)
-                  const totalValue =
+                  const totalActual =
                     metricMode === 'alumnos' ? carr.totalAlumnos : carr.totalMatriculas
+                  const totalProjected = visibleCycles.reduce(
+                    (acc, cy) => acc + getProjectedForCycle(carr, cy),
+                    0
+                  )
 
                   return (
                     <React.Fragment key={carr.carreraId}>
@@ -736,25 +1054,56 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                           </div>
                         </td>
 
-                        {/* Cycles columns */}
-                        {data.ciclos.map((cy) => {
+                        {/* Cycles columns: Actual next to Projected in Emerald Color */}
+                        {visibleCycles.map((cy) => {
                           const cycleData = carr.byCycle[cy.nombre]
-                          const value =
+                          const actualVal =
                             metricMode === 'alumnos'
                               ? cycleData?.alumnos || 0
                               : cycleData?.matriculas || 0
+                          const projectedVal = getProjectedForCycle(carr, cy)
 
                           return (
                             <td
                               key={cy.nombre}
                               className="py-2.5 px-3 text-center font-medium"
                             >
-                              {value > 0 ? (
-                                <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-foreground">
-                                  {value}
-                                </span>
+                              {enablePrediction ? (
+                                <div className="inline-flex items-center justify-center gap-1">
+                                  {/* Actual Value */}
+                                  <span
+                                    className={`text-xs font-medium ${
+                                      actualVal > 0 ? 'text-foreground' : 'text-muted-foreground/30'
+                                    }`}
+                                  >
+                                    {actualVal > 0 ? actualVal : '—'}
+                                  </span>
+
+                                  {/* Transition arrow */}
+                                  <span className="text-[10px] text-muted-foreground/40 select-none">
+                                    →
+                                  </span>
+
+                                  {/* Projected Value in Emerald Green */}
+                                  <span
+                                    className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold transition-colors ${
+                                      projectedVal > 0
+                                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-2xs'
+                                        : 'text-muted-foreground/30 font-light'
+                                    }`}
+                                  >
+                                    {projectedVal > 0 ? projectedVal : '—'}
+                                  </span>
+                                </div>
                               ) : (
-                                <span className="text-muted-foreground/30 font-light">—</span>
+                                /* Normal mode without projection */
+                                actualVal > 0 ? (
+                                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-foreground">
+                                    {actualVal}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground/30 font-light">—</span>
+                                )
                               )}
                             </td>
                           )
@@ -762,16 +1111,30 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
 
                         {/* Total column */}
                         <td className="py-2.5 px-4 text-right bg-card/60 group-hover:bg-muted/40">
-                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-bold bg-primary/10 text-primary">
-                            {totalValue.toLocaleString()}
-                          </span>
+                          {enablePrediction ? (
+                            <div className="inline-flex items-center justify-end gap-1.5">
+                              {/* Actual Total */}
+                              <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-md text-xs font-semibold bg-muted text-foreground">
+                                {totalActual.toLocaleString()}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground/40">→</span>
+                              {/* Projected Total */}
+                              <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-600 text-white dark:bg-emerald-500 dark:text-gray-950 shadow-2xs">
+                                {totalProjected.toLocaleString()}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-bold bg-primary/10 text-primary">
+                              {totalActual.toLocaleString()}
+                            </span>
+                          )}
                         </td>
                       </tr>
 
                       {/* Expanded Courses Nested Table */}
                       {isExpanded && (
                         <tr className="bg-muted/15 border-b border-border/80">
-                          <td colSpan={data.ciclos.length + 2} className="p-3 pl-8 sm:pl-10">
+                          <td colSpan={visibleCycles.length + 2} className="p-3 pl-8 sm:pl-10">
                             <div className="rounded-lg border border-border/80 bg-background overflow-hidden shadow-2xs">
                               <div className="py-2 px-3 bg-muted/40 border-b border-border flex items-center justify-between text-[11px] font-medium text-muted-foreground">
                                 <span>
@@ -790,41 +1153,67 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                                     <th className="py-1.5 px-3 text-center">Créditos</th>
                                     <th className="py-1.5 px-3 text-center">Secciones</th>
                                     <th className="py-1.5 px-3 text-right">
-                                      Matriculados
+                                      Matriculados Actuales
                                     </th>
+                                    {enablePrediction && (
+                                      <th className="py-1.5 px-3 text-right text-emerald-600 dark:text-emerald-400">
+                                        Proyección ({retentionRate}%)
+                                      </th>
+                                    )}
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border/30">
-                                  {carr.courses.map((cr) => (
-                                    <tr
-                                      key={cr.cursoId}
-                                      className="hover:bg-muted/30 transition-colors"
-                                    >
-                                      <td className="py-1.5 px-3 font-medium whitespace-nowrap">
-                                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-normal">
-                                          {cr.cicloNombre}
-                                        </Badge>
-                                      </td>
-                                      <td className="py-1.5 px-3 font-mono text-muted-foreground whitespace-nowrap">
-                                        {cr.codCurso}
-                                      </td>
-                                      <td className="py-1.5 px-3 font-medium text-foreground">
-                                        {cr.nombre}
-                                      </td>
-                                      <td className="py-1.5 px-3 text-muted-foreground truncate max-w-[200px]">
-                                        {cr.planNombre}
-                                      </td>
-                                      <td className="py-1.5 px-3 text-center text-muted-foreground">
-                                        {cr.creditos} cr
-                                      </td>
-                                      <td className="py-1.5 px-3 text-center text-muted-foreground">
-                                        {cr.seccionesCount} sec
-                                      </td>
-                                      <td className="py-1.5 px-3 text-right font-bold text-foreground">
-                                        {cr.alumnosCount}
-                                      </td>
-                                    </tr>
-                                  ))}
+                                  {carr.courses.map((cr) => {
+                                    // Cálculo de proyección de la asignatura basada en la cohorte que avanza
+                                    const prevCyObj = data.ciclos.find(
+                                      (x) => x.orden === cr.cicloOrden - 1
+                                    )
+                                    const courseCohortBase = prevCyObj
+                                      ? carr.byCycle[prevCyObj.nombre]?.alumnos || 0
+                                      : 0
+                                    const courseProjected = Math.round(
+                                      courseCohortBase * (retentionRate / 100)
+                                    )
+
+                                    return (
+                                      <tr
+                                        key={cr.cursoId}
+                                        className="hover:bg-muted/30 transition-colors"
+                                      >
+                                        <td className="py-1.5 px-3 font-medium whitespace-nowrap">
+                                          <Badge
+                                            variant="outline"
+                                            className="text-[10px] py-0 px-1.5 font-normal"
+                                          >
+                                            {cr.cicloNombre}
+                                          </Badge>
+                                        </td>
+                                        <td className="py-1.5 px-3 font-mono text-muted-foreground whitespace-nowrap">
+                                          {cr.codCurso}
+                                        </td>
+                                        <td className="py-1.5 px-3 font-medium text-foreground">
+                                          {cr.nombre}
+                                        </td>
+                                        <td className="py-1.5 px-3 text-muted-foreground truncate max-w-[200px]">
+                                          {cr.planNombre}
+                                        </td>
+                                        <td className="py-1.5 px-3 text-center text-muted-foreground">
+                                          {cr.creditos} cr
+                                        </td>
+                                        <td className="py-1.5 px-3 text-center text-muted-foreground">
+                                          {cr.seccionesCount} sec
+                                        </td>
+                                        <td className="py-1.5 px-3 text-right font-bold text-foreground">
+                                          {cr.alumnosCount}
+                                        </td>
+                                        {enablePrediction && (
+                                          <td className="py-1.5 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                                            {cr.cicloOrden <= 1 ? '—' : courseProjected}
+                                          </td>
+                                        )}
+                                      </tr>
+                                    )
+                                  })}
                                 </tbody>
                               </table>
                             </div>
@@ -847,25 +1236,57 @@ export function ForecastView({ initialCaseId }: ForecastViewProps) {
                       </Badge>
                     </div>
                   </td>
-                  {data.ciclos.map((cy) => {
-                    const sum =
+                  {visibleCycles.map((cy) => {
+                    const sumActual =
                       metricMode === 'alumnos'
                         ? data.totals.byCycle[cy.nombre]?.alumnos || 0
                         : data.totals.byCycle[cy.nombre]?.matriculas || 0
+                    const sumProjected = projectedTotalsByCycle[cy.nombre] || 0
 
                     return (
                       <td key={cy.nombre} className="py-3 px-3 text-center">
-                        <span className="font-bold text-xs">{sum.toLocaleString()}</span>
+                        {enablePrediction ? (
+                          <div className="inline-flex items-center justify-center gap-1">
+                            <span className="font-bold text-xs text-foreground">
+                              {sumActual.toLocaleString()}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground/40 select-none">
+                              →
+                            </span>
+                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800">
+                              {sumProjected.toLocaleString()}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="font-bold text-xs">
+                            {sumActual.toLocaleString()}
+                          </span>
+                        )}
                       </td>
                     )
                   })}
                   <td className="py-3 px-4 text-right bg-muted/80">
-                    <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-black bg-primary text-primary-foreground shadow-xs">
-                      {(metricMode === 'alumnos'
-                        ? data.totals.totalAlumnosGeneral
-                        : data.totals.totalMatriculasGeneral
-                      ).toLocaleString()}
-                    </span>
+                    {enablePrediction ? (
+                      <div className="inline-flex items-center justify-end gap-1.5">
+                        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-bold bg-muted text-foreground">
+                          {(metricMode === 'alumnos'
+                            ? data.totals.totalAlumnosGeneral
+                            : data.totals.totalMatriculasGeneral
+                          ).toLocaleString()}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/40">→</span>
+                        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-black bg-emerald-600 text-white shadow-xs">
+                          {projectedGrandTotal.toLocaleString()}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-black bg-primary text-primary-foreground shadow-xs">
+                        {(metricMode === 'alumnos'
+                          ? data.totals.totalAlumnosGeneral
+                          : data.totals.totalMatriculasGeneral
+                        ).toLocaleString()}
+                      </span>
+                    )}
                   </td>
                 </tr>
               </tfoot>
