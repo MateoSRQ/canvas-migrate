@@ -45,7 +45,9 @@ export function StudentInspectorDialog({
             return (
               <DialogDescription className="text-xs text-muted-foreground space-y-1 pt-1">
                 <div className="text-foreground font-medium flex items-center gap-1.5 flex-wrap">
-                  <span className="font-semibold text-foreground">[{modCode} {item.cursoCodigo.trim()} {item.seccionNombre.trim()}] {item.cursoNombre.trim()}</span>
+                  <span className="font-semibold text-foreground">{item.cursoNombre.trim()}</span>
+                  <span className="text-muted-foreground">•</span>
+                  <span className="text-muted-foreground font-mono text-xs">[{modCode} {item.seccionNombre.trim()}]</span>
                 </div>
                 <div className="flex items-center gap-2 text-[11px] flex-wrap">
                   <span>Docente: {item.docenteNombre || 'Sin docente asignado'}</span>

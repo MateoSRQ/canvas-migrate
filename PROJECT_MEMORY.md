@@ -281,6 +281,16 @@
     - [x] **Matrículas Directas al Curso Propio**: Cada matrícula en `enrollments.csv` se vincula directa y exclusivamente a su propio curso (`targetCourseId = courseId`) y su respectiva sección.
     - [x] **Depuración de Reportes y Árbol Visual**: Eliminado el bloque de combinaciones en `hierarchy.txt`, omitida la creación de `CURSOS_COMPARTIDOS.md` y eliminada la métrica de combinaciones en `RESUMEN.md`.
     - [x] **Ajuste en Interfaz de Usuario**: Los distintivos de grupo se mantienen únicamente como metadatos informativos de origen (`Grupo: {codigo}`) sin referencia a cross-listing.
+  - [x] **Eliminación de Código en Negrita Duplicado en Títulos de Curso en la UI**:
+    - [x] **`HierarchySelector`**: Celda de curso en la tabla detallada muestra exclusivamente el nombre de la asignatura (`row.original.cursoNombre`), evitando la repetición del código de sección que ya figura en su propia columna.
+    - [x] **`HierarchyTreeTable`**: Nodo de curso muestra el título limpio (`curso.rawCursoNombre`) conservando el nombre estructurado completo en el tooltip flotante.
+    - [x] **`CaseComparisonView`**: Retirado el código SIS en negrita (`{course.courseId} •` y `{course.sisCourseId} •`) previo al título en los paneles de Migración y Canvas API.
+    - [x] **`CanvasCaseManager`**: Retirado el prefijo `{course.sisCourseId}` en negrita y el guión antes del título del curso.
+    - [x] **`StudentInspectorDialog`**: Cabecera simplificada con el nombre limpio de la asignatura e insignia sutil de modalidad y sección.
+  - [x] **Resolución y Visualización de Nombres de Docentes y Alumnos (Cero IDs Huérfanos)**:
+    - [x] **Corrección en Lector de Migraciones (`migration-service.ts`)**: Solucionado el fallo donde `users.csv` evaluaba solo `first_name`/`last_name` vacíos provocando que docentes y alumnos aparecieran con su código repetido (`DNI - DNI` / `COD - COD`). Ahora lee prioritariamente `full_name` y `sortable_name`.
+    - [x] **Generación de `users.csv` (`canvas-exporter.ts`)**: Población de `first_name` y `last_name` a partir de `fullName` para compatibilidad total Canvas SIS.
+    - [x] **Resolución Docente 100% en Jerarquía (`hierarchy-service.ts`)**: Indexación multi-clave en `utbMap` (`IdPersona`, `Documento`, `Codigo`) e integración de fallback contra `alumnoMap`/`personaMap` para asistentes y ayudantes de cátedra, garantizando nombres completos reales en toda la interfaz.
   - [x] Verificado con compilación TypeScript estricta (`tsc --noEmit` con 0 errores) y empaquetado de producción (`npm run build` con 0 errores).
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
@@ -746,11 +756,17 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
     - Cada curso-sección es una entidad independiente en Canvas LMS con su propia matrícula y sección, eliminando cursos agrupados vacíos o desvinculaciones.
     - No se genera ni empaqueta `xlists.csv` ni `CURSOS_COMPARTIDOS.md`.
   - **Insignias en Interfaz**: La insignia de grupo (`Grupo: {codigo}`) en la tabla y en el árbol se mantiene exclusivamente como indicador informativo de origen (`Grupo compartido: {codigo}`), eliminando cualquier mención a cross-listing o `xlists.csv`.
-- **Limpieza Visual de Cursos (Visualización Exclusiva del Título)**:
-  - **Motivación**: Dado que el título del curso contiene de forma estructurada `[MOD CODIGO SECCION] ASIGNATURA` (ej: `[MP CUR006381 ANI- SECCIÓN 4] CULTURA MATEMÁTICA I`), mostrar además insignias `[MP]`, `[Curso v2]` y el código crudo `MP-CUR...` antes del título generaba saturación visual y redundancia.
-  - **Ajuste en `HierarchySelector` (Tabla Detallada)**: Se retiró la fila de insignias y el código crudo dentro de la celda de Curso, mostrando directamente el título completo limpio.
-  - **Ajuste en `HierarchyTreeTable` (Árbol Jerárquico)**: Se eliminaron las insignias redundantes y el código crudo `{curso.cursoCodigo} •`, dejando únicamente el título completo `{curso.cursoNombre}`.
-  - **Ajuste en `StudentInspectorDialog` (Modal de Alumnos)**: Se suprimieron las insignias y el código crudo en la cabecera, desplegando exclusivamente el título completo del curso.
+- **Limpieza Visual de Cursos (Visualización Exclusiva del Título sin Duplicación en Negrita)**:
+  - **Motivación**: Dado que la sección ya se despliega en su propia columna o sub-rama (`ANI- SECCIÓN 4`), mantener el prefijo estructurado `[MP CUR006381 ANI- SECCIÓN 4]` en negrita dentro del título del curso en la UI provocaba duplicación y sobrecarga de códigos repetidos.
+  - **Ajuste en `HierarchySelector` (Tabla Detallada)**: La celda de Curso despliega directamente el nombre de la asignatura (`row.original.cursoNombre`), conservando el formato Canvas completo en el tooltip contextual. La cabecera de la fila expandida muestra `[{item.seccionNombre}] ({item.cursoNombre})` sin códigos redundantes.
+  - **Ajuste en `HierarchyTreeTable` (Árbol Jerárquico)**: El nodo de curso muestra el título limpio `{curso.rawCursoNombre}` (ej: `CULTURA MATEMÁTICA I`), manteniendo el título completo en el tooltip `title={curso.cursoNombre}`.
+  - **Ajuste en `StudentInspectorDialog` (Modal de Alumnos)**: Se suprimió la duplicación de corchetes en negrita, mostrando `{item.cursoNombre}` acompañado de una etiqueta secundaria `[{modCode} {item.seccionNombre}]`.
+  - **Ajuste en `CaseComparisonView` (Comparativa Lado a Lado)**: Se eliminaron los códigos en negrita `{course.courseId} •` y `{course.sisCourseId} •` antes del nombre del curso en los paneles de Migración y Canvas API, mostrando un encabezado limpio y homogéneo.
+  - **Ajuste en `CanvasCaseManager` (Explorador Canvas API)**: Se retiró el código en negrita `{course.sisCourseId}` y el guión previo a `{course.name}`, dejando únicamente el título del curso junto a su insignia SIS en el extremo derecho.
+- **Resolución Integral de Nombres de Docentes y Estudiantes (Cero IDs Numéricos Huérfanos)**:
+  - **Detección y Corrección en Lector de Paquetes (`migration-service.ts`)**: Los paquetes exportados colocaban el nombre completo en `full_name`, pero el lector solo comprobaba `first_name` y `last_name` vacíos, provocando que los docentes y estudiantes se visualizaran como `07353547 - 07353547` o `26011111010001 - 26011111010001`. Ahora lee prioritariamente `full_name` y `sortable_name`.
+  - **Población en Generador SIS (`canvas-exporter.ts`)**: Se incorporó la separación automática de `first_name` y `last_name` al compilar `users.csv`.
+  - **Resolución 100% en Base de Datos Académica (`hierarchy-service.ts`)**: `utbMap` ahora indexa por `IdPersona`, `Documento` y `Codigo`. Además, se agregó resolución fallback contra `alumnoMap` y `personaMap` para asistentes y ayudantes de práctica registrados en `Carga_Academica_Sede_Curso_Horario_Detalle`, garantizando que el 100% de personas cuenten con su nombre completo oficial.
 
 
 

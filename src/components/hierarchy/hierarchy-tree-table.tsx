@@ -1263,7 +1263,7 @@ export function HierarchyTreeTable({
                                                                           className="text-foreground font-medium text-xs sm:text-[13px] truncate"
                                                                         >
                                                                           {
-                                                                            curso.cursoNombre
+                                                                            curso.rawCursoNombre
                                                                           }
                                                                         </span>
                                                                       </div>

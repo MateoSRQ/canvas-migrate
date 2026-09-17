@@ -517,7 +517,7 @@ export function HierarchySelector({
               className="font-medium text-xs sm:text-[13px] text-foreground leading-snug min-w-[320px] max-w-[650px]"
               title={v2CourseName}
             >
-              {v2CourseName}
+              {row.original.cursoNombre}
             </div>
           )
         },
@@ -1400,11 +1400,11 @@ export function HierarchySelector({
                                 <div className="flex items-center gap-2 font-medium text-foreground">
                                   <Users className="size-3.5 text-primary" />
                                   <span>Matriculados en Sección Única:</span>
-                                  <span className="font-mono text-primary font-bold">
+                                  <span className="font-mono text-primary font-semibold">
                                     [{item.seccionNombre}]
                                   </span>
                                   <span className="text-muted-foreground font-medium">
-                                    ([{getModalidadCode(item.modalidadId, item.modalidadNombre)} {item.cursoCodigo.trim()} {item.seccionNombre.trim()}] {item.cursoNombre.trim()})
+                                    ({item.cursoNombre.trim()})
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">

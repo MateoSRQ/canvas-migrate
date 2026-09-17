@@ -554,11 +554,10 @@ export function CaseComparisonView({
             )}
             <BookOpen className="size-3.5 text-blue-600 shrink-0" />
             <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-              <span className="font-mono font-bold text-xs text-foreground">
-                {course.courseId}
-              </span>
-              <span className="text-muted-foreground">•</span>
-              <span className="font-semibold text-xs text-foreground truncate max-w-xs">
+              <span
+                className="font-medium text-xs text-foreground truncate max-w-sm sm:max-w-md"
+                title={course.longName}
+              >
                 {course.longName}
               </span>
             </div>
@@ -829,11 +828,10 @@ export function CaseComparisonView({
             )}
             <BookOpen className="size-3.5 text-emerald-600 shrink-0" />
             <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-              <span className="font-mono font-bold text-xs text-foreground">
-                {course.sisCourseId || course.courseCode || `#${course.canvasId}`}
-              </span>
-              <span className="text-muted-foreground">•</span>
-              <span className="font-semibold text-xs text-foreground truncate max-w-xs">
+              <span
+                className="font-medium text-xs text-foreground truncate max-w-sm sm:max-w-md"
+                title={course.name}
+              >
                 {course.name}
               </span>
             </div>

@@ -490,14 +490,8 @@ export function CanvasCaseManager() {
               [CURSO]
             </Badge>
 
-            <span className="font-mono text-primary font-bold text-xs shrink-0">
-              {course.sisCourseId || course.courseCode || `CUR-${course.canvasId}`}
-            </span>
-
-            <span className="text-muted-foreground shrink-0">-</span>
-
             <span
-              className="truncate font-semibold text-xs text-foreground"
+              className="truncate font-medium text-xs text-foreground"
               title={course.name}
             >
               {course.name}
