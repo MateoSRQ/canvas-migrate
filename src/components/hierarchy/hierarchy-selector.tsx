@@ -506,12 +506,12 @@ export function HierarchySelector({
         minSize: 300,
         accessorFn: (row) => {
           const modCode = getModalidadCode(row.modalidadId, row.modalidadNombre)
-          return `[${modCode}] ${row.cursoNombre.trim()} [${row.seccionNombre.trim()}]`
+          return `[${modCode}] - ${row.cursoCodigo.trim()} - ${row.cursoNombre.trim()} - ${row.seccionNombre.trim()}`
         },
         cell: ({ row }) => {
           const modCode = getModalidadCode(row.original.modalidadId, row.original.modalidadNombre)
           const v2CourseCode = `${modCode}-${row.original.cursoCodigo.trim()}-${row.original.seccionNombre.trim()}`
-          const v2CourseName = `[${modCode}] ${row.original.cursoNombre.trim()} [${row.original.seccionNombre.trim()}]`
+          const v2CourseName = `[${modCode}] - ${row.original.cursoCodigo.trim()} - ${row.original.cursoNombre.trim()} - ${row.original.seccionNombre.trim()}`
 
           return (
             <div className="space-y-1 min-w-[320px] max-w-[650px]">
@@ -1434,7 +1434,7 @@ export function HierarchySelector({
                                     [{item.seccionNombre}]
                                   </span>
                                   <span className="text-muted-foreground font-medium">
-                                    ([{getModalidadCode(item.modalidadId, item.modalidadNombre)}] {item.cursoNombre} [{item.seccionNombre}])
+                                    ([{getModalidadCode(item.modalidadId, item.modalidadNombre)}] - {item.cursoCodigo.trim()} - {item.cursoNombre.trim()} - {item.seccionNombre.trim()})
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">

@@ -264,6 +264,17 @@
     - Formateo de nombres de sección en `sections.csv`: `[${modCode}] ${it.seccionNombre.trim()}` (ej. `[MP] FD SECCIÓN 1`, `[MN] FD SECCIÓN 1`, `[MD] FD SECCIÓN 1`), eliminando colisiones de nombres idénticos entre modalidades en cursos combinados.
     - Enlace de matrículas a cursos contenedores en `enrollments.csv`: las secciones cross-listadas dirigen su `course_id` al ID del curso contenedor maestro (`xlist_course_id`), permitiendo a Canvas LMS computar los alumnos reales en el curso maestro en vez de marcar 0.
     - Mapeo en árbol de migración (`migration-service.ts`): las secciones cross-listadas se asocian tanto a su curso curricular de origen como a su curso contenedor maestro.
+  - [x] **Estandarización de Nombre Completo de Cursos y Secciones (`[MOD] - CODIGO - ASIGNATURA - SECCION`)**:
+    - [x] **Formato Unificado**: Adopción formal del estándar `[${modCode}] - ${cursoCodigo} - ${cursoNombre} - ${seccionNombre}` (ej. `[MP] - CUR006381 - CULTURA MATEMÁTICA I - ANI- SECCIÓN 4`).
+    - [x] **Exportación SIS (`courses.csv` y `sections.csv`)**:
+      - `courses.csv`: `long_name` y `short_name` aplican la estructura completa `[MOD] - CODIGO - ASIGNATURA - SECCION`.
+      - `sections.csv`: `name` adopta idéntica estructura completa `[MOD] - CODIGO - ASIGNATURA - SECCION`, resolviendo la duplicidad o confusión en cohortes (ej. cohorte `7532` matriculada en 6 asignaturas distintas con nombres de sección únicos y descriptivos).
+    - [x] **Artefactos y Reportes (`hierarchy.txt`, `CURSOS_COMPARTIDOS.md`)**: Visualización en texto del árbol jerárquico y tablas de cursos combinados alineadas al estándar.
+    - [x] **Interfaces de Usuario y Diálogos**:
+      - `HierarchyTreeTable`: Nodo de curso con título completo y claro.
+      - `HierarchySelector`: Columna 'Curso (v2)' y desglose de matriculados sincronizados.
+      - `StudentInspectorDialog`: Cabecera de inspección con nombre completo.
+      - `CanvasAuditService`: Auditoría contra Canvas API comparando bajo el estándar unificado.
   - [x] Verificado con compilación TypeScript estricta (`tsc --noEmit` con 0 errores) y empaquetado de producción (`npm run build` con 0 errores).
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
@@ -713,5 +724,16 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
     - Se ajustó `targetCourseId = xlistsMap.has(sectionId) ? xlistsMap.get(sectionId)!.xlist_course_id : courseId`, garantizando que docentes y estudiantes queden activamente adscritos al curso maestro contenedor (`GRP_...`) con conteo de matriculados real y visible.
   - **Sincronización en Árbol de Paquetes de Migración (`migration-service.ts`)**:
     - Se adaptó el lector de paquetes para vincular las secciones tanto a su curso original como al curso contenedor maestro (`secByCourse.get(xlistCId)`), garantizando que al inspeccionar el curso contenedor se desplieguen sus secciones, docentes y alumnos.
+- **Estandarización de Nomenclatura Unificada: `[MOD] - CODIGO - ASIGNATURA - SECCION`**:
+  - **Motivación y Diagnóstico**:
+    - En `BDACADEMICO6`, una misma cohorte de estudiantes (ej. sección `7532` de Animación Digital) cursa hasta 6 asignaturas diferentes en el semestre (`CULTURA MATEMÁTICA I`, `DIBUJO ARTÍSTICO I`, `INTRODUCCIÓN A LA ANIMACIÓN`, etc.).
+    - Al llamarse anteriormente la sección `[MP] ANI- SECCIÓN 4` para todas las asignaturas, en `sections.csv` aparecían múltiples filas con el mismo nombre descriptivo, generando confusión sobre a qué curso pertenecía cada sección.
+  - **Formato Adoptado**: `[${modCode}] - ${cursoCodigo} - ${cursoNombre} - ${seccionNombre}` (ejemplo real: `[MP] - CUR006381 - CULTURA MATEMÁTICA I - ANI- SECCIÓN 4`).
+  - **Consistencia Total**:
+    - `courses.csv`: `long_name` y `short_name` aplican esta estructura unificada.
+    - `sections.csv`: Cada sección hereda este nombre completo descriptivo, haciendo que cada fila sea 100% autoexplicativa y única.
+    - `hierarchy.txt` y `CURSOS_COMPARTIDOS.md`: Actualizados con la nueva nomenclatura.
+    - Interfaz gráfica: Reflejado en `HierarchySelector` (columna Curso v2 y desglose), `HierarchyTreeTable` y `StudentInspectorDialog`.
+
 
 

@@ -311,9 +311,9 @@ export async function exportSelectedToCanvasCsv(
     const planAccId = accPrefix ? `${accPrefix}${rawPlanAccId}` : rawPlanAccId
     const rawCurso = cursoRawMap.get(it.cursoId)
     const shortName = rawCurso?.abreviatura
-      ? `[${modCode}] ${String(rawCurso.abreviatura).trim()} [${it.seccionNombre.trim()}]`
-      : (coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId)
-    const longName = `[${modCode}] ${it.cursoNombre.trim()} [${it.seccionNombre.trim()}]`
+      ? `[${modCode}] - ${it.cursoCodigo.trim()} - ${String(rawCurso.abreviatura).trim()} - ${it.seccionNombre.trim()}`
+      : `[${modCode}] - ${it.cursoCodigo.trim()} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
+    const longName = `[${modCode}] - ${it.cursoCodigo.trim()} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
 
     if (!coursesMap.has(courseId)) {
       coursesMap.set(courseId, {
@@ -445,7 +445,7 @@ export async function exportSelectedToCanvasCsv(
       sectionsMap.set(sectionId, {
         section_id: sectionId,
         course_id: courseId,
-        name: `[${modCode}] ${it.seccionNombre.trim()}`,
+        name: `[${modCode}] - ${it.cursoCodigo.trim()} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`,
         status: 'active',
         start_date: '',
         end_date: '',
@@ -740,7 +740,7 @@ export async function exportSelectedToCanvasCsv(
     const modCode = getModalidadCode(it.modalidadId, it.modalidadNombre)
     const rawCurCode = `${modCode}-${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
     const curCode = coursePrefix ? `${coursePrefix}${rawCurCode}` : rawCurCode
-    const curKey = `${curCode} - [${modCode}] ${it.cursoNombre.trim()} [${it.seccionNombre.trim()}]`
+    const curKey = `${curCode} - [${modCode}] - ${it.cursoCodigo.trim()} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
     if (!curG.has(curKey)) curG.set(curKey, [])
     curG.get(curKey)!.push(it)
   }
@@ -769,7 +769,7 @@ export async function exportSelectedToCanvasCsv(
                 const rawSecId = `${s.seccionId}-${rawSecCourseId}`
                 const secId = coursePrefix ? `${coursePrefix}${rawSecId}` : rawSecId
                 treeLines.push(
-                  `\t\t\t\t\t\t${rootIndent}[SECCION] [${sModCode}] ${s.seccionNombre} (SEC: ${secId})${s.grupoCodigo ? ` [GRUPO: ${s.grupoCodigo}]` : ''} - ${s.estudiantes.length} alumnos`
+                  `\t\t\t\t\t\t${rootIndent}[SECCION] [${sModCode}] - ${s.cursoCodigo.trim()} - ${s.cursoNombre.trim()} - ${s.seccionNombre} (SEC: ${secId})${s.grupoCodigo ? ` [GRUPO: ${s.grupoCodigo}]` : ''} - ${s.estudiantes.length} alumnos`
                 )
                 const seenDocKeys = new Set<string>()
                 for (const d of s.docentes) {
@@ -814,7 +814,7 @@ export async function exportSelectedToCanvasCsv(
           const rawSecId = `${item.seccionId}-${rawItemCourseId}`
           const secId = coursePrefix ? `${coursePrefix}${rawSecId}` : rawSecId
           treeLines.push(
-            `\t-> [SECCION COMBINADA] ${secId} ([${itemModCode}] ${item.seccionNombre}) - Curso: ${rawItemCourseId} "[${itemModCode}] ${item.cursoNombre.trim()} [${item.seccionNombre.trim()}]"`
+            `\t-> [SECCION COMBINADA] ${secId} ([${itemModCode}] - ${item.cursoCodigo.trim()} - ${item.cursoNombre.trim()} - ${item.seccionNombre}) - Curso: ${rawItemCourseId} "[${itemModCode}] - ${item.cursoCodigo.trim()} - ${item.cursoNombre.trim()} - ${item.seccionNombre.trim()}]"`
           )
         }
       }
@@ -976,7 +976,7 @@ ${xlistsList.length > 0 ? '9.' : '8.'} **\`canvas_migration.zip\`**: Paquete ZIP
             : '*(Sin asignar)*'
         const alumnosCount = it.estudiantes?.length || 0
         ccLines.push(
-          `| **[${itModCode}] ${it.seccionNombre}** | \`${secId}\` | \`${courseId}\`<br>[${itModCode}] ${it.cursoNombre.trim()} [${it.seccionNombre.trim()}] | ${it.carreraNombre} > ${it.planNombre} | **${alumnosCount}** | ${teachStr} |`
+          `| **[${itModCode}] - ${it.cursoCodigo.trim()} - ${it.cursoNombre.trim()} - ${it.seccionNombre}** | \`${secId}\` | \`${courseId}\`<br>[${itModCode}] - ${it.cursoCodigo.trim()} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()} | ${it.carreraNombre} > ${it.planNombre} | **${alumnosCount}** | ${teachStr} |`
         )
       }
 

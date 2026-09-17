@@ -236,7 +236,7 @@ export function HierarchyTreeTable({
       // 6. Curso Individual (v2: Prefijo de Modalidad + Código de Curso + Sección)
       const modCode = getModalidadCode(it.modalidadId, it.modalidadNombre)
       const v2CourseCode = `${modCode}-${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
-      const v2CourseName = `[${modCode}] ${it.cursoNombre.trim()} [${it.seccionNombre.trim()}]`
+      const v2CourseName = `[${modCode}] - ${it.cursoCodigo.trim()} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
       const cursoKey = v2CourseCode
 
       let curNode = plNode.cursos.get(cursoKey)

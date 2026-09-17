@@ -61,7 +61,7 @@ export function StudentInspectorDialog({
                   </Badge>
                   <span className="font-mono text-primary font-semibold">{v2CourseCode}</span>
                   <span>•</span>
-                  <span className="font-medium text-foreground">[{modCode}] {item.cursoNombre} [{item.seccionNombre}]</span>
+                  <span className="font-medium text-foreground">[{modCode}] - {item.cursoCodigo.trim()} - {item.cursoNombre.trim()} - {item.seccionNombre.trim()}</span>
                 </div>
                 <div className="flex items-center gap-2 text-[11px] flex-wrap">
                   <span>Docente: {item.docenteNombre || 'Sin docente asignado'}</span>
