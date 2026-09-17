@@ -264,15 +264,17 @@
     - Formateo de nombres de sección en `sections.csv`: `[${modCode}] ${it.seccionNombre.trim()}` (ej. `[MP] FD SECCIÓN 1`, `[MN] FD SECCIÓN 1`, `[MD] FD SECCIÓN 1`), eliminando colisiones de nombres idénticos entre modalidades en cursos combinados.
     - Enlace de matrículas a cursos contenedores en `enrollments.csv`: las secciones cross-listadas dirigen su `course_id` al ID del curso contenedor maestro (`xlist_course_id`), permitiendo a Canvas LMS computar los alumnos reales en el curso maestro en vez de marcar 0.
     - Mapeo en árbol de migración (`migration-service.ts`): las secciones cross-listadas se asocian tanto a su curso curricular de origen como a su curso contenedor maestro.
-  - [x] **Estandarización de Nombre Completo de Cursos y Secciones (`[MOD] - CODIGO - ASIGNATURA - SECCION`)**:
-    - [x] **Formato Unificado**: Adopción formal del estándar `[${modCode}] - ${cursoCodigo} - ${cursoNombre} - ${seccionNombre}` (ej. `[MP] - CUR006381 - CULTURA MATEMÁTICA I - ANI- SECCIÓN 4`).
+  - [x] **Estandarización de Nombre Completo de Cursos y Secciones (`[MOD CODIGO SECCION] ASIGNATURA`)**:
+    - [x] **Formato Unificado**: Adopción formal del estándar `[${modCode} ${cursoCodigo} ${seccionNombre}] ${cursoNombre}` (ej. `[MP CUR006381 ANI- SECCIÓN 4] CULTURA MATEMÁTICA I`).
     - [x] **Exportación SIS (`courses.csv` y `sections.csv`)**:
-      - `courses.csv`: `long_name` y `short_name` aplican la estructura completa `[MOD] - CODIGO - ASIGNATURA - SECCION`.
-      - `sections.csv`: `name` adopta idéntica estructura completa `[MOD] - CODIGO - ASIGNATURA - SECCION`, resolviendo la duplicidad o confusión en cohortes (ej. cohorte `7532` matriculada en 6 asignaturas distintas con nombres de sección únicos y descriptivos).
-    - [x] **Artefactos y Reportes (`hierarchy.txt`, `CURSOS_COMPARTIDOS.md`)**: Visualización en texto del árbol jerárquico y tablas de cursos combinados alineadas al estándar.
+      - `courses.csv`: `long_name` y `short_name` aplican la estructura `[MOD CODIGO SECCION] ASIGNATURA`.
+      - `sections.csv`: `name` adopta idéntica estructura `[MOD CODIGO SECCION] ASIGNATURA`, garantizando unicidad y claridad para cada sección.
+    - [x] **Artefactos y Reportes (`hierarchy.txt`)**: Visualización en texto del árbol jerárquico alineada al estándar.
     - [x] **Interfaces de Usuario y Diálogos**:
-      - `HierarchyTreeTable`: Nodo de curso con título completo y claro.
+      - `HierarchyTreeTable`: Nodo de curso con título completo `[MOD CODIGO SECCION] ASIGNATURA`.
       - `HierarchySelector`: Columna 'Curso (v2)' y desglose de matriculados sincronizados.
+      - `StudentInspectorDialog`: Cabecera de inspección con nombre completo.
+      - `CanvasAuditService`: Auditoría contra Canvas API comparando bajo el estándar unificado.
   - [x] **Eliminación Total de Cross-Listing (`xlists.csv`) y Cursos Contenedores Maestros**:
     - [x] **Arquitectura 100% Cursos Individuales**: Supresión de la generación de cursos contenedores artificiales (`GRP_<grupo>`) en `courses.csv`.
     - [x] **Eliminación de `xlists.csv`**: No se genera archivo `xlists.csv` ni se empaqueta en `canvas_migration.zip`.
@@ -728,15 +730,15 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
     - Se ajustó `targetCourseId = xlistsMap.has(sectionId) ? xlistsMap.get(sectionId)!.xlist_course_id : courseId`, garantizando que docentes y estudiantes queden activamente adscritos al curso maestro contenedor (`GRP_...`) con conteo de matriculados real y visible.
   - **Sincronización en Árbol de Paquetes de Migración (`migration-service.ts`)**:
     - Se adaptó el lector de paquetes para vincular las secciones tanto a su curso original como al curso contenedor maestro (`secByCourse.get(xlistCId)`), garantizando que al inspeccionar el curso contenedor se desplieguen sus secciones, docentes y alumnos.
-- **Estandarización de Nomenclatura Unificada: `[MOD] - CODIGO - ASIGNATURA - SECCION`**:
+- **Estandarización de Nomenclatura Unificada: `[MOD CODIGO SECCION] ASIGNATURA`**:
   - **Motivación y Diagnóstico**:
     - En `BDACADEMICO6`, una misma cohorte de estudiantes (ej. sección `7532` de Animación Digital) cursa hasta 6 asignaturas diferentes en el semestre (`CULTURA MATEMÁTICA I`, `DIBUJO ARTÍSTICO I`, `INTRODUCCIÓN A LA ANIMACIÓN`, etc.).
     - Al llamarse anteriormente la sección `[MP] ANI- SECCIÓN 4` para todas las asignaturas, en `sections.csv` aparecían múltiples filas con el mismo nombre descriptivo, generando confusión sobre a qué curso pertenecía cada sección.
-  - **Formato Adoptado**: `[${modCode}] - ${cursoCodigo} - ${cursoNombre} - ${seccionNombre}` (ejemplo real: `[MP] - CUR006381 - CULTURA MATEMÁTICA I - ANI- SECCIÓN 4`).
+  - **Formato Adoptado**: `[${modCode} ${cursoCodigo} ${seccionNombre}] ${cursoNombre}` (ejemplo real: `[MP CUR006381 ANI- SECCIÓN 4] CULTURA MATEMÁTICA I`).
   - **Consistencia Total**:
-    - `courses.csv`: `long_name` y `short_name` aplican esta estructura unificada.
+    - `courses.csv`: `long_name` y `short_name` aplican esta estructura unificada delimitando los códigos entre corchetes seguido del nombre de la asignatura.
     - `sections.csv`: Cada sección hereda este nombre completo descriptivo, haciendo que cada fila sea 100% autoexplicativa y única.
-    - `hierarchy.txt` y `CURSOS_COMPARTIDOS.md`: Actualizados con la nueva nomenclatura.
+    - `hierarchy.txt`: Actualizado con la nueva nomenclatura.
     - Interfaz gráfica: Reflejado en `HierarchySelector` (columna Curso v2 y desglose), `HierarchyTreeTable` y `StudentInspectorDialog`.
 - **Supresión Total de Cross-Listing y Cursos Contenedores**:
   - **Decisión de Negocio y Arquitectura**: Los cursos contenedores artificiales (`GRP_...`) y la combinación forzada de secciones vía `xlists.csv` han sido totalmente eliminados a favor del modelo unificado 1:1 de cursos independientes.

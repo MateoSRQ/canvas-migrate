@@ -309,10 +309,11 @@ export async function exportSelectedToCanvasCsv(
     const rawPlanAccId = it.planCodigo ? it.planCodigo.trim() : `P-${it.planId}`
     const planAccId = accPrefix ? `${accPrefix}${rawPlanAccId}` : rawPlanAccId
     const rawCurso = cursoRawMap.get(it.cursoId)
+    const courseTag = `[${modCode} ${it.cursoCodigo.trim()} ${it.seccionNombre.trim()}]`
     const shortName = rawCurso?.abreviatura
-      ? `[${modCode}] - ${it.cursoCodigo.trim()} - ${String(rawCurso.abreviatura).trim()} - ${it.seccionNombre.trim()}`
-      : `[${modCode}] - ${it.cursoCodigo.trim()} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
-    const longName = `[${modCode}] - ${it.cursoCodigo.trim()} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
+      ? `${courseTag} ${String(rawCurso.abreviatura).trim()}`
+      : `${courseTag} ${it.cursoNombre.trim()}`
+    const longName = `${courseTag} ${it.cursoNombre.trim()}`
 
     if (!coursesMap.has(courseId)) {
       coursesMap.set(courseId, {
@@ -384,7 +385,7 @@ export async function exportSelectedToCanvasCsv(
       sectionsMap.set(sectionId, {
         section_id: sectionId,
         course_id: courseId,
-        name: `[${modCode}] - ${it.cursoCodigo.trim()} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`,
+        name: `[${modCode} ${it.cursoCodigo.trim()} ${it.seccionNombre.trim()}] ${it.cursoNombre.trim()}`,
         status: 'active',
         start_date: '',
         end_date: '',
@@ -664,7 +665,7 @@ export async function exportSelectedToCanvasCsv(
     const modCode = getModalidadCode(it.modalidadId, it.modalidadNombre)
     const rawCurCode = `${modCode}-${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
     const curCode = coursePrefix ? `${coursePrefix}${rawCurCode}` : rawCurCode
-    const curKey = `${curCode} - [${modCode}] - ${it.cursoCodigo.trim()} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
+    const curKey = `${curCode} - [${modCode} ${it.cursoCodigo.trim()} ${it.seccionNombre.trim()}] ${it.cursoNombre.trim()}`
     if (!curG.has(curKey)) curG.set(curKey, [])
     curG.get(curKey)!.push(it)
   }
@@ -693,7 +694,7 @@ export async function exportSelectedToCanvasCsv(
                 const rawSecId = `${s.seccionId}-${rawSecCourseId}`
                 const secId = coursePrefix ? `${coursePrefix}${rawSecId}` : rawSecId
                 treeLines.push(
-                  `\t\t\t\t\t\t${rootIndent}[SECCION] [${sModCode}] - ${s.cursoCodigo.trim()} - ${s.cursoNombre.trim()} - ${s.seccionNombre} (SEC: ${secId})${s.grupoCodigo ? ` [GRUPO: ${s.grupoCodigo}]` : ''} - ${s.estudiantes.length} alumnos`
+                  `\t\t\t\t\t\t${rootIndent}[SECCION] [${sModCode} ${s.cursoCodigo.trim()} ${s.seccionNombre.trim()}] ${s.cursoNombre.trim()} (SEC: ${secId})${s.grupoCodigo ? ` [GRUPO: ${s.grupoCodigo}]` : ''} - ${s.estudiantes.length} alumnos`
                 )
                 const seenDocKeys = new Set<string>()
                 for (const d of s.docentes) {
