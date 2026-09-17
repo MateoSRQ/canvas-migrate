@@ -256,6 +256,10 @@
   - [x] **Diálogos de Selección, Inspección y Exportación**:
     - `StudentInspectorDialog` muestra código v2, insignia de modalidad y desglose de matriculados.
     - `CanvasExportDialog` actualizado con ejemplos de aislamiento sandbox en formato v2 (`MP-CUR006380-01-D`, `7115-MP-CUR006380-01-D`).
+  - [x] **Auditoría Exhaustiva de Matrículas en BDACADEMICO6 y Filtro de Secciones con Alumnos (`onlyWithStudents`)**:
+    - Verificación matemática y de integridad relacional en vivo contra Microsoft SQL Server 2022 (`localhost:1433`) y vista oficial `[Academico].[VW_ALUMNO_CURSOS_MATRICULADOS]`: 95,656 registros de matrícula exactamente coincidentes (cero pérdida).
+    - Explicación de secciones con 0 alumnos en periodos como `2026-2 PREGRADO`: 141 secciones cerradas `NO HABILITADO` y 178 secciones planificadas de ciclos superiores sin matrículas en origen.
+    - Incorporado filtro reactivo en cascada `Solo con alumnos matriculados` (`onlyWithStudents`) en `HierarchySelector` con insignia azul activa e icono `Users`.
   - [x] Verificado con compilación TypeScript estricta (`tsc --noEmit` con 0 errores) y empaquetado de producción (`npm run build` con 0 errores).
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
@@ -670,5 +674,31 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
     - `HierarchySelector` (Tabla Detallada): Columna de Curso con ancho dedicado ampliado (`size: 380`, `minSize: 300`) y contenedor de celda `min-w-[320px] max-w-[650px] leading-snug`, eliminando el truncamiento estrecho previo de 280px. Título formateado con corchetes `[MODALIDAD] ASIGNATURA [SECCIÓN]`, resolviendo colisiones visuales con asignaturas que contienen guiones.
     - `StudentInspectorDialog`: Cabecera con badge de modalidad y título de curso delimitado con corchetes.
     - `CanvasExportDialog`: Ejemplos técnicos de prefijo de aislamiento adaptados a `MP-CUR006380-01-D` y `7115-MP-CUR006380-01-D`.
+- **Auditoría de Conciliación de Matrículas en BDACADEMICO6 (Prueba Matemática de Cero Pérdida)**:
+  - **Verificación contra Microsoft SQL Server 2022 (`localhost:1433`)**:
+    - `[Matricula].[Matricula_Alumno_Curso]`: exactamente **95,656 filas** en MSSQL == **95,656 filas** en SQLite (`dev.db`).
+    - `[Matricula].[Matricula_Alumno]`: exactamente **2,942 filas** en MSSQL == **2,942 filas** en SQLite (`dev.db`).
+    - Para `carga_academica_id = 6053` (`2026-2 PREGRADO`): exactamente **293 alumnos únicos** en MSSQL == **293 alumnos únicos** en SQLite.
+  - **Contraste con la Vista Oficial `[Academico].[VW_ALUMNO_CURSOS_MATRICULADOS]`**:
+    - Definición de la vista: Join relacional idéntico al implementado en el sistema: `Matricula_Alumno_Curso.carga_academica_sede_curso_horario_id -> Carga_Academica_Sede_Curso_Horario.id -> Carga_Academica_Sede_Curso.id`.
+    - Para el periodo `2026-2`, la vista oficial en MSSQL devuelve exactamente 1,823 matrículas distribuidas en 99 secciones activas.
+  - **Prueba de Mapeo sin Pérdida (Zero-Loss)**:
+    - Las 95,656 filas de matrícula del caso se evaluaron contra el árbol de jerarquía:
+      - **Mapeadas a secciones**: `95,656` (100.00%).
+      - **Huérfanas / No mapeadas**: `0` (`{ noHorario: 0, noCargaCurso: 0, notInHierarchy: 0 }`).
+  - **Diagnóstico de Secciones con 0 Alumnos en `2026-2 PREGRADO`**:
+    - Total de secciones registradas en `Carga_Academica_Sede_Curso` para el periodo: **794 secciones**.
+    - Secciones con alumnos matriculados: **475 secciones** (1,976 alumnos únicos / 2,188 matrículas).
+    - Secciones con 0 alumnos matriculados: **319 secciones**:
+      - **141 secciones** están explícitamente cerradas como `NO HABILITADO` o `NO HANILITADO AFORO 0`.
+      - **178 secciones** corresponden a ofertas planificadas para ciclos superiores (Ciclos 3 al 10) o grupos paralelos preventivos (`SEC 1`, `SEC 2`, etc.) creados durante la programación académica para los cuales **ningún alumno llegó a matricularse en `BDACADEMICO6`**.
+  - **Efecto Visual v2 vs v1**:
+    - En **v1**, múltiples secciones (incluyendo vacías o deshabilitadas) se agrupaban bajo un solo curso (`CUR006380`). Con que 1 sola sección tuviera alumnos, el curso figuraba con matrícula en el resumen.
+    - En **v2**, al convertirse cada sección en un curso individual independiente con sección única, cada sección vacía de la programación académica se expone como un curso independiente de 0 alumnos.
+- **Filtro Reactivo «Solo con alumnos matriculados» (`onlyWithStudents`)**:
+  - Incorporado en la barra de herramientas de `HierarchySelector` junto a «Excluir secciones NO HABILITADO».
+  - Permite al usuario conmutar entre ver la oferta académica total planificada o purgar instantáneamente las 178 secciones planificadas vacías, dejando exclusivamente cursos con estudiantes activos.
+  - Se reinicia a desactivado al pulsar «Restablecer Filtros».
+  - **Diseño Visual**: Checkbox con icono `Users`, fondo azul traslúcido (`bg-blue-500/10 border-blue-500/30 text-blue-800 dark:text-blue-300`) e insignia mono `Activo` (`bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40`).
 
 

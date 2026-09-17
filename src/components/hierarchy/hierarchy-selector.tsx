@@ -114,6 +114,7 @@ export function HierarchySelector({
   const [carreraFilter, setCarreraFilter] = React.useState<string>('all')
   const [planFilter, setPlanFilter] = React.useState<string>('all')
   const [excludeNoHabilitado, setExcludeNoHabilitado] = React.useState<boolean>(true)
+  const [onlyWithStudents, setOnlyWithStudents] = React.useState<boolean>(false)
   const [searchQuery, setSearchQuery] = React.useState<string>('')
 
   // Estado de la tabla TanStack
@@ -273,6 +274,9 @@ export function HierarchySelector({
       if (excludeNoHabilitado && item.isNoHabilitado) {
         return false
       }
+      if (onlyWithStudents && item.estudiantesCount === 0) {
+        return false
+      }
       if (periodoFilter !== 'all' && String(item.periodoId) !== periodoFilter) {
         return false
       }
@@ -332,6 +336,7 @@ export function HierarchySelector({
   }, [
     hierarchyData,
     excludeNoHabilitado,
+    onlyWithStudents,
     periodoFilter,
     sedeFilter,
     modalidadFilter,
@@ -350,6 +355,7 @@ export function HierarchySelector({
     setCarreraFilter('all')
     setPlanFilter('all')
     setExcludeNoHabilitado(true)
+    setOnlyWithStudents(false)
     setSearchQuery('')
     setTableExpandedRows(new Set())
   }
@@ -948,6 +954,29 @@ export function HierarchySelector({
                 <Badge
                   variant="outline"
                   className="text-[9px] px-1 py-0 h-3.5 bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 font-mono"
+                >
+                  Activo
+                </Badge>
+              )}
+            </label>
+
+            <label
+              className={`flex items-center gap-2 cursor-pointer select-none text-xs px-2.5 py-1 rounded-md border transition-all ${
+                onlyWithStudents
+                  ? 'bg-blue-500/10 border-blue-500/30 text-blue-800 dark:text-blue-300 font-medium'
+                  : 'bg-muted/40 border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Checkbox
+                checked={onlyWithStudents}
+                onCheckedChange={(checked) => setOnlyWithStudents(!!checked)}
+              />
+              <Users className="size-3.5 text-muted-foreground" />
+              <span>Solo con alumnos matriculados</span>
+              {onlyWithStudents && (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] px-1 py-0 h-3.5 bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40 font-mono"
                 >
                   Activo
                 </Badge>
