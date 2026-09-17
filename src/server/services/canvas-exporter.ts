@@ -7,6 +7,7 @@ import {
   getCaseHierarchyData,
   type HierarchyItem,
 } from './hierarchy-service'
+import { getModalidadCode } from '#/lib/utils'
 
 const execFileAsync = promisify(execFile)
 
@@ -170,7 +171,6 @@ export async function exportSelectedToCanvasCsv(
   const accountsMap = new Map<string, AccountRow>()
   const rootOrder: AccountRow[] = []
   const sedesOrder: AccountRow[] = []
-  const modalidadesOrder: AccountRow[] = []
   const facultadesOrder: AccountRow[] = []
   const carrerasOrder: AccountRow[] = []
   const planesOrder: AccountRow[] = []
@@ -201,26 +201,13 @@ export async function exportSelectedToCanvasCsv(
       sedesOrder.push(row)
     }
 
-    const rawModAccId = `M-${it.modalidadId}`
-    const modAccId = accPrefix ? `${accPrefix}${rawModAccId}` : rawModAccId
-    if (!accountsMap.has(modAccId)) {
-      const row: AccountRow = {
-        account_id: modAccId,
-        parent_account_id: sedeAccId,
-        name: it.modalidadNombre.trim(),
-        status: 'active',
-      }
-      accountsMap.set(modAccId, row)
-      modalidadesOrder.push(row)
-    }
-
     const facCode = it.facultadCodigo || facultadCodeMap.get(it.facultadId) || `F-${it.facultadId}`
     const rawFacAccId = facCode.startsWith('F-') ? facCode : `F-${facCode}`
     const facAccId = accPrefix ? `${accPrefix}${rawFacAccId}` : rawFacAccId
     if (!accountsMap.has(facAccId)) {
       const row: AccountRow = {
         account_id: facAccId,
-        parent_account_id: modAccId,
+        parent_account_id: sedeAccId,
         name: it.facultadNombre.trim(),
         status: 'active',
       }
@@ -256,11 +243,10 @@ export async function exportSelectedToCanvasCsv(
     }
   }
 
-  // Orden topológico: Subcuenta raíz personalizada (si se crea) -> Sedes -> Modalidades -> Facultades -> Carreras -> Planes
+  // Orden topológico: Subcuenta raíz personalizada (si se crea) -> Sedes -> Facultades -> Carreras -> Planes
   const sortedAccounts = [
     ...rootOrder,
     ...sedesOrder,
-    ...modalidadesOrder,
     ...facultadesOrder,
     ...carrerasOrder,
     ...planesOrder,
@@ -318,15 +304,16 @@ export async function exportSelectedToCanvasCsv(
 
   const coursesMap = new Map<string, CourseRow>()
   for (const it of selectedItems) {
-    const rawCourseId = `${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
+    const modCode = getModalidadCode(it.modalidadId, it.modalidadNombre)
+    const rawCourseId = `${modCode}-${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
     const courseId = coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId
     const rawPlanAccId = it.planCodigo ? it.planCodigo.trim() : `P-${it.planId}`
     const planAccId = accPrefix ? `${accPrefix}${rawPlanAccId}` : rawPlanAccId
     const rawCurso = cursoRawMap.get(it.cursoId)
     const shortName = rawCurso?.abreviatura
-      ? `${String(rawCurso.abreviatura).trim()} - ${it.seccionNombre.trim()}`
+      ? `${modCode} - ${String(rawCurso.abreviatura).trim()} - ${it.seccionNombre.trim()}`
       : (coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId)
-    const longName = `${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
+    const longName = `${modCode} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
 
     if (!coursesMap.has(courseId)) {
       coursesMap.set(courseId, {
@@ -390,7 +377,8 @@ export async function exportSelectedToCanvasCsv(
 
         // Mapear cada sección del grupo hacia el curso contenedor
         for (const it of groupItems) {
-          const rawCourseId = `${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
+          const modCode = getModalidadCode(it.modalidadId, it.modalidadNombre)
+          const rawCourseId = `${modCode}-${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
           const rawSectionId = `${it.seccionId}-${rawCourseId}`
           const sectionId = coursePrefix ? `${coursePrefix}${rawSectionId}` : rawSectionId
           xlistsMap.set(sectionId, {
@@ -448,7 +436,8 @@ export async function exportSelectedToCanvasCsv(
 
   const sectionsMap = new Map<string, SectionRow>()
   for (const it of selectedItems) {
-    const rawCourseId = `${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
+    const modCode = getModalidadCode(it.modalidadId, it.modalidadNombre)
+    const rawCourseId = `${modCode}-${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
     const courseId = coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId
     const rawSectionId = `${it.seccionId}-${rawCourseId}`
     const sectionId = coursePrefix ? `${coursePrefix}${rawSectionId}` : rawSectionId
@@ -618,7 +607,8 @@ export async function exportSelectedToCanvasCsv(
   const enrollmentsMap = new Map<string, EnrollmentRow>()
 
   for (const it of selectedItems) {
-    const rawCourseId = `${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
+    const modCode = getModalidadCode(it.modalidadId, it.modalidadNombre)
+    const rawCourseId = `${modCode}-${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
     const courseId = coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId
     const rawSectionId = `${it.seccionId}-${rawCourseId}`
     const sectionId = coursePrefix ? `${coursePrefix}${rawSectionId}` : rawSectionId
@@ -723,7 +713,7 @@ export async function exportSelectedToCanvasCsv(
     ``,
   ]
 
-  // Agrupar items por estructura jerárquica para hierarchy.txt
+  // Agrupar items por estructura jerárquica para hierarchy.txt (Sede -> Facultad -> Carrera -> Plan -> Curso -> Sección)
   const periodoGroup = new Map<string, any>()
   for (const it of selectedItems) {
     const pKey = it.periodoNombre
@@ -732,11 +722,7 @@ export async function exportSelectedToCanvasCsv(
 
     const sKey = it.sedeNombre
     if (!sedesG.has(sKey)) sedesG.set(sKey, new Map())
-    const modG = sedesG.get(sKey)!
-
-    const mKey = it.modalidadNombre
-    if (!modG.has(mKey)) modG.set(mKey, new Map())
-    const facG = modG.get(mKey)!
+    const facG = sedesG.get(sKey)!
 
     const fKey = it.facultadNombre
     if (!facG.has(fKey)) facG.set(fKey, new Map())
@@ -750,9 +736,10 @@ export async function exportSelectedToCanvasCsv(
     if (!planG.has(plKey)) planG.set(plKey, new Map())
     const curG = planG.get(plKey)!
 
-    const rawCurCode = `${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
+    const modCode = getModalidadCode(it.modalidadId, it.modalidadNombre)
+    const rawCurCode = `${modCode}-${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
     const curCode = coursePrefix ? `${coursePrefix}${rawCurCode}` : rawCurCode
-    const curKey = `${curCode} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
+    const curKey = `${curCode} - ${modCode} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
     if (!curG.has(curKey)) curG.set(curKey, [])
     curG.get(curKey)!.push(it)
   }
@@ -765,43 +752,41 @@ export async function exportSelectedToCanvasCsv(
       treeLines.push(`\t[SUBCUENTA INICIAL EXISTENTE] ${cleanRootAccountId}`)
     }
     const rootIndent = cleanRootAccountId ? '\t' : ''
-    for (const [sName, modG] of sedesG) {
+    for (const [sName, facG] of sedesG) {
       treeLines.push(`\t${rootIndent}[CUENTA] ${sName}`)
-      for (const [mName, facG] of modG) {
-        treeLines.push(`\t\t${rootIndent}[SUBCUENTA] ${mName}`)
-        for (const [fName, carrG] of facG) {
-          treeLines.push(`\t\t\t${rootIndent}[SUBCUENTA] ${fName}`)
-          for (const [cName, planG] of carrG) {
-            treeLines.push(`\t\t\t\t${rootIndent}[SUBCUENTA] ${cName}`)
-            for (const [plName, curG] of planG) {
-              treeLines.push(`\t\t\t\t\t${rootIndent}[SUBCUENTA PLAN] ${plName}`)
-              for (const [curName, secs] of curG) {
-                treeLines.push(`\t\t\t\t\t\t${rootIndent}[CURSO] ${curName}`)
-                for (const s of secs as HierarchyItem[]) {
-                  const rawSecCourseId = `${s.cursoCodigo.trim()}-${s.seccionNombre.trim()}`
-                  const rawSecId = `${s.seccionId}-${rawSecCourseId}`
-                  const secId = coursePrefix ? `${coursePrefix}${rawSecId}` : rawSecId
+      for (const [fName, carrG] of facG) {
+        treeLines.push(`\t\t${rootIndent}[SUBCUENTA] ${fName}`)
+        for (const [cName, planG] of carrG) {
+          treeLines.push(`\t\t\t${rootIndent}[SUBCUENTA] ${cName}`)
+          for (const [plName, curG] of planG) {
+            treeLines.push(`\t\t\t\t${rootIndent}[SUBCUENTA PLAN] ${plName}`)
+            for (const [curName, secs] of curG) {
+              treeLines.push(`\t\t\t\t\t${rootIndent}[CURSO] ${curName}`)
+              for (const s of secs as HierarchyItem[]) {
+                const sModCode = getModalidadCode(s.modalidadId, s.modalidadNombre)
+                const rawSecCourseId = `${sModCode}-${s.cursoCodigo.trim()}-${s.seccionNombre.trim()}`
+                const rawSecId = `${s.seccionId}-${rawSecCourseId}`
+                const secId = coursePrefix ? `${coursePrefix}${rawSecId}` : rawSecId
+                treeLines.push(
+                  `\t\t\t\t\t\t${rootIndent}[SECCION] ${s.seccionNombre} (SEC: ${secId})${s.grupoCodigo ? ` [GRUPO: ${s.grupoCodigo}]` : ''} - ${s.estudiantes.length} alumnos`
+                )
+                const seenDocKeys = new Set<string>()
+                for (const d of s.docentes) {
+                  const key = d.dni ? d.dni.trim() : d.fullName.trim()
+                  if (seenDocKeys.has(key)) continue
+                  seenDocKeys.add(key)
                   treeLines.push(
-                    `\t\t\t\t\t\t\t${rootIndent}[SECCION] ${s.seccionNombre} (SEC: ${secId})${s.grupoCodigo ? ` [GRUPO: ${s.grupoCodigo}]` : ''} - ${s.estudiantes.length} alumnos`
+                    `\t\t\t\t\t\t\t${rootIndent}(D) [DOCENTE] DNI:${d.dni} - ${d.fullName} <${d.email}>`
                   )
-                  const seenDocKeys = new Set<string>()
-                  for (const d of s.docentes) {
-                    const key = d.dni ? d.dni.trim() : d.fullName.trim()
-                    if (seenDocKeys.has(key)) continue
-                    seenDocKeys.add(key)
-                    treeLines.push(
-                      `\t\t\t\t\t\t\t\t${rootIndent}(D) [DOCENTE] DNI:${d.dni} - ${d.fullName} <${d.email}>`
-                    )
-                  }
-                  const seenEstKeys = new Set<string>()
-                  for (const e of s.estudiantes) {
-                    const key = e.codigo ? e.codigo.trim() : e.fullName.trim()
-                    if (seenEstKeys.has(key)) continue
-                    seenEstKeys.add(key)
-                    treeLines.push(
-                      `\t\t\t\t\t\t\t\t${rootIndent}(E) [ESTUDIANTE] COD:${e.codigo} - ${e.fullName} <${e.email}>`
-                    )
-                  }
+                }
+                const seenEstKeys = new Set<string>()
+                for (const e of s.estudiantes) {
+                  const key = e.codigo ? e.codigo.trim() : e.fullName.trim()
+                  if (seenEstKeys.has(key)) continue
+                  seenEstKeys.add(key)
+                  treeLines.push(
+                    `\t\t\t\t\t\t\t${rootIndent}(E) [ESTUDIANTE] COD:${e.codigo} - ${e.fullName} <${e.email}>`
+                  )
                 }
               }
             }
@@ -823,11 +808,12 @@ export async function exportSelectedToCanvasCsv(
         const xlistId = coursePrefix ? `${coursePrefix}${rawXlistId}` : rawXlistId
         treeLines.push(`[CURSO MAESTRO / CONTENEDOR] ${xlistId} - GRUPO ${g}`)
         for (const item of gItems) {
-          const rawItemCourseId = `${item.cursoCodigo.trim()}-${item.seccionNombre.trim()}`
+          const itemModCode = getModalidadCode(item.modalidadId, item.modalidadNombre)
+          const rawItemCourseId = `${itemModCode}-${item.cursoCodigo.trim()}-${item.seccionNombre.trim()}`
           const rawSecId = `${item.seccionId}-${rawItemCourseId}`
           const secId = coursePrefix ? `${coursePrefix}${rawSecId}` : rawSecId
           treeLines.push(
-            `\t-> [SECCION COMBINADA] ${secId} (${item.seccionNombre}) - Curso: ${rawItemCourseId} "${item.cursoNombre.trim()} - ${item.seccionNombre.trim()}"`
+            `\t-> [SECCION COMBINADA] ${secId} (${item.seccionNombre}) - Curso: ${rawItemCourseId} "${itemModCode} - ${item.cursoNombre.trim()} - ${item.seccionNombre.trim()}"`
           )
         }
       }
@@ -871,10 +857,10 @@ ${xlistsList.length > 0 ? `| **Combinaciones (Cross-listing)** | ${xlistsList.le
 
 ## Archivos Generados en este Directorio
 
-1. **\`accounts.csv\`**: Árbol ordenado topológicamente de Cuentas (Sede) y Subcuentas (Modalidad > Facultad > Carrera > Plan).
+1. **\`accounts.csv\`**: Árbol ordenado topológicamente de Cuentas (Sede) y Subcuentas (Facultad > Carrera > Plan).
 2. **\`terms.csv\`**: Periodos académicos Canvas con formato de fecha SIS.
-3. **\`courses.csv\`**: Cursos individuales por combinación de curso y sección en formato online enlazados al plan curricular (incluye cursos contenedores de grupos).
-4. **\`sections.csv\`**: Secciones de clase identificadas por clave compuesta \`<seccion_id>-<cod_curso>-<seccion>\`.
+3. **\`courses.csv\`**: Cursos individuales por combinación de curso y sección con código de modalidad al inicio (\`MP\`, \`MN\`, \`MD\`) en formato online enlazados al plan curricular (incluye cursos contenedores de grupos).
+4. **\`sections.csv\`**: Secciones de clase identificadas por clave compuesta \`<seccion_id>-<modalidad>-<cod_curso>-<seccion>\`.
 5. **\`users.csv\`**: Docentes con DNI oficial normalizado y alumnos con código universitario.
 6. **\`enrollments.csv\`**: Relaciones de alumnos (rol \`student\`) y profesores (rol \`teacher\`).
 ${xlistsList.length > 0 ? `7. **\`xlists.csv\`**: Combinaciones (cross-listing) de secciones bajo cursos contenedores maestros compartidos.\n8.` : '7.'} **\`hierarchy.txt\`**: Visualización jerárquica indentada de toda la estructura académica exportada.
@@ -976,7 +962,8 @@ ${xlistsList.length > 0 ? '9.' : '8.'} **\`canvas_migration.zip\`**: Paquete ZIP
       ccLines.push('| :--- | :--- | :--- | :--- | :---: | :--- |')
 
       for (const it of gItems) {
-        const rawCourseId = `${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
+        const itModCode = getModalidadCode(it.modalidadId, it.modalidadNombre)
+        const rawCourseId = `${itModCode}-${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
         const courseId = coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId
         const rawSecId = `${it.seccionId}-${rawCourseId}`
         const secId = coursePrefix ? `${coursePrefix}${rawSecId}` : rawSecId
@@ -988,7 +975,7 @@ ${xlistsList.length > 0 ? '9.' : '8.'} **\`canvas_migration.zip\`**: Paquete ZIP
             : '*(Sin asignar)*'
         const alumnosCount = it.estudiantes?.length || 0
         ccLines.push(
-          `| **${it.seccionNombre}** | \`${secId}\` | \`${courseId}\`<br>${it.cursoNombre.trim()} - ${it.seccionNombre.trim()} | ${it.carreraNombre} > ${it.planNombre} | **${alumnosCount}** | ${teachStr} |`
+          `| **${it.seccionNombre}** | \`${secId}\` | \`${courseId}\`<br>${itModCode} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()} | ${it.carreraNombre} > ${it.planNombre} | **${alumnosCount}** | ${teachStr} |`
         )
       }
 

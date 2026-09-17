@@ -234,13 +234,15 @@
   - Integración en `README.md` con sección de acceso rápido y referencias cruzadas.
 - [x] **Creación de Rama de Git \`v2\`**:
   - Creada y conmutada la nueva rama de trabajo \`v2\` a partir de \`forecast\`, consolidando todas las fases 1-5, la suite de Previsión de Matrícula (Forecast con visualizaciones TanStack Charts, simulación matemática de cohortes, exportación Excel nativa, presentación apaisada A3 en PDF) y la documentación relacional integral (Diagramas ER y Diccionario de Datos).
-- [x] **Versión 2 (v2): Lógica de Creación Individual de Cursos por Curso-Sección**:
+- [x] **Versión 2 (v2): Lógica de Creación Individual de Cursos por Curso-Sección y Normalización de Modalidad**:
   - [x] Cada combinación de curso y sección constituye un curso Canvas individual e independiente (`courses.csv`).
-  - [x] Nombre del curso (`long_name` y `short_name`): formato `${cursoNombre} - ${seccionNombre}`.
-  - [x] Identificador SIS del curso (`course_id`): formato `${codCurso}-${seccionNombre}` (con soporte de prefijos Sandbox `${coursePrefix}`).
-  - [x] Mapeo de secciones (`sections.csv`): `course_id` apunta al nuevo ID de curso-sección, y `section_id` compuesto `${seccionId}-${codCurso}-${seccionNombre}` garantizando unicidad global a prueba de colisiones.
-  - [x] Asignación de matrículas (`enrollments.csv`): docentes y estudiantes vinculados al nuevo `course_id` y su respectivo `section_id`.
-  - [x] Actualización coherente en árbol visual `hierarchy.txt`, reporte técnico `RESUMEN.md`, catálogo de cursos compartidos `CURSOS_COMPARTIDOS.md` y métricas de conteo de cursos en `HierarchySelector`.
+  - [x] **Eliminación de Modalidad de la jerarquía de subcuentas (`accounts.csv`)**: Las facultades cuelgan directamente de la Sede (`Sede -> Facultad -> Carrera -> Plan`), suprimiendo las subcuentas intermedias `M-...`.
+  - [x] **Código de modalidad estándar al inicio**: Prefijo normalizado al inicio del código y nombre del curso: `MP` (Modalidad Presencial), `MN` (Modalidad No Presencial / Semi Presencial) y `MD` (Modalidad a Distancia).
+  - [x] **Nombre del curso (`long_name` y `short_name`)**: Formato `${modCode} - ${cursoNombre} - ${seccionNombre}` (ej. `MP - ESTOMATOLOGÍA INTEGRAL DEL NIÑO Y ADOLESCENTE I - 01-D`).
+  - [x] **Identificador SIS del curso (`course_id`)**: Formato `${modCode}-${codCurso}-${seccionNombre}` (ej. `MP-CUR006380-01-D`, con prefijos Sandbox opcionales `${coursePrefix}`).
+  - [x] **Mapeo de secciones (`sections.csv`)**: `course_id` apunta al nuevo ID compuesto, y `section_id` con formato `${seccionId}-${modCode}-${codCurso}-${seccionNombre}` garantizando unicidad global a prueba de colisiones.
+  - [x] **Asignación de matrículas (`enrollments.csv`)**: Docentes y estudiantes vinculados al nuevo `course_id` y su respectivo `section_id`.
+  - [x] **Árbol visual y reportes**: `hierarchy.txt`, `RESUMEN.md`, `CURSOS_COMPARTIDOS.md` y `HierarchySelector` actualizados y coordinados.
   - [x] Verificado mediante exportaciones de prueba y compilación exitosa de TypeScript y Vite SSR.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
@@ -398,15 +400,16 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - `hierarchy_writer.ts`: Formatted tabbed hierarchy tree output (`hierarchy.txt`).
 - **Key Normalization Rules**:
   - Teacher SIS ID: Normalized to official National ID / DNI (replaces legacy emails and sequential IDs).
-  - Subaccount Hierarchy: `Sede` -> `Modalidad` -> `Facultad` -> `Carrera` -> `Plan`.
+  - Subaccount Hierarchy: `Sede` -> `Facultad` -> `Carrera` -> `Plan` (la modalidad fue retirada de la jerarquía de cuentas a partir de v2).
   - Exclusion filter: Sections with `"NO HABILITADO"` omitted when flag is false.
   - Course Creation & Placement (`courses.csv`) [Versión 2 / v2]:
     - Cada combinación de curso y sección se materializa como un curso Canvas individual e independiente.
-    - **`course_id`**: `<cod_curso>-<nombre_seccion>` (ej. `CUR006380-01-D`).
-    - **`long_name`**: `<nombre_curso> - <nombre_seccion>` (ej. `ESTOMATOLOGÍA INTEGRAL DEL NIÑO Y ADOLESCENTE I - 01-D`).
-    - **`short_name`**: `<abreviatura_curso> - <nombre_seccion>` o `<course_id>`.
+    - **Prefijo de Modalidad al Inicio**: Se antepone el código de modalidad normalizado: `MP` (Presencial), `MN` (No Presencial / Semipresencial) o `MD` (A Distancia).
+    - **`course_id`**: `<modalidad>-<cod_curso>-<nombre_seccion>` (ej. `MP-CUR006380-01-D`).
+    - **`long_name`**: `<modalidad> - <nombre_curso> - <nombre_seccion>` (ej. `MP - ESTOMATOLOGÍA INTEGRAL DEL NIÑO Y ADOLESCENTE I - 01-D`).
+    - **`short_name`**: `<modalidad> - <abreviatura_curso> - <nombre_seccion>` o `<course_id>`.
     - **`account_id`**: Asociado directamente a la subcuenta del Plan Curricular (`<cod_plan>`).
-    - Secciones (`sections.csv`): `course_id` apunta al curso individual (`<cod_curso>-<nombre_seccion>`), con `section_id` compuesto único `<seccion_id>-<cod_curso>-<nombre_seccion>` para evitar cualquier riesgo de colisión en Canvas SIS.
+    - Secciones (`sections.csv`): `course_id` apunta al curso individual (`<modalidad>-<cod_curso>-<nombre_seccion>`), con `section_id` compuesto único `<seccion_id>-<modalidad>-<cod_curso>-<nombre_seccion>` para evitar cualquier riesgo de colisión en Canvas SIS.
     - Matrículas (`enrollments.csv`): Vinculadas de forma biunívoca a `<course_id>` y `<section_id>`.
   - Root Account Association & SIS Provisioning: Top-level Sedes point to `parent_account_id: cleanRootAccountId` (or `""` to attach directly to Canvas institutional root). When `createRootAccount` is enabled, the exporter generates the custom root definition in the first row of `accounts.csv` with `parent_account_id: ""` and `status: "active"`. This enables Canvas LMS to create the subaccount during the same SIS import process and attach Sedes immediately without *"Parent account didn't exist"* warnings. Includes optional descriptive display name (`rootAccountName`).
   - Sandbox Isolation Testing Mode (Prefixing): Enabling `isolateAccountPrefix` with a root subaccount (e.g. `TEST-5`) prefixes all generated subaccounts (Campus, Modality, Faculty, Career, Plan) with `${rootAccountId}_` (e.g. `TEST-5_S-001`, `TEST-5_M-2264`, `TEST-5_P004084`) and links them coherently in `courses.csv` (e.g. `TEST-5_CUR006380-01-D`) and `sections.csv` (e.g. `TEST-5_7115-CUR006380-01-D`). This guarantees a 100% isolated tree in Canvas LMS, preventing Canvas from moving or reparenting the real institutional `SEDE LIMA` (`S-001`) or dragging unselected faculties.

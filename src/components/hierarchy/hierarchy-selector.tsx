@@ -43,6 +43,7 @@ import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
 import { Checkbox } from '#/components/ui/checkbox'
 import { Input } from '#/components/ui/input'
+import { getModalidadCode } from '#/lib/utils'
 import {
   Table,
   TableBody,
@@ -718,8 +719,12 @@ export function HierarchySelector({
     }
 
     const selectedSet = new Set(selectedRowIds)
+    const selectedItems = hierarchyData.items.filter((item) => selectedSet.has(String(item.id)))
     const uniqueCourses = new Set(
-      selectedItems.map((item) => `${item.cursoCodigo.trim()}-${item.seccionNombre.trim()}`)
+      selectedItems.map(
+        (item) =>
+          `${getModalidadCode(item.modalidadId, item.modalidadNombre)}-${item.cursoCodigo.trim()}-${item.seccionNombre.trim()}`
+      )
     )
     const totalStudents = selectedItems.reduce((acc, item) => acc + item.estudiantesCount, 0)
 
