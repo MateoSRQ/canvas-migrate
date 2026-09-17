@@ -436,13 +436,16 @@ export async function exportSelectedToCanvasCsv(
             ? doc.email.trim()
             : `${teacherUserId}@politecnica.edu.pe`
         const fullName = doc.fullName.trim()
+        const nameParts = fullName.split(' ').filter(Boolean)
+        const firstName = nameParts[0] || ''
+        const lastName = nameParts.slice(1).join(' ') || ''
         usersMap.set(teacherUserId, {
           user_id: teacherUserId,
           integration_id: '',
           login_id: email,
           password: '',
-          first_name: '',
-          last_name: '',
+          first_name: firstName,
+          last_name: lastName,
           full_name: fullName,
           sortable_name: fullName,
           short_name: fullName,
@@ -464,13 +467,16 @@ export async function exportSelectedToCanvasCsv(
             ? est.email.trim()
             : `${studentUserId}@politecnica.edu.pe`
         const fullName = est.fullName.trim()
+        const nameParts = fullName.split(' ').filter(Boolean)
+        const firstName = nameParts[0] || ''
+        const lastName = nameParts.slice(1).join(' ') || ''
         usersMap.set(studentUserId, {
           user_id: studentUserId,
           integration_id: '',
           login_id: email,
           password: '',
-          first_name: '',
-          last_name: '',
+          first_name: firstName,
+          last_name: lastName,
           full_name: fullName,
           sortable_name: fullName,
           short_name: fullName,

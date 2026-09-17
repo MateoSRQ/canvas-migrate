@@ -129,6 +129,9 @@ export function getCaseHierarchyData(
   for (const p of utbPersonas) {
     const id = p.Id !== undefined ? String(p.Id).trim() : (p.id !== undefined ? String(p.id).trim() : null)
     if (id) utbMap.set(id, p)
+    if (p.IdPersona) utbMap.set(String(p.IdPersona).trim(), p)
+    if (p.Documento) utbMap.set(String(p.Documento).trim(), p)
+    if (p.Codigo) utbMap.set(String(p.Codigo).trim(), p)
   }
 
   // Student lookup map from Academico.Alumno + General.Persona
@@ -199,13 +202,38 @@ export function getCaseHierarchyData(
         list.push({ dni, fullName, email })
       }
     } else {
-      const fallbackName = `Docente ${d.docente_id}`
-      if (!list.some((t) => t.fullName === fallbackName)) {
-        list.push({
-          dni: '',
-          fullName: fallbackName,
-          email: '',
-        })
+      // Fallback: check if docente_id matches an assistant/student in alumnoMap or personaMap
+      const stuMatch = alumnoMap.get(Number(d.docente_id))
+      if (stuMatch) {
+        if (!list.some((t) => t.fullName === stuMatch.fullName)) {
+          list.push({
+            dni: stuMatch.codigo,
+            fullName: stuMatch.fullName,
+            email: stuMatch.email,
+          })
+        }
+      } else {
+        const perMatch = personaMap.get(Number(d.docente_id))
+        if (perMatch) {
+          const first = (perMatch.nombre || '').trim()
+          const pat = (perMatch.apellido_paterno || '').trim()
+          const mat = (perMatch.apellido_materno || '').trim()
+          const fullName = [first, pat, mat].filter(Boolean).join(' ') || `Docente ${d.docente_id}`
+          const dni = (perMatch.nro_documento || '').trim()
+          const email = (perMatch.email || '').trim()
+          if (!list.some((t) => t.fullName === fullName)) {
+            list.push({ dni, fullName, email })
+          }
+        } else {
+          const fallbackName = `Docente ${d.docente_id}`
+          if (!list.some((t) => t.fullName === fallbackName)) {
+            list.push({
+              dni: '',
+              fullName: fallbackName,
+              email: '',
+            })
+          }
+        }
       }
     }
   }

@@ -221,7 +221,7 @@ export async function getMigrationTree(folderName: string): Promise<MigrationTre
       if (!id) continue
       const first = (u.first_name || '').trim()
       const last = (u.last_name || '').trim()
-      const fullName = [first, last].filter(Boolean).join(' ') || id
+      const fullName = (u.full_name || u.sortable_name || u.short_name || [first, last].filter(Boolean).join(' ') || id).trim()
       userMap.set(id, {
         id,
         login: (u.login_id || '').trim(),
