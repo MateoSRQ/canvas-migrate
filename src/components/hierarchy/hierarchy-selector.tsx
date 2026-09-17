@@ -718,8 +718,9 @@ export function HierarchySelector({
     }
 
     const selectedSet = new Set(selectedRowIds)
-    const selectedItems = hierarchyData.items.filter((item) => selectedSet.has(String(item.id)))
-    const uniqueCourses = new Set(selectedItems.map((item) => item.cursoId))
+    const uniqueCourses = new Set(
+      selectedItems.map((item) => `${item.cursoCodigo.trim()}-${item.seccionNombre.trim()}`)
+    )
     const totalStudents = selectedItems.reduce((acc, item) => acc + item.estudiantesCount, 0)
 
     return {

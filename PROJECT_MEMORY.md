@@ -234,6 +234,14 @@
   - Integración en `README.md` con sección de acceso rápido y referencias cruzadas.
 - [x] **Creación de Rama de Git \`v2\`**:
   - Creada y conmutada la nueva rama de trabajo \`v2\` a partir de \`forecast\`, consolidando todas las fases 1-5, la suite de Previsión de Matrícula (Forecast con visualizaciones TanStack Charts, simulación matemática de cohortes, exportación Excel nativa, presentación apaisada A3 en PDF) y la documentación relacional integral (Diagramas ER y Diccionario de Datos).
+- [x] **Versión 2 (v2): Lógica de Creación Individual de Cursos por Curso-Sección**:
+  - [x] Cada combinación de curso y sección constituye un curso Canvas individual e independiente (`courses.csv`).
+  - [x] Nombre del curso (`long_name` y `short_name`): formato `${cursoNombre} - ${seccionNombre}`.
+  - [x] Identificador SIS del curso (`course_id`): formato `${codCurso}-${seccionNombre}` (con soporte de prefijos Sandbox `${coursePrefix}`).
+  - [x] Mapeo de secciones (`sections.csv`): `course_id` apunta al nuevo ID de curso-sección, y `section_id` compuesto `${seccionId}-${codCurso}-${seccionNombre}` garantizando unicidad global a prueba de colisiones.
+  - [x] Asignación de matrículas (`enrollments.csv`): docentes y estudiantes vinculados al nuevo `course_id` y su respectivo `section_id`.
+  - [x] Actualización coherente en árbol visual `hierarchy.txt`, reporte técnico `RESUMEN.md`, catálogo de cursos compartidos `CURSOS_COMPARTIDOS.md` y métricas de conteo de cursos en `HierarchySelector`.
+  - [x] Verificado mediante exportaciones de prueba y compilación exitosa de TypeScript y Vite SSR.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
 - [ ] Theory vs. Practice Session Modeling: Badges and indicators in Tree/Table and selective cross-listing support for decoupled theory and practice schedules.
@@ -392,9 +400,16 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - Teacher SIS ID: Normalized to official National ID / DNI (replaces legacy emails and sequential IDs).
   - Subaccount Hierarchy: `Sede` -> `Modalidad` -> `Facultad` -> `Carrera` -> `Plan`.
   - Exclusion filter: Sections with `"NO HABILITADO"` omitted when flag is false.
-  - Course Placement (`courses.csv`): Associated directly with the Curricular Plan subaccount (`account_id: <cod_plan>`).
+  - Course Creation & Placement (`courses.csv`) [Versión 2 / v2]:
+    - Cada combinación de curso y sección se materializa como un curso Canvas individual e independiente.
+    - **`course_id`**: `<cod_curso>-<nombre_seccion>` (ej. `CUR006380-01-D`).
+    - **`long_name`**: `<nombre_curso> - <nombre_seccion>` (ej. `ESTOMATOLOGÍA INTEGRAL DEL NIÑO Y ADOLESCENTE I - 01-D`).
+    - **`short_name`**: `<abreviatura_curso> - <nombre_seccion>` o `<course_id>`.
+    - **`account_id`**: Asociado directamente a la subcuenta del Plan Curricular (`<cod_plan>`).
+    - Secciones (`sections.csv`): `course_id` apunta al curso individual (`<cod_curso>-<nombre_seccion>`), con `section_id` compuesto único `<seccion_id>-<cod_curso>-<nombre_seccion>` para evitar cualquier riesgo de colisión en Canvas SIS.
+    - Matrículas (`enrollments.csv`): Vinculadas de forma biunívoca a `<course_id>` y `<section_id>`.
   - Root Account Association & SIS Provisioning: Top-level Sedes point to `parent_account_id: cleanRootAccountId` (or `""` to attach directly to Canvas institutional root). When `createRootAccount` is enabled, the exporter generates the custom root definition in the first row of `accounts.csv` with `parent_account_id: ""` and `status: "active"`. This enables Canvas LMS to create the subaccount during the same SIS import process and attach Sedes immediately without *"Parent account didn't exist"* warnings. Includes optional descriptive display name (`rootAccountName`).
-  - Sandbox Isolation Testing Mode (Prefixing): Enabling `isolateAccountPrefix` with a root subaccount (e.g. `TEST-5`) prefixes all generated subaccounts (Campus, Modality, Faculty, Career, Plan) with `${rootAccountId}_` (e.g. `TEST-5_S-001`, `TEST-5_M-2264`, `TEST-5_P004084`) and links them coherently in `courses.csv`. This guarantees a 100% isolated tree in Canvas LMS, preventing Canvas from moving or reparenting the real institutional `SEDE LIMA` (`S-001`) or dragging unselected faculties.
+  - Sandbox Isolation Testing Mode (Prefixing): Enabling `isolateAccountPrefix` with a root subaccount (e.g. `TEST-5`) prefixes all generated subaccounts (Campus, Modality, Faculty, Career, Plan) with `${rootAccountId}_` (e.g. `TEST-5_S-001`, `TEST-5_M-2264`, `TEST-5_P004084`) and links them coherently in `courses.csv` (e.g. `TEST-5_CUR006380-01-D`) and `sections.csv` (e.g. `TEST-5_7115-CUR006380-01-D`). This guarantees a 100% isolated tree in Canvas LMS, preventing Canvas from moving or reparenting the real institutional `SEDE LIMA` (`S-001`) or dragging unselected faculties.
   - Student Enrollment Foreign Key Resolution: In MSSQL `BDACADEMICO5`, the table `Matricula.Matricula_Alumno_Curso` links to `Matricula.Matricula_Alumno.id` via `matricula_alumno_id` (the student's term enrollment header record), NOT directly to `Academico.Alumno.id`. The service resolves `matricula_alumno_id` -> `Matricula.Matricula_Alumno` -> `Academico.Alumno.id` -> `General.Persona` (with fallback to `Matricula.Matricula_Alumno.codalumno`), preventing accidental primary key ID collisions with `Academico.Alumno.id` and guaranteeing 100% accurate student rosters in both UI views and `enrollments.csv`.
   - Multi-Course Grouping & Shared Classrooms (`grupo`): In table `Carga_Academica.Carga_Academica_Sede_Curso_Horario_Detalle`, the column `grupo` (`varchar(20)`) unifies course-sections from different plans/careers that share the exact same teacher, weekly schedule, and physical/virtual classroom (e.g. `EEGG_CCM1D01`, `FI_MIC01`). Enables Canvas LMS cross-listing (sections grouped under a single master course) or Canvas Groups generation.
   - Theory vs. Practice Session Classification: In `Academico.Curso`, hours are defined by `num_horas_sem_teoria`, `num_horas_sem_practica`, and `num_horas_sem_laboratorio`. In academic scheduling, `Carga_Academica.Carga_Academica_Sede_Curso_Horario_Detalle.cat_tipo_hora_id` links directly to `General.Catalogo` (`2217` = "Teoría" with 2,870 sessions, `2218` = "Práctica" with 2,262 sessions), with `cat_tipo_id` indicating session mode (`2077` = "Normal", `2078` = "Compartido"). This schema allows distinguishing sections where theory and practice have different teachers (271 instances) or distinct cross-listing groups (37 instances).

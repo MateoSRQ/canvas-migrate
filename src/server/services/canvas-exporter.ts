@@ -318,20 +318,21 @@ export async function exportSelectedToCanvasCsv(
 
   const coursesMap = new Map<string, CourseRow>()
   for (const it of selectedItems) {
-    const rawCourseId = it.cursoCodigo.trim()
+    const rawCourseId = `${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
     const courseId = coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId
     const rawPlanAccId = it.planCodigo ? it.planCodigo.trim() : `P-${it.planId}`
     const planAccId = accPrefix ? `${accPrefix}${rawPlanAccId}` : rawPlanAccId
     const rawCurso = cursoRawMap.get(it.cursoId)
     const shortName = rawCurso?.abreviatura
-      ? String(rawCurso.abreviatura).trim()
+      ? `${String(rawCurso.abreviatura).trim()} - ${it.seccionNombre.trim()}`
       : (coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId)
+    const longName = `${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
 
     if (!coursesMap.has(courseId)) {
       coursesMap.set(courseId, {
         course_id: courseId,
         short_name: shortName,
-        long_name: it.cursoNombre.trim(),
+        long_name: longName,
         account_id: planAccId,
         term_id: `T-${it.periodoId}`,
         status: 'active',
@@ -389,7 +390,7 @@ export async function exportSelectedToCanvasCsv(
 
         // Mapear cada sección del grupo hacia el curso contenedor
         for (const it of groupItems) {
-          const rawCourseId = it.cursoCodigo.trim()
+          const rawCourseId = `${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
           const rawSectionId = `${it.seccionId}-${rawCourseId}`
           const sectionId = coursePrefix ? `${coursePrefix}${rawSectionId}` : rawSectionId
           xlistsMap.set(sectionId, {
@@ -447,7 +448,7 @@ export async function exportSelectedToCanvasCsv(
 
   const sectionsMap = new Map<string, SectionRow>()
   for (const it of selectedItems) {
-    const rawCourseId = it.cursoCodigo.trim()
+    const rawCourseId = `${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
     const courseId = coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId
     const rawSectionId = `${it.seccionId}-${rawCourseId}`
     const sectionId = coursePrefix ? `${coursePrefix}${rawSectionId}` : rawSectionId
@@ -617,7 +618,7 @@ export async function exportSelectedToCanvasCsv(
   const enrollmentsMap = new Map<string, EnrollmentRow>()
 
   for (const it of selectedItems) {
-    const rawCourseId = it.cursoCodigo.trim()
+    const rawCourseId = `${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
     const courseId = coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId
     const rawSectionId = `${it.seccionId}-${rawCourseId}`
     const sectionId = coursePrefix ? `${coursePrefix}${rawSectionId}` : rawSectionId
@@ -749,9 +750,9 @@ export async function exportSelectedToCanvasCsv(
     if (!planG.has(plKey)) planG.set(plKey, new Map())
     const curG = planG.get(plKey)!
 
-    const rawCurCode = it.cursoCodigo.trim()
+    const rawCurCode = `${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
     const curCode = coursePrefix ? `${coursePrefix}${rawCurCode}` : rawCurCode
-    const curKey = `${curCode} - ${it.cursoNombre}`
+    const curKey = `${curCode} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
     if (!curG.has(curKey)) curG.set(curKey, [])
     curG.get(curKey)!.push(it)
   }
@@ -777,7 +778,8 @@ export async function exportSelectedToCanvasCsv(
               for (const [curName, secs] of curG) {
                 treeLines.push(`\t\t\t\t\t\t${rootIndent}[CURSO] ${curName}`)
                 for (const s of secs as HierarchyItem[]) {
-                  const rawSecId = `${s.seccionId}-${s.cursoCodigo}`
+                  const rawSecCourseId = `${s.cursoCodigo.trim()}-${s.seccionNombre.trim()}`
+                  const rawSecId = `${s.seccionId}-${rawSecCourseId}`
                   const secId = coursePrefix ? `${coursePrefix}${rawSecId}` : rawSecId
                   treeLines.push(
                     `\t\t\t\t\t\t\t${rootIndent}[SECCION] ${s.seccionNombre} (SEC: ${secId})${s.grupoCodigo ? ` [GRUPO: ${s.grupoCodigo}]` : ''} - ${s.estudiantes.length} alumnos`
@@ -821,10 +823,11 @@ export async function exportSelectedToCanvasCsv(
         const xlistId = coursePrefix ? `${coursePrefix}${rawXlistId}` : rawXlistId
         treeLines.push(`[CURSO MAESTRO / CONTENEDOR] ${xlistId} - GRUPO ${g}`)
         for (const item of gItems) {
-          const rawSecId = `${item.seccionId}-${item.cursoCodigo.trim()}`
+          const rawItemCourseId = `${item.cursoCodigo.trim()}-${item.seccionNombre.trim()}`
+          const rawSecId = `${item.seccionId}-${rawItemCourseId}`
           const secId = coursePrefix ? `${coursePrefix}${rawSecId}` : rawSecId
           treeLines.push(
-            `\t-> [SECCION COMBINADA] ${secId} (${item.seccionNombre}) - Curso: ${item.cursoCodigo} "${item.cursoNombre}"`
+            `\t-> [SECCION COMBINADA] ${secId} (${item.seccionNombre}) - Curso: ${rawItemCourseId} "${item.cursoNombre.trim()} - ${item.seccionNombre.trim()}"`
           )
         }
       }
@@ -870,8 +873,8 @@ ${xlistsList.length > 0 ? `| **Combinaciones (Cross-listing)** | ${xlistsList.le
 
 1. **\`accounts.csv\`**: Árbol ordenado topológicamente de Cuentas (Sede) y Subcuentas (Modalidad > Facultad > Carrera > Plan).
 2. **\`terms.csv\`**: Periodos académicos Canvas con formato de fecha SIS.
-3. **\`courses.csv\`**: Cursos académicos en formato online enlazados al plan curricular (incluye cursos contenedores de grupos).
-4. **\`sections.csv\`**: Secciones de clase identificadas por clave compuesta \`<seccion_id>-<cod_curso>\`.
+3. **\`courses.csv\`**: Cursos individuales por combinación de curso y sección en formato online enlazados al plan curricular (incluye cursos contenedores de grupos).
+4. **\`sections.csv\`**: Secciones de clase identificadas por clave compuesta \`<seccion_id>-<cod_curso>-<seccion>\`.
 5. **\`users.csv\`**: Docentes con DNI oficial normalizado y alumnos con código universitario.
 6. **\`enrollments.csv\`**: Relaciones de alumnos (rol \`student\`) y profesores (rol \`teacher\`).
 ${xlistsList.length > 0 ? `7. **\`xlists.csv\`**: Combinaciones (cross-listing) de secciones bajo cursos contenedores maestros compartidos.\n8.` : '7.'} **\`hierarchy.txt\`**: Visualización jerárquica indentada de toda la estructura académica exportada.
@@ -973,7 +976,7 @@ ${xlistsList.length > 0 ? '9.' : '8.'} **\`canvas_migration.zip\`**: Paquete ZIP
       ccLines.push('| :--- | :--- | :--- | :--- | :---: | :--- |')
 
       for (const it of gItems) {
-        const rawCourseId = it.cursoCodigo.trim()
+        const rawCourseId = `${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
         const courseId = coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId
         const rawSecId = `${it.seccionId}-${rawCourseId}`
         const secId = coursePrefix ? `${coursePrefix}${rawSecId}` : rawSecId
@@ -985,7 +988,7 @@ ${xlistsList.length > 0 ? '9.' : '8.'} **\`canvas_migration.zip\`**: Paquete ZIP
             : '*(Sin asignar)*'
         const alumnosCount = it.estudiantes?.length || 0
         ccLines.push(
-          `| **${it.seccionNombre}** | \`${secId}\` | \`${courseId}\`<br>${it.cursoNombre} | ${it.carreraNombre} > ${it.planNombre} | **${alumnosCount}** | ${teachStr} |`
+          `| **${it.seccionNombre}** | \`${secId}\` | \`${courseId}\`<br>${it.cursoNombre.trim()} - ${it.seccionNombre.trim()} | ${it.carreraNombre} > ${it.planNombre} | **${alumnosCount}** | ${teachStr} |`
         )
       }
 
