@@ -581,7 +581,7 @@ export function HierarchySelector({
                 <Badge
                   variant="outline"
                   className="text-[9px] px-1 py-0 h-4 bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 font-mono font-medium flex items-center gap-1 shadow-2xs"
-                  title={`Grupo: ${row.original.grupoCodigo} (Cross-listing)`}
+                  title={`Grupo compartido: ${row.original.grupoCodigo}`}
                 >
                   <span className="size-1 rounded-full bg-purple-500" />
                   Grupo: {row.original.grupoCodigo}

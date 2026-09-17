@@ -1457,7 +1457,7 @@ export function HierarchyTreeTable({
                                                                                           <Badge
                                                                                             variant="outline"
                                                                                             className="text-[10px] px-1.5 py-0 h-4.5 bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 font-mono font-medium flex items-center gap-1 shadow-xs"
-                                                                                            title={`Grupo compartido: ${sec.grupoCodigo}. Comparte aula y docente con otras secciones (se exportará con cross-listing en xlists.csv).`}
+                                                                                            title={`Grupo compartido: ${sec.grupoCodigo} (Comparte aula y docente en origen).`}
                                                                                           >
                                                                                             <span className="size-1.5 rounded-full bg-purple-500 animate-pulse" />
                                                                                             Grupo: {sec.grupoCodigo}

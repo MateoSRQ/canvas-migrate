@@ -273,8 +273,12 @@
     - [x] **Interfaces de Usuario y Diálogos**:
       - `HierarchyTreeTable`: Nodo de curso con título completo y claro.
       - `HierarchySelector`: Columna 'Curso (v2)' y desglose de matriculados sincronizados.
-      - `StudentInspectorDialog`: Cabecera de inspección con nombre completo.
-      - `CanvasAuditService`: Auditoría contra Canvas API comparando bajo el estándar unificado.
+  - [x] **Eliminación Total de Cross-Listing (`xlists.csv`) y Cursos Contenedores Maestros**:
+    - [x] **Arquitectura 100% Cursos Individuales**: Supresión de la generación de cursos contenedores artificiales (`GRP_<grupo>`) en `courses.csv`.
+    - [x] **Eliminación de `xlists.csv`**: No se genera archivo `xlists.csv` ni se empaqueta en `canvas_migration.zip`.
+    - [x] **Matrículas Directas al Curso Propio**: Cada matrícula en `enrollments.csv` se vincula directa y exclusivamente a su propio curso (`targetCourseId = courseId`) y su respectiva sección.
+    - [x] **Depuración de Reportes y Árbol Visual**: Eliminado el bloque de combinaciones en `hierarchy.txt`, omitida la creación de `CURSOS_COMPARTIDOS.md` y eliminada la métrica de combinaciones en `RESUMEN.md`.
+    - [x] **Ajuste en Interfaz de Usuario**: Los distintivos de grupo se mantienen únicamente como metadatos informativos de origen (`Grupo: {codigo}`) sin referencia a cross-listing.
   - [x] Verificado con compilación TypeScript estricta (`tsc --noEmit` con 0 errores) y empaquetado de producción (`npm run build` con 0 errores).
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
@@ -734,6 +738,13 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
     - `sections.csv`: Cada sección hereda este nombre completo descriptivo, haciendo que cada fila sea 100% autoexplicativa y única.
     - `hierarchy.txt` y `CURSOS_COMPARTIDOS.md`: Actualizados con la nueva nomenclatura.
     - Interfaz gráfica: Reflejado en `HierarchySelector` (columna Curso v2 y desglose), `HierarchyTreeTable` y `StudentInspectorDialog`.
+- **Supresión Total de Cross-Listing y Cursos Contenedores**:
+  - **Decisión de Negocio y Arquitectura**: Los cursos contenedores artificiales (`GRP_...`) y la combinación forzada de secciones vía `xlists.csv` han sido totalmente eliminados a favor del modelo unificado 1:1 de cursos independientes.
+  - **Comportamiento Resultante**:
+    - Cada curso-sección es una entidad independiente en Canvas LMS con su propia matrícula y sección, eliminando cursos agrupados vacíos o desvinculaciones.
+    - No se genera ni empaqueta `xlists.csv` ni `CURSOS_COMPARTIDOS.md`.
+  - **Insignias en Interfaz**: La insignia de grupo (`Grupo: {codigo}`) en la tabla y en el árbol se mantiene exclusivamente como indicador informativo de origen (`Grupo compartido: {codigo}`), eliminando cualquier mención a cross-listing o `xlists.csv`.
+
 
 
 
