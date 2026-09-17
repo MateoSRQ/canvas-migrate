@@ -232,6 +232,8 @@
   - Publicado [`docs/DIAGRAMAS_ER_BD_ACADEMICO.md`](docs/DIAGRAMAS_ER_BD_ACADEMICO.md): 6 diagramas Mermaid especializados que modelan el Ecosistema Maestro, Malla Curricular y Planes (`Academico`), Carga Académica y Aulas Compartidas (`Carga_Academica`), Flujo de Matrícula (`Matricula`), Identidad Docente y Accesos (`BDAUTENTICACION5`), y Pipeline de Extracción hacia Canvas LMS.
   - Publicado [`docs/DICCIONARIO_DATOS_BD_ACADEMICO.md`](docs/DICCIONARIO_DATOS_BD_ACADEMICO.md): Diccionario exhaustivo (108 KB, 1,800 líneas) con tablas formales para todos los esquemas (`Academico`, `Carga_Academica`, `Matricula`, `General`, `Admision`, `GradosTitulos`, `Titulacion`, `Personal`, `Auth`), detallando tipos de datos exactos, claves primarias, claves foráneas salientes, nulabilidad y descripciones de negocio.
   - Integración en `README.md` con sección de acceso rápido y referencias cruzadas.
+- [x] **Creación de Rama de Git \`v2\`**:
+  - Creada y conmutada la nueva rama de trabajo \`v2\` a partir de \`forecast\`, consolidando todas las fases 1-5, la suite de Previsión de Matrícula (Forecast con visualizaciones TanStack Charts, simulación matemática de cohortes, exportación Excel nativa, presentación apaisada A3 en PDF) y la documentación relacional integral (Diagramas ER y Diccionario de Datos).
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
 - [ ] Theory vs. Practice Session Modeling: Badges and indicators in Tree/Table and selective cross-listing support for decoupled theory and practice schedules.
