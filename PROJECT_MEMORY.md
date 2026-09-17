@@ -234,16 +234,29 @@
   - Integración en `README.md` con sección de acceso rápido y referencias cruzadas.
 - [x] **Creación de Rama de Git \`v2\`**:
   - Creada y conmutada la nueva rama de trabajo \`v2\` a partir de \`forecast\`, consolidando todas las fases 1-5, la suite de Previsión de Matrícula (Forecast con visualizaciones TanStack Charts, simulación matemática de cohortes, exportación Excel nativa, presentación apaisada A3 en PDF) y la documentación relacional integral (Diagramas ER y Diccionario de Datos).
-- [x] **Versión 2 (v2): Lógica de Creación Individual de Cursos por Curso-Sección y Normalización de Modalidad**:
-  - [x] Cada combinación de curso y sección constituye un curso Canvas individual e independiente (`courses.csv`).
-  - [x] **Eliminación de Modalidad de la jerarquía de subcuentas (`accounts.csv`)**: Las facultades cuelgan directamente de la Sede (`Sede -> Facultad -> Carrera -> Plan`), suprimiendo las subcuentas intermedias `M-...`.
+- [x] **Versión 2 (v2): Lógica de Creación Individual de Cursos por Curso-Sección, Normalización de Modalidad, Visualización y Verificación**:
+  - [x] **Regla de Unificación de Curso y Sección**: Cada combinación de curso y sección constituye un curso Canvas individual e independiente (`courses.csv`).
+  - [x] **Eliminación de Modalidad como Subcuenta (`accounts.csv`)**: Las facultades cuelgan directamente de la Sede (`Sede -> Facultad -> Carrera -> Plan`), suprimiendo el nivel intermedio de subcuentas por modalidad.
   - [x] **Código de modalidad estándar al inicio**: Prefijo normalizado al inicio del código y nombre del curso: `MP` (Modalidad Presencial), `MN` (Modalidad No Presencial / Semi Presencial) y `MD` (Modalidad a Distancia).
   - [x] **Nombre del curso (`long_name` y `short_name`)**: Formato `${modCode} - ${cursoNombre} - ${seccionNombre}` (ej. `MP - ESTOMATOLOGÍA INTEGRAL DEL NIÑO Y ADOLESCENTE I - 01-D`).
   - [x] **Identificador SIS del curso (`course_id`)**: Formato `${modCode}-${codCurso}-${seccionNombre}` (ej. `MP-CUR006380-01-D`, con prefijos Sandbox opcionales `${coursePrefix}`).
-  - [x] **Mapeo de secciones (`sections.csv`)**: `course_id` apunta al nuevo ID compuesto, y `section_id` con formato `${seccionId}-${modCode}-${codCurso}-${seccionNombre}` garantizando unicidad global a prueba de colisiones.
+  - [x] **Mapeo de secciones (`sections.csv`)**: 1 sección única por curso, con `course_id` apuntando al nuevo curso individual, y `section_id` con formato `${seccionId}-${modCode}-${codCurso}-${seccionNombre}` garantizando unicidad global a prueba de colisiones.
   - [x] **Asignación de matrículas (`enrollments.csv`)**: Docentes y estudiantes vinculados al nuevo `course_id` y su respectivo `section_id`.
-  - [x] **Árbol visual y reportes**: `hierarchy.txt`, `RESUMEN.md`, `CURSOS_COMPARTIDOS.md` y `HierarchySelector` actualizados y coordinados.
-  - [x] Verificado mediante exportaciones de prueba y compilación exitosa de TypeScript y Vite SSR.
+  - [x] **Generación de Paquete SIS (`canvas-exporter.ts`)**: `accounts.csv`, `courses.csv`, `sections.csv`, `enrollments.csv`, `xlists.csv`, `hierarchy.txt`, `RESUMEN.md` y `CURSOS_COMPARTIDOS.md` completamente adaptados a las especificaciones de la v2.
+  - [x] **Verificación y Auditoría contra Canvas API (`canvas-audit-service.ts`)**: Servicio de auditoría actualizado para contrastar cursos agrupados por combinación curso-sección y verificar la existencia de secciones bajo el SIS ID v2.
+  - [x] **Visualización en Árbol Jerárquico (`hierarchy-tree-table.tsx`)**:
+    - Jerarquía simplificada: `Periodo -> Sede -> Facultad -> Carrera -> Plan -> Curso (v2) -> Sección Única`.
+    - Cabecera de curso enriquecida con insignia de modalidad cromática (`MP`, `MN`, `MD`), insignia `[Curso v2]`, código compuesto y nombre completo.
+    - Controles de plegado/desplegado en bloque adaptados a los nuevos niveles ('sedes', 'carreras', 'cursos', 'all').
+  - [x] **Visualización en Tabla Detallada (`hierarchy-selector.tsx`)**:
+    - Columna de Curso actualizada a "Curso (v2)" con insignia de modalidad, insignia `[Curso v2]`, código v2 y ordenación multi-criterio.
+    - Columna de Sección identificada con distintivo "Sección Única".
+    - Motor de búsqueda global ampliado con `matchV2Code` para buscar cursos directamente por código v2 (ej: `MP-CUR...`).
+    - Desglose de matriculados expandible actualizado con código v2 y sección única.
+  - [x] **Diálogos de Selección, Inspección y Exportación**:
+    - `StudentInspectorDialog` muestra código v2, insignia de modalidad y desglose de matriculados.
+    - `CanvasExportDialog` actualizado con ejemplos de aislamiento sandbox en formato v2 (`MP-CUR006380-01-D`, `7115-MP-CUR006380-01-D`).
+  - [x] Verificado con compilación TypeScript estricta (`tsc --noEmit` con 0 errores) y empaquetado de producción (`npm run build` con 0 errores).
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
 - [ ] Theory vs. Practice Session Modeling: Badges and indicators in Tree/Table and selective cross-listing support for decoupled theory and practice schedules.
@@ -647,3 +660,14 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - Nested Tree & Detailed Table: Sections with `grupoCodigo` display an outline badge `Grupo: {codigo}` with purple background (`bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800`), font-mono styling, and pulsating indicator dot. Search bar automatically matches group codes.
   - Comparison Workspace: Left panel displays `Xlist: {masterCourseId}` on exported sections and `{count} Xlist` in summary bar. Right panel parses `nonxlist_course_id` and displays `Cross-list (Origen: #{id})`. Synchronized and local search engines automatically match `xlistCourseId` and section IDs when filtering migration trees.
   - Canvas Case Manager: Sections originating from cross-listing dynamically render purple `Cross-list (Origen: #{id})` badge.
+- **Versión 2 (v2) Visualización y Badges de Modalidad**:
+  - **Paleta Cromática de Insignias de Modalidad**:
+    - `MP` (Modalidad Presencial): Azul (`bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800`).
+    - `MN` (Modalidad No Presencial / Semi Presencial): Ámbar (`bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800`).
+    - `MD` (Modalidad a Distancia): Esmeralda (`bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800`).
+  - **Identificadores v2 en Componentes**:
+    - `HierarchyTreeTable`: Nodo de curso con badge de modalidad, badge secundario `[Curso v2]`, código compuesto en mono y título extendido. Plegado en bloque reconfigurado a niveles ('sedes', 'carreras', 'cursos', 'all').
+    - `HierarchySelector` (Tabla Detallada): Columna de Curso con badges de modalidad y `[Curso v2]`, ordenación por código compuesto y soporte de búsqueda `matchV2Code`. Columna de Sección con badge distintivo `Única`.
+    - `StudentInspectorDialog`: Cabecera con badge de modalidad y código compuesto v2.
+    - `CanvasExportDialog`: Ejemplos técnicos de prefijo de aislamiento adaptados a `MP-CUR006380-01-D` y `7115-MP-CUR006380-01-D`.
+

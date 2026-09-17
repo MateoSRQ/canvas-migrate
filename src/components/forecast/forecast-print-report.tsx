@@ -1,21 +1,8 @@
 import * as React from 'react'
-import {
-  GraduationCap,
-  Calendar,
-  Building2,
-  Laptop,
-  Clock,
-  TrendingDown,
-  RefreshCw,
-  ArrowRight,
-  Sparkles,
-  Users,
-  BookOpen,
-} from 'lucide-react'
+import { GraduationCap } from 'lucide-react'
 import type {
   ForecastResult,
   ForecastCareerRow,
-  ForecastCourseItem,
 } from '#/server/services/forecast-service'
 
 export interface ForecastPrintReportProps {

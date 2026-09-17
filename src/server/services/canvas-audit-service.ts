@@ -1,4 +1,5 @@
 import { getCaseHierarchyData, getSectionEnrolledStudents, type HierarchyItem } from './hierarchy-service'
+import { getModalidadCode } from '#/lib/utils'
 
 export interface CanvasAuditOptions {
   caseId: string
@@ -119,26 +120,34 @@ export async function auditExportAgainstCanvasApi(
     }
   }
 
-  // 2. Agrupar por curso
+  // 2. Agrupar por curso (v2: Cada combinación de curso y sección es un curso individual)
   interface CourseGroup {
     courseId: number
-    courseCode: string
+    courseSisId: string
     courseName: string
+    rawCourseId: string
+    modCode: string
     sections: HierarchyItem[]
   }
 
   const courseGroupsMap = new Map<string, CourseGroup>()
   for (const it of selectedItems) {
-    const code = it.cursoCodigo.trim()
-    if (!courseGroupsMap.has(code)) {
-      courseGroupsMap.set(code, {
+    const modCode = getModalidadCode(it.modalidadId, it.modalidadNombre)
+    const rawCourseId = `${modCode}-${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
+    const courseSisId = rawCourseId
+    const courseName = `${modCode} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
+
+    if (!courseGroupsMap.has(courseSisId)) {
+      courseGroupsMap.set(courseSisId, {
         courseId: it.cursoId,
-        courseCode: code,
-        courseName: it.cursoNombre.trim(),
+        courseSisId,
+        courseName,
+        rawCourseId,
+        modCode,
         sections: [],
       })
     }
-    courseGroupsMap.get(code)!.sections.push(it)
+    courseGroupsMap.get(courseSisId)!.sections.push(it)
   }
 
   const courseGroups = Array.from(courseGroupsMap.values())
@@ -167,7 +176,7 @@ export async function auditExportAgainstCanvasApi(
     const chunk = courseGroups.slice(i, i + concurrency)
     await Promise.all(
       chunk.map(async (grp) => {
-        const courseSisId = grp.courseCode
+        const courseSisId = grp.courseSisId
         let canvasCourse: any = null
 
         // Consultar curso por SIS ID en Canvas
@@ -205,7 +214,7 @@ export async function auditExportAgainstCanvasApi(
           for (const sec of grp.sections) {
             totalSectionsCount++
             missingSectionsCount++
-            const sisSectionId = `${sec.seccionId}-${grp.courseCode}`
+            const sisSectionId = `${sec.seccionId}-${grp.rawCourseId}`
 
             variations.push({
               id: `section-missing-${sec.id}`,
@@ -356,7 +365,7 @@ export async function auditExportAgainstCanvasApi(
         // Comparar Secciones
         for (const sec of grp.sections) {
           totalSectionsCount++
-          const expectedSis = `${sec.seccionId}-${grp.courseCode}`.toLowerCase()
+          const expectedSis = `${sec.seccionId}-${grp.rawCourseId}`.toLowerCase()
           const expectedName = sec.seccionNombre.trim().toLowerCase()
 
           const matchedSec =

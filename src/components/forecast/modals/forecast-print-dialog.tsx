@@ -4,10 +4,8 @@ import {
   FileText,
   Sliders,
   Sparkles,
-  Layers,
   BookOpen,
   Info,
-  Check,
 } from 'lucide-react'
 import {
   Dialog,

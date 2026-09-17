@@ -24,6 +24,7 @@ import {
   TableRow,
 } from '#/components/ui/table'
 import { getSectionStudentsFn } from '#/server/functions/hierarchy'
+import { getModalidadCode } from '#/lib/utils'
 import { TreeSectionRoster } from './tree-section-roster'
 import type {
   HierarchyItem,
@@ -55,9 +56,13 @@ interface TreeSectionNode {
 }
 
 interface TreeCourseNode {
+  cursoKey: string
   cursoId: number
   cursoCodigo: string
   cursoNombre: string
+  rawCursoCodigo: string
+  rawCursoNombre: string
+  modCode: string
   secciones: TreeSectionNode[]
   sectionIds: number[]
   totalStudents: number
@@ -67,7 +72,7 @@ interface TreePlanNode {
   planId: number
   planCodigo: string
   planNombre: string
-  cursos: Map<number, TreeCourseNode>
+  cursos: Map<string, TreeCourseNode>
   sectionIds: number[]
   totalStudents: number
 }
@@ -88,18 +93,10 @@ interface TreeFacultadNode {
   totalStudents: number
 }
 
-interface TreeModalidadNode {
-  modalidadId: number
-  modalidadNombre: string
-  facultades: Map<number, TreeFacultadNode>
-  sectionIds: number[]
-  totalStudents: number
-}
-
 interface TreeSedeNode {
   sedeId: number
   sedeNombre: string
-  modalidades: Map<number, TreeModalidadNode>
+  facultades: Map<number, TreeFacultadNode>
   sectionIds: number[]
   totalStudents: number
 }
@@ -181,7 +178,7 @@ export function HierarchyTreeTable({
         sNode = {
           sedeId: it.sedeId,
           sedeNombre: it.sedeNombre,
-          modalidades: new Map(),
+          facultades: new Map(),
           sectionIds: [],
           totalStudents: 0,
         }
@@ -190,23 +187,8 @@ export function HierarchyTreeTable({
       sNode.sectionIds.push(it.id)
       sNode.totalStudents += it.estudiantesCount
 
-      // 3. Modalidad (Subcuenta)
-      let mNode = sNode.modalidades.get(it.modalidadId)
-      if (!mNode) {
-        mNode = {
-          modalidadId: it.modalidadId,
-          modalidadNombre: it.modalidadNombre,
-          facultades: new Map(),
-          sectionIds: [],
-          totalStudents: 0,
-        }
-        sNode.modalidades.set(it.modalidadId, mNode)
-      }
-      mNode.sectionIds.push(it.id)
-      mNode.totalStudents += it.estudiantesCount
-
-      // 4. Facultad (Subcuenta)
-      let fNode = mNode.facultades.get(it.facultadId)
+      // 3. Facultad (Subcuenta - directa de Sede en v2)
+      let fNode = sNode.facultades.get(it.facultadId)
       if (!fNode) {
         fNode = {
           facultadId: it.facultadId,
@@ -215,12 +197,12 @@ export function HierarchyTreeTable({
           sectionIds: [],
           totalStudents: 0,
         }
-        mNode.facultades.set(it.facultadId, fNode)
+        sNode.facultades.set(it.facultadId, fNode)
       }
       fNode.sectionIds.push(it.id)
       fNode.totalStudents += it.estudiantesCount
 
-      // 5. Carrera (Subcuenta)
+      // 4. Carrera (Subcuenta)
       let cNode = fNode.carreras.get(it.carreraId)
       if (!cNode) {
         cNode = {
@@ -235,7 +217,7 @@ export function HierarchyTreeTable({
       cNode.sectionIds.push(it.id)
       cNode.totalStudents += it.estudiantesCount
 
-      // 6. Plan (Subcuenta)
+      // 5. Plan (Subcuenta)
       let plNode = cNode.planes.get(it.planId)
       if (!plNode) {
         plNode = {
@@ -251,23 +233,32 @@ export function HierarchyTreeTable({
       plNode.sectionIds.push(it.id)
       plNode.totalStudents += it.estudiantesCount
 
-      // 7. Curso
-      let curNode = plNode.cursos.get(it.cursoId)
+      // 6. Curso Individual (v2: Prefijo de Modalidad + Código de Curso + Sección)
+      const modCode = getModalidadCode(it.modalidadId, it.modalidadNombre)
+      const v2CourseCode = `${modCode}-${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
+      const v2CourseName = `${modCode} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
+      const cursoKey = v2CourseCode
+
+      let curNode = plNode.cursos.get(cursoKey)
       if (!curNode) {
         curNode = {
+          cursoKey,
           cursoId: it.cursoId,
-          cursoCodigo: it.cursoCodigo,
-          cursoNombre: it.cursoNombre,
+          cursoCodigo: v2CourseCode,
+          cursoNombre: v2CourseName,
+          rawCursoCodigo: it.cursoCodigo.trim(),
+          rawCursoNombre: it.cursoNombre.trim(),
+          modCode,
           secciones: [],
           sectionIds: [],
           totalStudents: 0,
         }
-        plNode.cursos.set(it.cursoId, curNode)
+        plNode.cursos.set(cursoKey, curNode)
       }
       curNode.sectionIds.push(it.id)
       curNode.totalStudents += it.estudiantesCount
 
-      // 8. Sección
+      // 7. Sección Única
       curNode.secciones.push({
         id: it.id,
         seccionId: it.seccionId,
@@ -299,27 +290,24 @@ export function HierarchyTreeTable({
       keys.add(`periodo-${p.periodoId}`)
       for (const s of p.sedes.values()) {
         keys.add(`sede-${p.periodoId}-${s.sedeId}`)
-        for (const m of s.modalidades.values()) {
-          keys.add(`mod-${p.periodoId}-${s.sedeId}-${m.modalidadId}`)
-          for (const f of m.facultades.values()) {
-            keys.add(`fac-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}`)
-            for (const c of f.carreras.values()) {
+        for (const f of s.facultades.values()) {
+          keys.add(`fac-${p.periodoId}-${s.sedeId}-${f.facultadId}`)
+          for (const c of f.carreras.values()) {
+            keys.add(
+              `carr-${p.periodoId}-${s.sedeId}-${f.facultadId}-${c.carreraId}`
+            )
+            for (const pl of c.planes.values()) {
               keys.add(
-                `carr-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}`
+                `plan-${p.periodoId}-${s.sedeId}-${f.facultadId}-${c.carreraId}-${pl.planId}`
               )
-              for (const pl of c.planes.values()) {
+              for (const cur of pl.cursos.values()) {
                 keys.add(
-                  `plan-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}`
+                  `curso-${p.periodoId}-${s.sedeId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoKey}`
                 )
-                for (const cur of pl.cursos.values()) {
+                for (const sec of cur.secciones) {
                   keys.add(
-                    `curso-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}`
+                    `sec-${p.periodoId}-${s.sedeId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoKey}-${sec.id}`
                   )
-                  for (const sec of cur.secciones) {
-                    keys.add(
-                      `sec-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}-${sec.id}`
-                    )
-                  }
                 }
               }
             }
@@ -374,10 +362,10 @@ export function HierarchyTreeTable({
         const firstSede = Array.from(firstPeriodo.sedes.values())[0]
         if (firstSede) {
           initialSet.add(`sede-${firstPeriodo.periodoId}-${firstSede.sedeId}`)
-          const firstMod = Array.from(firstSede.modalidades.values())[0]
-          if (firstMod) {
+          const firstFac = Array.from(firstSede.facultades.values())[0]
+          if (firstFac) {
             initialSet.add(
-              `mod-${firstPeriodo.periodoId}-${firstSede.sedeId}-${firstMod.modalidadId}`
+              `fac-${firstPeriodo.periodoId}-${firstSede.sedeId}-${firstFac.facultadId}`
             )
           }
         }
@@ -409,26 +397,23 @@ export function HierarchyTreeTable({
       const keys: string[] = [`periodo-${p.periodoId}`]
       for (const s of p.sedes.values()) {
         keys.push(`sede-${p.periodoId}-${s.sedeId}`)
-        for (const m of s.modalidades.values()) {
-          keys.push(`mod-${p.periodoId}-${s.sedeId}-${m.modalidadId}`)
-          for (const f of m.facultades.values()) {
-            keys.push(`fac-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}`)
-            for (const c of f.carreras.values()) {
-              keys.push(`carr-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}`)
-              for (const pl of c.planes.values()) {
+        for (const f of s.facultades.values()) {
+          keys.push(`fac-${p.periodoId}-${s.sedeId}-${f.facultadId}`)
+          for (const c of f.carreras.values()) {
+            keys.push(`carr-${p.periodoId}-${s.sedeId}-${f.facultadId}-${c.carreraId}`)
+            for (const pl of c.planes.values()) {
+              keys.push(
+                `plan-${p.periodoId}-${s.sedeId}-${f.facultadId}-${c.carreraId}-${pl.planId}`
+              )
+              for (const cur of pl.cursos.values()) {
                 keys.push(
-                  `plan-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}`
+                  `curso-${p.periodoId}-${s.sedeId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoKey}`
                 )
-                for (const cur of pl.cursos.values()) {
-                  keys.push(
-                    `curso-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}`
-                  )
-                  if (includeMatriculados) {
-                    for (const sec of cur.secciones) {
-                      keys.push(
-                        `sec-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}-${sec.id}`
-                      )
-                    }
+                if (includeMatriculados) {
+                  for (const sec of cur.secciones) {
+                    keys.push(
+                      `sec-${p.periodoId}-${s.sedeId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoKey}-${sec.id}`
+                    )
                   }
                 }
               }
@@ -444,27 +429,50 @@ export function HierarchyTreeTable({
   const getSedeBranchKeys = React.useCallback(
     (pId: number, s: TreeSedeNode, includeMatriculados = false): string[] => {
       const keys: string[] = [`sede-${pId}-${s.sedeId}`]
-      for (const m of s.modalidades.values()) {
-        keys.push(`mod-${pId}-${s.sedeId}-${m.modalidadId}`)
-        for (const f of m.facultades.values()) {
-          keys.push(`fac-${pId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}`)
-          for (const c of f.carreras.values()) {
-            keys.push(`carr-${pId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}`)
-            for (const pl of c.planes.values()) {
+      for (const f of s.facultades.values()) {
+        keys.push(`fac-${pId}-${s.sedeId}-${f.facultadId}`)
+        for (const c of f.carreras.values()) {
+          keys.push(`carr-${pId}-${s.sedeId}-${f.facultadId}-${c.carreraId}`)
+          for (const pl of c.planes.values()) {
+            keys.push(
+              `plan-${pId}-${s.sedeId}-${f.facultadId}-${c.carreraId}-${pl.planId}`
+            )
+            for (const cur of pl.cursos.values()) {
               keys.push(
-                `plan-${pId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}`
+                `curso-${pId}-${s.sedeId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoKey}`
               )
-              for (const cur of pl.cursos.values()) {
-                keys.push(
-                  `curso-${pId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}`
-                )
-                if (includeMatriculados) {
-                  for (const sec of cur.secciones) {
-                    keys.push(
-                      `sec-${pId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}-${sec.id}`
-                    )
-                  }
+              if (includeMatriculados) {
+                for (const sec of cur.secciones) {
+                  keys.push(
+                    `sec-${pId}-${s.sedeId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoKey}-${sec.id}`
+                  )
                 }
+              }
+            }
+          }
+        }
+      }
+      return keys
+    },
+    []
+  )
+
+  const getFacultadBranchKeys = React.useCallback(
+    (pId: number, sId: number, f: TreeFacultadNode, includeMatriculados = false): string[] => {
+      const keys: string[] = [`fac-${pId}-${sId}-${f.facultadId}`]
+      for (const c of f.carreras.values()) {
+        keys.push(`carr-${pId}-${sId}-${f.facultadId}-${c.carreraId}`)
+        for (const pl of c.planes.values()) {
+          keys.push(`plan-${pId}-${sId}-${f.facultadId}-${c.carreraId}-${pl.planId}`)
+          for (const cur of pl.cursos.values()) {
+            keys.push(
+              `curso-${pId}-${sId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoKey}`
+            )
+            if (includeMatriculados) {
+              for (const sec of cur.secciones) {
+                keys.push(
+                  `sec-${pId}-${sId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoKey}-${sec.id}`
+                )
               }
             }
           }
@@ -479,22 +487,21 @@ export function HierarchyTreeTable({
     (
       pId: number,
       sId: number,
-      mId: number,
       fId: number,
       c: TreeCarreraNode,
       includeMatriculados = false
     ): string[] => {
-      const keys: string[] = [`carr-${pId}-${sId}-${mId}-${fId}-${c.carreraId}`]
+      const keys: string[] = [`carr-${pId}-${sId}-${fId}-${c.carreraId}`]
       for (const pl of c.planes.values()) {
-        keys.push(`plan-${pId}-${sId}-${mId}-${fId}-${c.carreraId}-${pl.planId}`)
+        keys.push(`plan-${pId}-${sId}-${fId}-${c.carreraId}-${pl.planId}`)
         for (const cur of pl.cursos.values()) {
           keys.push(
-            `curso-${pId}-${sId}-${mId}-${fId}-${c.carreraId}-${pl.planId}-${cur.cursoId}`
+            `curso-${pId}-${sId}-${fId}-${c.carreraId}-${pl.planId}-${cur.cursoKey}`
           )
           if (includeMatriculados) {
             for (const sec of cur.secciones) {
               keys.push(
-                `sec-${pId}-${sId}-${mId}-${fId}-${c.carreraId}-${pl.planId}-${cur.cursoId}-${sec.id}`
+                `sec-${pId}-${sId}-${fId}-${c.carreraId}-${pl.planId}-${cur.cursoKey}-${sec.id}`
               )
             }
           }
@@ -509,19 +516,18 @@ export function HierarchyTreeTable({
     (
       pId: number,
       sId: number,
-      mId: number,
       fId: number,
       cId: number,
       pl: TreePlanNode,
       includeMatriculados = false
     ): string[] => {
-      const keys: string[] = [`plan-${pId}-${sId}-${mId}-${fId}-${cId}-${pl.planId}`]
+      const keys: string[] = [`plan-${pId}-${sId}-${fId}-${cId}-${pl.planId}`]
       for (const cur of pl.cursos.values()) {
-        keys.push(`curso-${pId}-${sId}-${mId}-${fId}-${cId}-${pl.planId}-${cur.cursoId}`)
+        keys.push(`curso-${pId}-${sId}-${fId}-${cId}-${pl.planId}-${cur.cursoKey}`)
         if (includeMatriculados) {
           for (const sec of cur.secciones) {
             keys.push(
-              `sec-${pId}-${sId}-${mId}-${fId}-${cId}-${pl.planId}-${cur.cursoId}-${sec.id}`
+              `sec-${pId}-${sId}-${fId}-${cId}-${pl.planId}-${cur.cursoKey}-${sec.id}`
             )
           }
         }
@@ -535,14 +541,13 @@ export function HierarchyTreeTable({
     (
       pId: number,
       sId: number,
-      mId: number,
       fId: number,
       cId: number,
       plId: number,
       cur: TreeCourseNode
     ): string[] => {
       return cur.secciones.map(
-        (sec: TreeSectionNode) => `sec-${pId}-${sId}-${mId}-${fId}-${cId}-${plId}-${cur.cursoId}-${sec.id}`
+        (sec: TreeSectionNode) => `sec-${pId}-${sId}-${fId}-${cId}-${plId}-${cur.cursoKey}-${sec.id}`
       )
     },
     []
@@ -591,30 +596,27 @@ export function HierarchyTreeTable({
           allKeys.add(`sede-${p.periodoId}-${s.sedeId}`)
           if (level === 'sedes') continue
 
-          for (const m of s.modalidades.values()) {
-            allKeys.add(`mod-${p.periodoId}-${s.sedeId}-${m.modalidadId}`)
-            for (const f of m.facultades.values()) {
-              allKeys.add(`fac-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}`)
-              for (const c of f.carreras.values()) {
-                allKeys.add(
-                  `carr-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}`
-                )
-                if (level === 'carreras') continue
+          for (const f of s.facultades.values()) {
+            allKeys.add(`fac-${p.periodoId}-${s.sedeId}-${f.facultadId}`)
+            for (const c of f.carreras.values()) {
+              allKeys.add(
+                `carr-${p.periodoId}-${s.sedeId}-${f.facultadId}-${c.carreraId}`
+              )
+              if (level === 'carreras') continue
 
-                for (const pl of c.planes.values()) {
+              for (const pl of c.planes.values()) {
+                allKeys.add(
+                  `plan-${p.periodoId}-${s.sedeId}-${f.facultadId}-${c.carreraId}-${pl.planId}`
+                )
+                for (const cur of pl.cursos.values()) {
                   allKeys.add(
-                    `plan-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}`
+                    `curso-${p.periodoId}-${s.sedeId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoKey}`
                   )
-                  for (const cur of pl.cursos.values()) {
-                    allKeys.add(
-                      `curso-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}`
-                    )
-                    if (level === 'all') {
-                      for (const sec of cur.secciones) {
-                        allKeys.add(
-                          `sec-${p.periodoId}-${s.sedeId}-${m.modalidadId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoId}-${sec.id}`
-                        )
-                      }
+                  if (level === 'all') {
+                    for (const sec of cur.secciones) {
+                      allKeys.add(
+                        `sec-${p.periodoId}-${s.sedeId}-${f.facultadId}-${c.carreraId}-${pl.planId}-${cur.cursoKey}-${sec.id}`
+                      )
                     }
                   }
                 }
@@ -915,27 +917,40 @@ export function HierarchyTreeTable({
                           </div>
                         </div>
 
-                        {/* Hijos de Sede: Modalidades (Subcuentas) */}
+                        {/* Hijos de Sede: Facultades (Subcuentas) */}
                         {isSExpanded && (
                           <div className="p-2.5 pl-6 space-y-2.5 bg-muted/5">
-                            {Array.from(sede.modalidades.values()).map((modalidad) => {
-                              const mKey = `mod-${periodo.periodoId}-${sede.sedeId}-${modalidad.modalidadId}`
-                              const isMExpanded = expandedNodes.has(mKey)
-                              const mCheckState = getNodeCheckState(modalidad.sectionIds)
+                            {Array.from(sede.facultades.values()).map((facultad) => {
+                              const fKey = `fac-${periodo.periodoId}-${sede.sedeId}-${facultad.facultadId}`
+                              const isFExpanded = expandedNodes.has(fKey)
+                              const fCheckState = getNodeCheckState(facultad.sectionIds)
 
                               return (
                                 <div
-                                  key={mKey}
+                                  key={fKey}
                                   className="border border-border/60 rounded-md bg-card overflow-hidden"
                                 >
-                                  {/* Nivel 2: Subcuenta Modalidad */}
+                                  {/* Nivel 2: Subcuenta Facultad */}
                                   <div className="flex items-center justify-between gap-3 px-3 py-2 bg-muted/15 border-b border-border/40">
                                     <div className="flex items-center gap-2 flex-1 min-w-0">
                                       <button
-                                        onClick={() => toggleNode(mKey)}
+                                        onClick={(e) => {
+                                          if (e.altKey) {
+                                            toggleBranchKeys(
+                                              getFacultadBranchKeys(
+                                                periodo.periodoId,
+                                                sede.sedeId,
+                                                facultad
+                                              )
+                                            )
+                                          } else {
+                                            toggleNode(fKey)
+                                          }
+                                        }}
                                         className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                        title="Clic para alternar facultad. Alt+Clic para desplegar/plegar toda la rama de la facultad"
                                       >
-                                        {isMExpanded ? (
+                                        {isFExpanded ? (
                                           <ChevronDown className="size-3" />
                                         ) : (
                                           <ChevronRight className="size-3" />
@@ -943,9 +958,9 @@ export function HierarchyTreeTable({
                                       </button>
 
                                       <Checkbox
-                                        checked={mCheckState}
+                                        checked={fCheckState}
                                         onCheckedChange={() =>
-                                          handleToggleNodeSelection(modalidad.sectionIds)
+                                          handleToggleNodeSelection(facultad.sectionIds)
                                         }
                                       />
 
@@ -953,43 +968,78 @@ export function HierarchyTreeTable({
                                         variant="outline"
                                         className="text-[9px] px-1 py-0 font-mono"
                                       >
-                                        [Subcuenta] Modalidad
+                                        [Subcuenta] Facultad
                                       </Badge>
 
-                                      <span className="text-xs font-medium text-foreground truncate">
-                                        {modalidad.modalidadNombre}
-                                      </span>
+                                      <div className="flex items-center gap-1.5 text-xs font-medium text-foreground truncate">
+                                        <GraduationCap className="size-3 text-muted-foreground" />
+                                        <span>{facultad.facultadNombre}</span>
+                                      </div>
                                     </div>
 
-                                    <div className="text-[11px] text-muted-foreground shrink-0">
-                                      <span>{modalidad.sectionIds.length} secciones</span>
+                                    <div className="text-[11px] text-muted-foreground shrink-0 flex items-center gap-1.5">
+                                      <span>{facultad.carreras.size} Carreras</span>
+                                      <span>•</span>
+                                      <span>{facultad.sectionIds.length} secciones</span>
+                                      <Button
+                                        variant="ghost"
+                                        size="xs"
+                                        onClick={() =>
+                                          toggleBranchKeys(
+                                            getFacultadBranchKeys(
+                                              periodo.periodoId,
+                                              sede.sedeId,
+                                              facultad
+                                            )
+                                          )
+                                        }
+                                        className="h-5 text-[10px] gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+                                        title="Desplegar o plegar toda la rama de esta facultad"
+                                      >
+                                        <ChevronsUpDown className="size-2.5" />
+                                        <span className="hidden sm:inline">Rama Facultad</span>
+                                      </Button>
                                     </div>
                                   </div>
 
-                                  {/* Hijos de Modalidad: Facultades */}
-                                  {isMExpanded && (
-                                    <div className="p-2 pl-5 space-y-2">
-                                      {Array.from(modalidad.facultades.values()).map(
-                                        (facultad) => {
-                                          const fKey = `fac-${periodo.periodoId}-${sede.sedeId}-${modalidad.modalidadId}-${facultad.facultadId}`
-                                          const isFExpanded = expandedNodes.has(fKey)
-                                          const fCheckState = getNodeCheckState(
-                                            facultad.sectionIds
+                                  {/* Hijos de Facultad: Carreras */}
+                                  {isFExpanded && (
+                                    <div className="p-2 pl-4 space-y-2">
+                                      {Array.from(facultad.carreras.values()).map(
+                                        (carrera) => {
+                                          const cKey = `carr-${periodo.periodoId}-${sede.sedeId}-${facultad.facultadId}-${carrera.carreraId}`
+                                          const isCExpanded = expandedNodes.has(cKey)
+                                          const cCheckState = getNodeCheckState(
+                                            carrera.sectionIds
                                           )
 
                                           return (
                                             <div
-                                              key={fKey}
-                                              className="border border-border/50 rounded bg-background overflow-hidden"
+                                              key={cKey}
+                                              className="border border-border/40 rounded bg-card overflow-hidden"
                                             >
-                                              {/* Nivel 3: Subcuenta Facultad */}
-                                              <div className="flex items-center justify-between gap-3 px-3 py-1.5 bg-muted/20 border-b border-border/30">
+                                              {/* Nivel 3: Subcuenta Carrera */}
+                                              <div className="flex items-center justify-between gap-3 px-3 py-1.5 bg-muted/10 border-b border-border/30">
                                                 <div className="flex items-center gap-2 flex-1 min-w-0">
                                                   <button
-                                                    onClick={() => toggleNode(fKey)}
+                                                    onClick={(e) => {
+                                                      if (e.altKey) {
+                                                        toggleBranchKeys(
+                                                          getCarreraBranchKeys(
+                                                            periodo.periodoId,
+                                                            sede.sedeId,
+                                                            facultad.facultadId,
+                                                            carrera
+                                                          )
+                                                        )
+                                                      } else {
+                                                        toggleNode(cKey)
+                                                      }
+                                                    }}
                                                     className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                                    title="Clic para alternar carrera. Alt+Clic para desplegar/plegar todos los cursos de la carrera"
                                                   >
-                                                    {isFExpanded ? (
+                                                    {isCExpanded ? (
                                                       <ChevronDown className="size-3" />
                                                     ) : (
                                                       <ChevronRight className="size-3" />
@@ -997,10 +1047,10 @@ export function HierarchyTreeTable({
                                                   </button>
 
                                                   <Checkbox
-                                                    checked={fCheckState}
+                                                    checked={cCheckState}
                                                     onCheckedChange={() =>
                                                       handleToggleNodeSelection(
-                                                        facultad.sectionIds
+                                                        carrera.sectionIds
                                                       )
                                                     }
                                                   />
@@ -1009,603 +1059,534 @@ export function HierarchyTreeTable({
                                                     variant="outline"
                                                     className="text-[9px] px-1 py-0 font-mono"
                                                   >
-                                                    [Subcuenta] Facultad
+                                                    [Subcuenta] Carrera
                                                   </Badge>
 
-                                                  <div className="flex items-center gap-1.5 text-xs font-medium text-foreground truncate">
-                                                    <GraduationCap className="size-3 text-muted-foreground" />
-                                                    <span>{facultad.facultadNombre}</span>
+                                                  <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground truncate">
+                                                    <BookOpen className="size-3 text-muted-foreground" />
+                                                    <span>{carrera.carreraNombre}</span>
+                                                    <span className="font-mono text-[10px] text-muted-foreground font-normal">
+                                                      (C-{carrera.carreraId})
+                                                    </span>
                                                   </div>
                                                 </div>
 
-                                                <div className="text-[11px] text-muted-foreground shrink-0">
-                                                  <span>{facultad.carreras.size} Carreras</span>
+                                                <div className="text-[11px] text-muted-foreground shrink-0 flex items-center gap-1.5">
+                                                  <span>{carrera.sectionIds.length} secciones</span>
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="xs"
+                                                    onClick={() =>
+                                                      toggleBranchKeys(
+                                                        getCarreraBranchKeys(
+                                                          periodo.periodoId,
+                                                          sede.sedeId,
+                                                          facultad.facultadId,
+                                                          carrera
+                                                        )
+                                                      )
+                                                    }
+                                                    className="h-5 text-[10px] gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+                                                    title="Desplegar o plegar todos los planes y cursos de esta carrera"
+                                                  >
+                                                    <ChevronsUpDown className="size-2.5" />
+                                                    <span className="hidden sm:inline">Rama Carrera</span>
+                                                  </Button>
                                                 </div>
                                               </div>
 
-                                              {/* Hijos de Facultad: Carreras */}
-                                              {isFExpanded && (
+                                              {/* Hijos de Carrera: Planes de Estudio */}
+                                              {isCExpanded && (
                                                 <div className="p-2 pl-4 space-y-2">
-                                                  {Array.from(facultad.carreras.values()).map(
-                                                    (carrera) => {
-                                                      const cKey = `carr-${periodo.periodoId}-${sede.sedeId}-${modalidad.modalidadId}-${facultad.facultadId}-${carrera.carreraId}`
-                                                      const isCExpanded = expandedNodes.has(cKey)
-                                                      const cCheckState = getNodeCheckState(
-                                                        carrera.sectionIds
-                                                      )
+                                                  {Array.from(
+                                                    carrera.planes.values()
+                                                  ).map((plan) => {
+                                                    const plKey = `plan-${periodo.periodoId}-${sede.sedeId}-${facultad.facultadId}-${carrera.carreraId}-${plan.planId}`
+                                                    const isPlExpanded =
+                                                      expandedNodes.has(plKey)
+                                                    const plCheckState =
+                                                      getNodeCheckState(plan.sectionIds)
 
-                                                      return (
-                                                        <div
-                                                          key={cKey}
-                                                          className="border border-border/40 rounded bg-card overflow-hidden"
-                                                        >
-                                                          {/* Nivel 4: Subcuenta Carrera */}
-                                                          <div className="flex items-center justify-between gap-3 px-3 py-1.5 bg-muted/10 border-b border-border/30">
-                                                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                              <button
-                                                                onClick={(e) => {
-                                                                  if (e.altKey) {
-                                                                    toggleBranchKeys(
-                                                                      getCarreraBranchKeys(
-                                                                        periodo.periodoId,
-                                                                        sede.sedeId,
-                                                                        modalidad.modalidadId,
-                                                                        facultad.facultadId,
-                                                                        carrera
-                                                                      )
-                                                                    )
-                                                                  } else {
-                                                                    toggleNode(cKey)
-                                                                  }
-                                                                }}
-                                                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                                                                title="Clic para alternar carrera. Alt+Clic para desplegar/plegar todos los cursos de la carrera"
-                                                              >
-                                                                {isCExpanded ? (
-                                                                  <ChevronDown className="size-3" />
-                                                                ) : (
-                                                                  <ChevronRight className="size-3" />
-                                                                )}
-                                                              </button>
-
-                                                              <Checkbox
-                                                                checked={cCheckState}
-                                                                onCheckedChange={() =>
-                                                                  handleToggleNodeSelection(
-                                                                    carrera.sectionIds
-                                                                  )
-                                                                }
-                                                              />
-
-                                                              <Badge
-                                                                variant="outline"
-                                                                className="text-[9px] px-1 py-0 font-mono"
-                                                              >
-                                                                [Subcuenta] Carrera
-                                                              </Badge>
-
-                                                              <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground truncate">
-                                                                <BookOpen className="size-3 text-muted-foreground" />
-                                                                <span>{carrera.carreraNombre}</span>
-                                                                <span className="font-mono text-[10px] text-muted-foreground font-normal">
-                                                                  (C-{carrera.carreraId})
-                                                                </span>
-                                                              </div>
-                                                            </div>
-
-                                                            <div className="text-[11px] text-muted-foreground shrink-0 flex items-center gap-1.5">
-                                                              <span>{carrera.sectionIds.length} secciones</span>
-                                                              <Button
-                                                                variant="ghost"
-                                                                size="xs"
-                                                                onClick={() =>
+                                                    return (
+                                                      <div
+                                                        key={plKey}
+                                                        className="border border-border/40 rounded bg-background overflow-hidden"
+                                                      >
+                                                        {/* Nivel 4: Subcuenta Plan Curricular */}
+                                                        <div className="flex items-center justify-between gap-3 px-3 py-1.5 bg-muted/20 border-b border-border/30">
+                                                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                            <button
+                                                              onClick={(e) => {
+                                                                if (e.altKey) {
                                                                   toggleBranchKeys(
-                                                                    getCarreraBranchKeys(
+                                                                    getPlanBranchKeys(
                                                                       periodo.periodoId,
                                                                       sede.sedeId,
-                                                                      modalidad.modalidadId,
                                                                       facultad.facultadId,
-                                                                      carrera
+                                                                      carrera.carreraId,
+                                                                      plan
                                                                     )
                                                                   )
+                                                                } else {
+                                                                  toggleNode(plKey)
                                                                 }
-                                                                className="h-5 text-[10px] gap-1 px-1.5 text-muted-foreground hover:text-foreground"
-                                                                title="Desplegar o plegar todos los planes y cursos de esta carrera"
-                                                              >
-                                                                <ChevronsUpDown className="size-2.5" />
-                                                                <span className="hidden sm:inline">Rama Carrera</span>
-                                                              </Button>
+                                                              }}
+                                                              className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                                              title="Clic para alternar plan. Alt+Clic para desplegar/plegar todos los cursos del plan"
+                                                            >
+                                                              {isPlExpanded ? (
+                                                                <ChevronDown className="size-3" />
+                                                              ) : (
+                                                                <ChevronRight className="size-3" />
+                                                              )}
+                                                            </button>
+
+                                                            <Checkbox
+                                                              checked={plCheckState}
+                                                              onCheckedChange={() =>
+                                                                handleToggleNodeSelection(
+                                                                  plan.sectionIds
+                                                                )
+                                                              }
+                                                            />
+
+                                                            <Badge
+                                                              variant="outline"
+                                                              className="text-[9px] px-1 py-0 font-mono"
+                                                            >
+                                                              [Subcuenta] Plan
+                                                            </Badge>
+
+                                                            <div className="text-xs font-medium text-foreground truncate flex items-center gap-1.5">
+                                                              <span className="font-mono text-primary font-semibold">
+                                                                {plan.planCodigo}
+                                                              </span>
+                                                              <span>-</span>
+                                                              <span>{plan.planNombre}</span>
                                                             </div>
                                                           </div>
 
-                                                          {/* Hijos de Carrera: Planes de Estudio */}
-                                                          {isCExpanded && (
-                                                            <div className="p-2 pl-4 space-y-2">
-                                                              {Array.from(
-                                                                carrera.planes.values()
-                                                              ).map((plan) => {
-                                                                const plKey = `plan-${periodo.periodoId}-${sede.sedeId}-${modalidad.modalidadId}-${facultad.facultadId}-${carrera.carreraId}-${plan.planId}`
-                                                                const isPlExpanded =
-                                                                  expandedNodes.has(plKey)
-                                                                const plCheckState =
-                                                                  getNodeCheckState(plan.sectionIds)
+                                                          <div className="text-[11px] text-muted-foreground shrink-0 flex items-center gap-1.5">
+                                                            <span>
+                                                              {plan.cursos.size} Cursos
+                                                            </span>
+                                                            <span> • </span>
+                                                            <span>
+                                                              {plan.sectionIds.length}{' '}
+                                                              Secciones
+                                                            </span>
+                                                            <Button
+                                                              variant="ghost"
+                                                              size="xs"
+                                                              onClick={() =>
+                                                                toggleBranchKeys(
+                                                                  getPlanBranchKeys(
+                                                                    periodo.periodoId,
+                                                                    sede.sedeId,
+                                                                    facultad.facultadId,
+                                                                    carrera.carreraId,
+                                                                    plan
+                                                                  )
+                                                                )
+                                                              }
+                                                              className="h-5 text-[10px] gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+                                                              title="Desplegar o plegar todos los cursos de este plan"
+                                                            >
+                                                              <ChevronsUpDown className="size-2.5" />
+                                                              <span className="hidden sm:inline">Rama Plan</span>
+                                                            </Button>
+                                                          </div>
+                                                        </div>
 
-                                                                return (
-                                                                  <div
-                                                                    key={plKey}
-                                                                    className="border border-border/40 rounded bg-background overflow-hidden"
-                                                                  >
-                                                                    {/* Nivel 5: Subcuenta Plan Curricular */}
-                                                                    <div className="flex items-center justify-between gap-3 px-3 py-1.5 bg-muted/20 border-b border-border/30">
-                                                                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                                        <button
-                                                                          onClick={(e) => {
-                                                                            if (e.altKey) {
-                                                                              toggleBranchKeys(
-                                                                                getPlanBranchKeys(
-                                                                                  periodo.periodoId,
-                                                                                  sede.sedeId,
-                                                                                  modalidad.modalidadId,
-                                                                                  facultad.facultadId,
-                                                                                  carrera.carreraId,
-                                                                                  plan
-                                                                                )
-                                                                              )
-                                                                            } else {
-                                                                              toggleNode(plKey)
-                                                                            }
-                                                                          }}
-                                                                          className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                                                                          title="Clic para alternar plan. Alt+Clic para desplegar/plegar todos los cursos del plan"
-                                                                        >
-                                                                          {isPlExpanded ? (
-                                                                            <ChevronDown className="size-3" />
-                                                                          ) : (
-                                                                            <ChevronRight className="size-3" />
-                                                                          )}
-                                                                        </button>
+                                                        {/* Hijos de Plan: Cursos y Tabla de Sección */}
+                                                        {isPlExpanded && (
+                                                          <div className="p-2 pl-4 space-y-2 bg-muted/5">
+                                                            {Array.from(
+                                                              plan.cursos.values()
+                                                            ).map((curso) => {
+                                                              const curKey = `curso-${periodo.periodoId}-${sede.sedeId}-${facultad.facultadId}-${carrera.carreraId}-${plan.planId}-${curso.cursoKey}`
+                                                              const isCurExpanded =
+                                                                expandedNodes.has(curKey)
+                                                              const curCheckState =
+                                                                getNodeCheckState(
+                                                                  curso.sectionIds
+                                                                )
 
-                                                                        <Checkbox
-                                                                          checked={plCheckState}
-                                                                          onCheckedChange={() =>
-                                                                            handleToggleNodeSelection(
-                                                                              plan.sectionIds
+                                                              return (
+                                                                <div
+                                                                  key={curKey}
+                                                                  className="border border-border/50 rounded-md bg-card overflow-hidden"
+                                                                >
+                                                                  {/* Encabezado Curso Individual v2 */}
+                                                                  <div className="flex items-center justify-between gap-3 px-3 py-1.5 bg-muted/15 border-b border-border/30">
+                                                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                                      <button
+                                                                        onClick={(e) => {
+                                                                          if (e.altKey) {
+                                                                            const secKeys = getCursoSecKeys(
+                                                                              periodo.periodoId,
+                                                                              sede.sedeId,
+                                                                              facultad.facultadId,
+                                                                              carrera.carreraId,
+                                                                              plan.planId,
+                                                                              curso
                                                                             )
+                                                                            toggleBranchKeys([curKey, ...secKeys])
+                                                                          } else {
+                                                                            toggleNode(curKey)
                                                                           }
-                                                                        />
+                                                                        }}
+                                                                        className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                                                        title="Clic para ver secciones. Alt+Clic para desplegar curso con todos sus matriculados"
+                                                                      >
+                                                                        {isCurExpanded ? (
+                                                                          <ChevronDown className="size-3" />
+                                                                        ) : (
+                                                                          <ChevronRight className="size-3" />
+                                                                        )}
+                                                                      </button>
 
-                                                                        <Badge
-                                                                          variant="outline"
-                                                                          className="text-[9px] px-1 py-0 font-mono"
-                                                                        >
-                                                                          [Subcuenta] Plan
-                                                                        </Badge>
+                                                                      <Checkbox
+                                                                        checked={
+                                                                          curCheckState
+                                                                        }
+                                                                        onCheckedChange={() =>
+                                                                          handleToggleNodeSelection(
+                                                                            curso.sectionIds
+                                                                          )
+                                                                        }
+                                                                      />
 
-                                                                        <div className="text-xs font-medium text-foreground truncate flex items-center gap-1.5">
-                                                                          <span className="font-mono text-primary font-semibold">
-                                                                            {plan.planCodigo}
-                                                                          </span>
-                                                                          <span>-</span>
-                                                                          <span>{plan.planNombre}</span>
-                                                                        </div>
-                                                                      </div>
+                                                                      <Badge
+                                                                        variant="outline"
+                                                                        className={`text-[9px] px-1.5 py-0 font-mono font-bold ${
+                                                                          curso.modCode === 'MP'
+                                                                            ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
+                                                                            : curso.modCode === 'MN'
+                                                                            ? 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                                                                            : 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                                                                        }`}
+                                                                        title={`Modalidad: ${curso.modCode === 'MP' ? 'Presencial (MP)' : curso.modCode === 'MN' ? 'No Presencial / Semipresencial (MN)' : 'A Distancia (MD)'}`}
+                                                                      >
+                                                                        {curso.modCode}
+                                                                      </Badge>
 
-                                                                      <div className="text-[11px] text-muted-foreground shrink-0 flex items-center gap-1.5">
-                                                                        <span>
-                                                                          {plan.cursos.size} Cursos
-                                                                        </span>
-                                                                        <span> • </span>
-                                                                        <span>
-                                                                          {plan.sectionIds.length}{' '}
-                                                                          Secciones
-                                                                        </span>
-                                                                        <Button
-                                                                          variant="ghost"
-                                                                          size="xs"
-                                                                          onClick={() =>
-                                                                            toggleBranchKeys(
-                                                                              getPlanBranchKeys(
-                                                                                periodo.periodoId,
-                                                                                sede.sedeId,
-                                                                                modalidad.modalidadId,
-                                                                                facultad.facultadId,
-                                                                                carrera.carreraId,
-                                                                                plan
-                                                                              )
-                                                                            )
+                                                                      <Badge
+                                                                        variant="secondary"
+                                                                        className="text-[9px] px-1 py-0 font-mono"
+                                                                      >
+                                                                        [Curso v2]
+                                                                      </Badge>
+
+                                                                      <div className="text-xs font-semibold text-foreground truncate flex items-center gap-1.5">
+                                                                        <span className="font-mono text-primary font-bold">
+                                                                          {
+                                                                            curso.cursoCodigo
                                                                           }
-                                                                          className="h-5 text-[10px] gap-1 px-1.5 text-muted-foreground hover:text-foreground"
-                                                                          title="Desplegar o plegar todos los cursos de este plan"
-                                                                        >
-                                                                          <ChevronsUpDown className="size-2.5" />
-                                                                          <span className="hidden sm:inline">Rama Plan</span>
-                                                                        </Button>
+                                                                        </span>
+                                                                        <span>-</span>
+                                                                        <span title={curso.cursoNombre}>
+                                                                          {
+                                                                            curso.cursoNombre
+                                                                          }
+                                                                        </span>
                                                                       </div>
                                                                     </div>
 
-                                                                    {/* Hijos de Plan: Cursos y Tabla Anidada de Secciones */}
-                                                                    {isPlExpanded && (
-                                                                      <div className="p-2 pl-4 space-y-2 bg-muted/5">
-                                                                        {Array.from(
-                                                                          plan.cursos.values()
-                                                                        ).map((curso) => {
-                                                                          const curKey = `curso-${periodo.periodoId}-${sede.sedeId}-${modalidad.modalidadId}-${facultad.facultadId}-${carrera.carreraId}-${plan.planId}-${curso.cursoId}`
-                                                                          const isCurExpanded =
-                                                                            expandedNodes.has(curKey)
-                                                                          const curCheckState =
-                                                                            getNodeCheckState(
-                                                                              curso.sectionIds
+                                                                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground shrink-0">
+                                                                      <span>
+                                                                        {
+                                                                          curso.secciones
+                                                                            .length
+                                                                        }{' '}
+                                                                        {curso.secciones.length === 1 ? 'sección' : 'secciones'}
+                                                                      </span>
+                                                                      <span>•</span>
+                                                                      <Badge
+                                                                        variant="outline"
+                                                                        className="text-[10px] font-mono px-1 py-0"
+                                                                      >
+                                                                        {
+                                                                          curso.totalStudents
+                                                                        }{' '}
+                                                                        alumnos
+                                                                      </Badge>
+                                                                      {curso.secciones.length > 0 && (
+                                                                        <Button
+                                                                          variant="ghost"
+                                                                          size="xs"
+                                                                          onClick={() => {
+                                                                            const secKeys = getCursoSecKeys(
+                                                                              periodo.periodoId,
+                                                                              sede.sedeId,
+                                                                              facultad.facultadId,
+                                                                              carrera.carreraId,
+                                                                              plan.planId,
+                                                                              curso
                                                                             )
+                                                                            const allSecExpanded = secKeys.every((k) =>
+                                                                              expandedNodes.has(k)
+                                                                            )
+                                                                            startTransition(() => {
+                                                                              setExpandedNodes((prev) => {
+                                                                                const next = new Set(prev)
+                                                                                next.add(curKey)
+                                                                                for (const k of secKeys) {
+                                                                                  if (allSecExpanded) {
+                                                                                    next.delete(k)
+                                                                                  } else {
+                                                                                    next.add(k)
+                                                                                  }
+                                                                                }
+                                                                                return next
+                                                                              })
+                                                                            })
+                                                                          }}
+                                                                          className="h-5 text-[10px] gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+                                                                          title="Desplegar o plegar docentes y alumnos de todas las secciones de este curso"
+                                                                        >
+                                                                          <Users className="size-2.5" />
+                                                                          <span>
+                                                                            {curso.secciones.every((s) =>
+                                                                              expandedNodes.has(
+                                                                                `sec-${periodo.periodoId}-${sede.sedeId}-${facultad.facultadId}-${carrera.carreraId}-${plan.planId}-${curso.cursoKey}-${s.id}`
+                                                                              )
+                                                                            )
+                                                                              ? 'Plegar Alumnos'
+                                                                              : 'Ver Alumnos'}
+                                                                          </span>
+                                                                        </Button>
+                                                                      )}
+                                                                    </div>
+                                                                  </div>
 
-                                                                          return (
-                                                                            <div
-                                                                              key={curKey}
-                                                                              className="border border-border/50 rounded-md bg-card overflow-hidden"
-                                                                            >
-                                                                              {/* Encabezado Curso */}
-                                                                              <div className="flex items-center justify-between gap-3 px-3 py-1.5 bg-muted/15 border-b border-border/30">
-                                                                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                                                  <button
-                                                                                    onClick={(e) => {
-                                                                                      if (e.altKey) {
-                                                                                        const secKeys = getCursoSecKeys(
-                                                                                          periodo.periodoId,
-                                                                                          sede.sedeId,
-                                                                                          modalidad.modalidadId,
-                                                                                          facultad.facultadId,
-                                                                                          carrera.carreraId,
-                                                                                          plan.planId,
-                                                                                          curso
-                                                                                        )
-                                                                                        toggleBranchKeys([curKey, ...secKeys])
-                                                                                      } else {
-                                                                                        toggleNode(curKey)
-                                                                                      }
-                                                                                    }}
-                                                                                    className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                                                                                    title="Clic para ver secciones. Alt+Clic para desplegar curso con todos sus matriculados"
-                                                                                  >
-                                                                                    {isCurExpanded ? (
-                                                                                      <ChevronDown className="size-3" />
-                                                                                    ) : (
-                                                                                      <ChevronRight className="size-3" />
-                                                                                    )}
-                                                                                  </button>
+                                                                  {/* Tabla Anidada de Secciones del Curso */}
+                                                                  {isCurExpanded && (
+                                                                    <div className="p-2 pl-4 sm:pl-6 bg-muted/5 border-t border-border/40 border-l-2 border-primary/30 ml-2 sm:ml-4 my-1 rounded-r-lg overflow-x-auto">
+                                                                      <Table>
+                                                                        <TableHeader>
+                                                                          <TableRow className="bg-muted/10 hover:bg-muted/10 text-[11px]">
+                                                                            <TableHead className="w-8 text-center py-2"></TableHead>
+                                                                            <TableHead className="w-10 text-center py-2">
+                                                                              Sel.
+                                                                            </TableHead>
+                                                                            <TableHead className="py-2">
+                                                                              Sección Única Canvas
+                                                                            </TableHead>
+                                                                            <TableHead className="py-2">
+                                                                              Docente(s) Asignado(s)
+                                                                            </TableHead>
+                                                                            <TableHead className="py-2 text-right">
+                                                                              Matriculados
+                                                                            </TableHead>
+                                                                            <TableHead className="w-28 text-right py-2">
+                                                                              Acciones
+                                                                            </TableHead>
+                                                                          </TableRow>
+                                                                        </TableHeader>
+                                                                        <TableBody>
+                                                                          {curso.secciones.map(
+                                                                            (sec) => {
+                                                                              const isSecSelected =
+                                                                                !!selectedRowIds[
+                                                                                  String(
+                                                                                    sec.id
+                                                                                  )
+                                                                                ]
+                                                                              const secKey = `sec-${periodo.periodoId}-${sede.sedeId}-${facultad.facultadId}-${carrera.carreraId}-${plan.planId}-${curso.cursoKey}-${sec.id}`
+                                                                              const isSecExpanded =
+                                                                                expandedNodes.has(secKey)
 
-                                                                                  <Checkbox
-                                                                                    checked={
-                                                                                      curCheckState
+                                                                              return (
+                                                                                <React.Fragment key={sec.id}>
+                                                                                  <TableRow
+                                                                                    data-state={
+                                                                                      isSecSelected &&
+                                                                                      'selected'
                                                                                     }
-                                                                                    onCheckedChange={() =>
-                                                                                      handleToggleNodeSelection(
-                                                                                        curso.sectionIds
-                                                                                      )
-                                                                                    }
-                                                                                  />
-
-                                                                                  <Badge
-                                                                                    variant="secondary"
-                                                                                    className="text-[9px] px-1 py-0 font-mono"
+                                                                                    className="hover:bg-muted/30 data-[state=selected]:bg-muted/50 text-xs"
                                                                                   >
-                                                                                    [Curso]
-                                                                                  </Badge>
-
-                                                                                  <div className="text-xs font-semibold text-foreground truncate flex items-center gap-1.5">
-                                                                                    <span className="font-mono text-primary font-bold">
-                                                                                      {
-                                                                                        curso.cursoCodigo
-                                                                                      }
-                                                                                    </span>
-                                                                                    <span>-</span>
-                                                                                    <span>
-                                                                                      {
-                                                                                        curso.cursoNombre
-                                                                                      }
-                                                                                    </span>
-                                                                                  </div>
-                                                                                </div>
-
-                                                                                <div className="flex items-center gap-2 text-[11px] text-muted-foreground shrink-0">
-                                                                                  <span>
-                                                                                    {
-                                                                                      curso.secciones
-                                                                                        .length
-                                                                                    }{' '}
-                                                                                    secciones
-                                                                                  </span>
-                                                                                  <span>•</span>
-                                                                                  <Badge
-                                                                                    variant="outline"
-                                                                                    className="text-[10px] font-mono px-1 py-0"
-                                                                                  >
-                                                                                    {
-                                                                                      curso.totalStudents
-                                                                                    }{' '}
-                                                                                    alumnos
-                                                                                  </Badge>
-                                                                                  {curso.secciones.length > 0 && (
-                                                                                    <Button
-                                                                                      variant="ghost"
-                                                                                      size="xs"
-                                                                                      onClick={() => {
-                                                                                        const secKeys = getCursoSecKeys(
-                                                                                          periodo.periodoId,
-                                                                                          sede.sedeId,
-                                                                                          modalidad.modalidadId,
-                                                                                          facultad.facultadId,
-                                                                                          carrera.carreraId,
-                                                                                          plan.planId,
-                                                                                          curso
-                                                                                        )
-                                                                                        const allSecExpanded = secKeys.every((k) =>
-                                                                                          expandedNodes.has(k)
-                                                                                        )
-                                                                                        startTransition(() => {
-                                                                                          setExpandedNodes((prev) => {
-                                                                                            const next = new Set(prev)
-                                                                                            next.add(curKey)
-                                                                                            for (const k of secKeys) {
-                                                                                              if (allSecExpanded) {
-                                                                                                next.delete(k)
-                                                                                              } else {
-                                                                                                next.add(k)
-                                                                                              }
-                                                                                            }
-                                                                                            return next
-                                                                                          })
-                                                                                        })
-                                                                                      }}
-                                                                                      className="h-5 text-[10px] gap-1 px-1.5 text-muted-foreground hover:text-foreground"
-                                                                                      title="Desplegar o plegar docentes y alumnos de todas las secciones de este curso"
-                                                                                    >
-                                                                                      <Users className="size-2.5" />
-                                                                                      <span>
-                                                                                        {curso.secciones.every((s) =>
-                                                                                          expandedNodes.has(
-                                                                                            `sec-${periodo.periodoId}-${sede.sedeId}-${modalidad.modalidadId}-${facultad.facultadId}-${carrera.carreraId}-${plan.planId}-${curso.cursoId}-${s.id}`
-                                                                                          )
-                                                                                        )
-                                                                                          ? 'Plegar Alumnos'
-                                                                                          : 'Ver Alumnos'}
-                                                                                      </span>
-                                                                                    </Button>
-                                                                                  )}
-                                                                                </div>
-                                                                              </div>
-
-                                                                              {/* Tabla Anidada de Secciones del Curso */}
-                                                                              {isCurExpanded && (
-                                                                                <div className="p-2 pl-4 sm:pl-6 bg-muted/5 border-t border-border/40 border-l-2 border-primary/30 ml-2 sm:ml-4 my-1 rounded-r-lg overflow-x-auto">
-                                                                                  <Table>
-                                                                                    <TableHeader>
-                                                                                      <TableRow className="bg-muted/10 hover:bg-muted/10 text-[11px]">
-                                                                                        <TableHead className="w-8 text-center py-2"></TableHead>
-                                                                                        <TableHead className="w-10 text-center py-2">
-                                                                                          Sel.
-                                                                                        </TableHead>
-                                                                                        <TableHead className="py-2">
-                                                                                          Sección Canvas
-                                                                                        </TableHead>
-                                                                                        <TableHead className="py-2">
-                                                                                          Docente(s) Asignado(s)
-                                                                                        </TableHead>
-                                                                                        <TableHead className="py-2 text-right">
-                                                                                          Matriculados
-                                                                                        </TableHead>
-                                                                                        <TableHead className="w-28 text-right py-2">
-                                                                                          Acciones
-                                                                                        </TableHead>
-                                                                                      </TableRow>
-                                                                                    </TableHeader>
-                                                                                    <TableBody>
-                                                                                      {curso.secciones.map(
-                                                                                        (sec) => {
-                                                                                          const isSecSelected =
-                                                                                            !!selectedRowIds[
-                                                                                              String(
-                                                                                                sec.id
-                                                                                              )
-                                                                                            ]
-                                                                                          const secKey = `sec-${periodo.periodoId}-${sede.sedeId}-${modalidad.modalidadId}-${facultad.facultadId}-${carrera.carreraId}-${plan.planId}-${curso.cursoId}-${sec.id}`
-                                                                                          const isSecExpanded =
-                                                                                            expandedNodes.has(secKey)
-
-                                                                                          return (
-                                                                                            <React.Fragment key={sec.id}>
-                                                                                              <TableRow
-                                                                                                data-state={
-                                                                                                  isSecSelected &&
-                                                                                                  'selected'
-                                                                                                }
-                                                                                                className="hover:bg-muted/30 data-[state=selected]:bg-muted/50 text-xs"
-                                                                                              >
-                                                                                                <TableCell className="w-8 text-center py-2">
-                                                                                                  <button
-                                                                                                    type="button"
-                                                                                                    onClick={() =>
-                                                                                                      toggleNode(secKey)
-                                                                                                    }
-                                                                                                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                                                                                                    title={
-                                                                                                      isSecExpanded
-                                                                                                        ? 'Plegar matriculados'
-                                                                                                        : 'Desplegar docentes y alumnos matriculados'
-                                                                                                    }
-                                                                                                  >
-                                                                                                    {isSecExpanded ? (
-                                                                                                      <ChevronDown className="size-3 text-primary font-bold" />
-                                                                                                    ) : (
-                                                                                                      <ChevronRight className="size-3" />
-                                                                                                    )}
-                                                                                                  </button>
-                                                                                                </TableCell>
-                                                                                                <TableCell className="text-center py-2">
-                                                                                                  <Checkbox
-                                                                                                    checked={
-                                                                                                      isSecSelected
-                                                                                                    }
-                                                                                                    onCheckedChange={(
-                                                                                                      val
-                                                                                                    ) =>
-                                                                                                      onToggleSelect(
-                                                                                                        [
-                                                                                                          sec.id,
-                                                                                                        ],
-                                                                                                        !!val
-                                                                                                      )
-                                                                                                    }
-                                                                                                  />
-                                                                                                </TableCell>
-                                                                                                <TableCell className="py-2">
-                                                                                                  <div className="flex items-center gap-2 flex-wrap">
-                                                                                                    <span className="font-semibold text-foreground">
-                                                                                                      {
-                                                                                                        sec.seccionNombre
-                                                                                                      }
-                                                                                                    </span>
-                                                                                                    {sec.grupoCodigo && (
-                                                                                                      <Badge
-                                                                                                        variant="outline"
-                                                                                                        className="text-[10px] px-1.5 py-0 h-4.5 bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 font-mono font-medium flex items-center gap-1 shadow-xs"
-                                                                                                        title={`Grupo compartido: ${sec.grupoCodigo}. Comparte aula y docente con otras secciones (se exportará con cross-listing en xlists.csv).`}
-                                                                                                      >
-                                                                                                        <span className="size-1.5 rounded-full bg-purple-500 animate-pulse" />
-                                                                                                        Grupo: {sec.grupoCodigo}
-                                                                                                      </Badge>
-                                                                                                    )}
-                                                                                                    {sec.isNoHabilitado && (
-                                                                                                      <Badge
-                                                                                                        variant="destructive"
-                                                                                                        className="text-[9px] px-1 py-0 h-4"
-                                                                                                      >
-                                                                                                        NO
-                                                                                                        HABILITADO
-                                                                                                      </Badge>
-                                                                                                    )}
-                                                                                                  </div>
-                                                                                                </TableCell>
-                                                                                                <TableCell className="py-2">
-                                                                                                  {sec.docentes.length > 0 ? (
-                                                                                                    <div className="space-y-0.5">
-                                                                                                      <div className="flex items-center gap-1.5 flex-wrap">
-                                                                                                        <span className="font-medium text-foreground">
-                                                                                                          {sec.docentes[0].fullName}
-                                                                                                        </span>
-                                                                                                        {sec.docentes.length > 1 && (
-                                                                                                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">
-                                                                                                            +{sec.docentes.length - 1} más
-                                                                                                          </Badge>
-                                                                                                        )}
-                                                                                                      </div>
-                                                                                                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                                                                                                        {sec.docentes[0].dni && (
-                                                                                                          <span className="font-mono bg-muted px-1 rounded">
-                                                                                                            DNI: {sec.docentes[0].dni}
-                                                                                                          </span>
-                                                                                                        )}
-                                                                                                        {sec.docentes[0].email && (
-                                                                                                          <span className="truncate max-w-[180px]">
-                                                                                                            {sec.docentes[0].email}
-                                                                                                          </span>
-                                                                                                        )}
-                                                                                                      </div>
-                                                                                                    </div>
-                                                                                                  ) : (
-                                                                                                    <span className="text-muted-foreground/60 italic text-[11px]">
-                                                                                                      Sin docente asignado
-                                                                                                    </span>
-                                                                                                  )}
-                                                                                                </TableCell>
-                                                                                                <TableCell className="text-right py-2 font-mono">
-                                                                                                  <Badge
-                                                                                                    variant={
-                                                                                                      sec.estudiantesCount >
-                                                                                                      0
-                                                                                                        ? 'secondary'
-                                                                                                        : 'outline'
-                                                                                                    }
-                                                                                                    className="text-xs px-2 py-0.5"
-                                                                                                  >
-                                                                                                    {
-                                                                                                      sec.estudiantesCount
-                                                                                                    }
-                                                                                                  </Badge>
-                                                                                                </TableCell>
-                                                                                                <TableCell className="text-right py-2">
-                                                                                                    <div className="flex items-center justify-end gap-1">
-                                                                                                      <Button
-                                                                                                        variant={isSecExpanded ? 'secondary' : 'ghost'}
-                                                                                                        size="xs"
-                                                                                                        onClick={() => toggleNode(secKey)}
-                                                                                                        className="h-6 text-[11px] gap-1 px-1.5"
-                                                                                                        title="Desplegar docentes y alumnos matriculados en este árbol"
-                                                                                                      >
-                                                                                                        {loadingSectionIds.has(sec.id) ? (
-                                                                                                          <Loader2 className="size-3 animate-spin text-primary" />
-                                                                                                        ) : (
-                                                                                                          <Users className="size-3" />
-                                                                                                        )}
-                                                                                                        <span>
-                                                                                                          {loadingSectionIds.has(sec.id)
-                                                                                                            ? 'Cargando...'
-                                                                                                            : isSecExpanded
-                                                                                                              ? 'Plegar'
-                                                                                                              : 'Ver'}
-                                                                                                        </span>
-                                                                                                      </Button>
-                                                                                                      <Button
-                                                                                                        variant="ghost"
-                                                                                                        size="icon"
-                                                                                                        onClick={() =>
-                                                                                                          onInspectStudents(
-                                                                                                            sec.item
-                                                                                                          )
-                                                                                                        }
-                                                                                                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                                                                                                        title="Abrir modal detallado de estudiantes"
-                                                                                                      >
-                                                                                                        <UserCheck className="size-3" />
-                                                                                                      </Button>
-                                                                                                    </div>
-                                                                                                  </TableCell>
-                                                                                                </TableRow>
-
-                                                                                                {/* Rama Nivel 8: Matriculados [(D) Docentes / (E) Estudiantes] */}
-                                                                                                {isSecExpanded && (
-                                                                                                  <TableRow className="bg-muted/10 border-b border-border/40 hover:bg-muted/15">
-                                                                                                    <TableCell colSpan={6} className="py-2.5 px-4 pl-10">
-                                                                                                      <TreeSectionRoster
-                                                                                                        sec={sec}
-                                                                                                        loadedStudents={loadedStudentsMap[sec.id]}
-                                                                                                        isLoading={loadingSectionIds.has(sec.id)}
-                                                                                                        onLoadStudents={fetchSectionStudents}
-                                                                                                        onInspectStudents={onInspectStudents}
-                                                                                                      />
-                                                                                                    </TableCell>
-                                                                                                  </TableRow>
-                                                                                                )}
-                                                                                            </React.Fragment>
+                                                                                    <TableCell className="w-8 text-center py-2">
+                                                                                      <button
+                                                                                        type="button"
+                                                                                        onClick={() =>
+                                                                                          toggleNode(secKey)
+                                                                                        }
+                                                                                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                                                                        title={
+                                                                                          isSecExpanded
+                                                                                            ? 'Plegar matriculados'
+                                                                                            : 'Desplegar docentes y alumnos matriculados'
+                                                                                        }
+                                                                                      >
+                                                                                        {isSecExpanded ? (
+                                                                                          <ChevronDown className="size-3 text-primary font-bold" />
+                                                                                        ) : (
+                                                                                          <ChevronRight className="size-3" />
+                                                                                        )}
+                                                                                      </button>
+                                                                                    </TableCell>
+                                                                                    <TableCell className="text-center py-2">
+                                                                                      <Checkbox
+                                                                                        checked={
+                                                                                          isSecSelected
+                                                                                        }
+                                                                                        onCheckedChange={(
+                                                                                          val
+                                                                                        ) =>
+                                                                                          onToggleSelect(
+                                                                                            [
+                                                                                              sec.id,
+                                                                                            ],
+                                                                                            !!val
                                                                                           )
                                                                                         }
+                                                                                      />
+                                                                                    </TableCell>
+                                                                                    <TableCell className="py-2">
+                                                                                      <div className="flex items-center gap-2 flex-wrap">
+                                                                                        <span className="font-semibold text-foreground">
+                                                                                          {
+                                                                                            sec.seccionNombre
+                                                                                          }
+                                                                                        </span>
+                                                                                        {sec.grupoCodigo && (
+                                                                                          <Badge
+                                                                                            variant="outline"
+                                                                                            className="text-[10px] px-1.5 py-0 h-4.5 bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 font-mono font-medium flex items-center gap-1 shadow-xs"
+                                                                                            title={`Grupo compartido: ${sec.grupoCodigo}. Comparte aula y docente con otras secciones (se exportará con cross-listing en xlists.csv).`}
+                                                                                          >
+                                                                                            <span className="size-1.5 rounded-full bg-purple-500 animate-pulse" />
+                                                                                            Grupo: {sec.grupoCodigo}
+                                                                                          </Badge>
+                                                                                        )}
+                                                                                        {sec.isNoHabilitado && (
+                                                                                          <Badge
+                                                                                            variant="destructive"
+                                                                                            className="text-[9px] px-1 py-0 h-4"
+                                                                                          >
+                                                                                            NO
+                                                                                            HABILITADO
+                                                                                          </Badge>
+                                                                                        )}
+                                                                                      </div>
+                                                                                    </TableCell>
+                                                                                    <TableCell className="py-2">
+                                                                                      {sec.docentes.length > 0 ? (
+                                                                                        <div className="space-y-0.5">
+                                                                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                                                                            <span className="font-medium text-foreground">
+                                                                                              {sec.docentes[0].fullName}
+                                                                                            </span>
+                                                                                            {sec.docentes.length > 1 && (
+                                                                                              <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">
+                                                                                                +{sec.docentes.length - 1} más
+                                                                                              </Badge>
+                                                                                            )}
+                                                                                          </div>
+                                                                                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                                                                                            {sec.docentes[0].dni && (
+                                                                                              <span className="font-mono bg-muted px-1 rounded">
+                                                                                                DNI: {sec.docentes[0].dni}
+                                                                                              </span>
+                                                                                            )}
+                                                                                            {sec.docentes[0].email && (
+                                                                                              <span className="truncate max-w-[180px]">
+                                                                                                {sec.docentes[0].email}
+                                                                                              </span>
+                                                                                            )}
+                                                                                          </div>
+                                                                                        </div>
+                                                                                      ) : (
+                                                                                        <span className="text-muted-foreground/60 italic text-[11px]">
+                                                                                          Sin docente asignado
+                                                                                        </span>
                                                                                       )}
-                                                                                    </TableBody>
-                                                                                  </Table>
-                                                                                </div>
-                                                                              )}
-                                                                            </div>
-                                                                          )
-                                                                        })}
-                                                                      </div>
-                                                                    )}
-                                                                  </div>
-                                                                )
-                                                              })}
-                                                            </div>
-                                                          )}
-                                                        </div>
-                                                      )
-                                                    }
-                                                  )}
+                                                                                    </TableCell>
+                                                                                    <TableCell className="text-right py-2 font-mono">
+                                                                                      <Badge
+                                                                                        variant={
+                                                                                          sec.estudiantesCount >
+                                                                                          0
+                                                                                            ? 'secondary'
+                                                                                            : 'outline'
+                                                                                        }
+                                                                                        className="text-xs px-2 py-0.5"
+                                                                                      >
+                                                                                        {
+                                                                                          sec.estudiantesCount
+                                                                                        }
+                                                                                      </Badge>
+                                                                                    </TableCell>
+                                                                                    <TableCell className="text-right py-2">
+                                                                                        <div className="flex items-center justify-end gap-1">
+                                                                                          <Button
+                                                                                            variant={isSecExpanded ? 'secondary' : 'ghost'}
+                                                                                            size="xs"
+                                                                                            onClick={() => toggleNode(secKey)}
+                                                                                            className="h-6 text-[11px] gap-1 px-1.5"
+                                                                                            title="Desplegar docentes y alumnos matriculados en este árbol"
+                                                                                          >
+                                                                                            {loadingSectionIds.has(sec.id) ? (
+                                                                                              <Loader2 className="size-3 animate-spin text-primary" />
+                                                                                            ) : (
+                                                                                              <Users className="size-3" />
+                                                                                            )}
+                                                                                            <span>
+                                                                                              {loadingSectionIds.has(sec.id)
+                                                                                                ? 'Cargando...'
+                                                                                                : isSecExpanded
+                                                                                                  ? 'Plegar'
+                                                                                                  : 'Ver'}
+                                                                                            </span>
+                                                                                          </Button>
+                                                                                          <Button
+                                                                                            variant="ghost"
+                                                                                            size="icon"
+                                                                                            onClick={() =>
+                                                                                              onInspectStudents(
+                                                                                                sec.item
+                                                                                              )
+                                                                                            }
+                                                                                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                                                                            title="Abrir modal detallado de estudiantes"
+                                                                                          >
+                                                                                            <UserCheck className="size-3" />
+                                                                                          </Button>
+                                                                                        </div>
+                                                                                      </TableCell>
+                                                                                    </TableRow>
+
+                                                                                    {/* Rama Nivel 8: Matriculados [(D) Docentes / (E) Estudiantes] */}
+                                                                                    {isSecExpanded && (
+                                                                                      <TableRow className="bg-muted/10 border-b border-border/40 hover:bg-muted/15">
+                                                                                        <TableCell colSpan={6} className="py-2.5 px-4 pl-10">
+                                                                                          <TreeSectionRoster
+                                                                                            sec={sec}
+                                                                                            loadedStudents={loadedStudentsMap[sec.id]}
+                                                                                            isLoading={loadingSectionIds.has(sec.id)}
+                                                                                            onLoadStudents={fetchSectionStudents}
+                                                                                            onInspectStudents={onInspectStudents}
+                                                                                          />
+                                                                                        </TableCell>
+                                                                                      </TableRow>
+                                                                                    )}
+                                                                                </React.Fragment>
+                                                                              )
+                                                                            }
+                                                                          )}
+                                                                        </TableBody>
+                                                                      </Table>
+                                                                    </div>
+                                                                  )}
+                                                                </div>
+                                                              )
+                                                            })}
+                                                          </div>
+                                                        )}
+                                                      </div>
+                                                    )
+                                                  })}
                                                 </div>
                                               )}
                                             </div>
@@ -1631,3 +1612,4 @@ export function HierarchyTreeTable({
     </div>
   )
 }
+

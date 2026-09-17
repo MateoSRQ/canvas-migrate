@@ -466,7 +466,7 @@ export function CanvasExportDialog({
                             Sin prefijo (Estándar / Producción)
                           </div>
                           <p className="text-[11px] text-muted-foreground leading-relaxed">
-                            Mantiene los SIS IDs globales (<code className="text-foreground">S-001</code>, <code className="text-foreground">CUR006380</code>). Si la sede ya existe en Canvas, Canvas la reubicará bajo esta subcuenta arrastrando todas sus ramas y cursos preexistentes.
+                            Mantiene los SIS IDs globales (<code className="text-foreground">S-001</code>, <code className="text-foreground">MP-CUR006380-01-D</code>). Si la sede ya existe en Canvas, Canvas la reubicará bajo esta subcuenta arrastrando todas sus ramas y cursos preexistentes.
                           </p>
                         </div>
                       </div>
@@ -502,7 +502,7 @@ export function CanvasExportDialog({
                             </Badge>
                           </div>
                           <p className="text-[11px] text-muted-foreground leading-relaxed">
-                            Prefija únicamente la estructura de subcuentas (<code className="text-foreground">{rootAccountId.trim()}_S-001</code>, <code className="text-foreground">{rootAccountId.trim()}_P004084</code>). Los cursos conservan su código oficial (<code className="text-foreground">CUR006380</code>). Evita mover la Sede Lima real ni arrastrar carreras de salud.
+                            Prefija únicamente la estructura de subcuentas (<code className="text-foreground">{rootAccountId.trim()}_S-001</code>, <code className="text-foreground">{rootAccountId.trim()}_P004084</code>). Los cursos conservan su código v2 (<code className="text-foreground">MP-CUR006380-01-D</code>). Evita mover la Sede Lima real ni arrastrar carreras de salud.
                           </p>
                         </div>
                       </div>
@@ -538,7 +538,7 @@ export function CanvasExportDialog({
                             </Badge>
                           </div>
                           <p className="text-[11px] text-muted-foreground leading-relaxed">
-                            Prefija cuentas (<code className="text-foreground">{rootAccountId.trim()}_S-001</code>), cursos (<code className="text-foreground">{rootAccountId.trim()}_CUR006380</code>) y secciones (<code className="text-foreground">{rootAccountId.trim()}_7115-CUR006380</code>). Genera un entorno de prueba 100% aislado sin afectar ni colisionar con ningún curso real en Canvas.
+                            Prefija cuentas (<code className="text-foreground">{rootAccountId.trim()}_S-001</code>), cursos (<code className="text-foreground">{rootAccountId.trim()}_MP-CUR006380-01-D</code>) y secciones (<code className="text-foreground">{rootAccountId.trim()}_7115-MP-CUR006380-01-D</code>). Genera un entorno de prueba 100% aislado sin afectar ni colisionar con ningún curso real en Canvas.
                           </p>
                         </div>
                       </div>

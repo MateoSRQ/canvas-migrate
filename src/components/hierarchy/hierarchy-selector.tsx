@@ -293,6 +293,9 @@ export function HierarchySelector({
       }
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim()
+        const modCode = getModalidadCode(item.modalidadId, item.modalidadNombre)
+        const v2CourseCode = `${modCode}-${item.cursoCodigo.trim()}-${item.seccionNombre.trim()}`.toLowerCase()
+        const matchV2Code = v2CourseCode.includes(query)
         const matchCourseCode = item.cursoCodigo.toLowerCase().includes(query)
         const matchCourseName = item.cursoNombre.toLowerCase().includes(query)
         const matchSectionName = item.seccionNombre.toLowerCase().includes(query)
@@ -310,6 +313,7 @@ export function HierarchySelector({
           : false
 
         if (
+          !matchV2Code &&
           !matchCourseCode &&
           !matchCourseName &&
           !matchSectionName &&
@@ -482,7 +486,7 @@ export function HierarchySelector({
             className="flex items-center gap-1 font-medium hover:text-foreground text-left"
             onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
           >
-            <span>Curso</span>
+            <span>Curso (v2)</span>
             {column.getIsSorted() === 'asc' ? (
               <ArrowUp className="size-3.5" />
             ) : column.getIsSorted() === 'desc' ? (
@@ -492,17 +496,53 @@ export function HierarchySelector({
             )}
           </button>
         ),
-        accessorKey: 'cursoNombre',
-        cell: ({ row }) => (
-          <div className="space-y-0.5">
-            <div className="font-mono text-[11px] font-semibold text-primary">
-              {row.original.cursoCodigo}
+        accessorFn: (row) => {
+          const modCode = getModalidadCode(row.modalidadId, row.modalidadNombre)
+          return `${modCode}-${row.cursoCodigo.trim()}-${row.seccionNombre.trim()} ${row.cursoNombre.trim()}`
+        },
+        cell: ({ row }) => {
+          const modCode = getModalidadCode(row.original.modalidadId, row.original.modalidadNombre)
+          const v2CourseCode = `${modCode}-${row.original.cursoCodigo.trim()}-${row.original.seccionNombre.trim()}`
+          const v2CourseName = `${modCode} - ${row.original.cursoNombre.trim()} - ${row.original.seccionNombre.trim()}`
+
+          return (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Badge
+                  variant="outline"
+                  className={`text-[9px] px-1.5 py-0 font-mono font-bold ${
+                    modCode === 'MP'
+                      ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
+                      : modCode === 'MN'
+                      ? 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                  }`}
+                  title={`Modalidad: ${
+                    modCode === 'MP'
+                      ? 'Presencial (MP)'
+                      : modCode === 'MN'
+                      ? 'No Presencial / Semipresencial (MN)'
+                      : 'A Distancia (MD)'
+                  }`}
+                >
+                  {modCode}
+                </Badge>
+                <Badge variant="secondary" className="text-[9px] px-1 py-0 font-mono">
+                  [Curso v2]
+                </Badge>
+                <span className="font-mono text-[11px] font-semibold text-primary">
+                  {v2CourseCode}
+                </span>
+              </div>
+              <div
+                className="font-medium text-xs text-foreground line-clamp-2 max-w-[280px]"
+                title={v2CourseName}
+              >
+                {v2CourseName}
+              </div>
             </div>
-            <div className="font-medium text-xs text-foreground line-clamp-2 max-w-[280px]">
-              {row.original.cursoNombre}
-            </div>
-          </div>
-        ),
+          )
+        },
       },
       {
         id: 'seccion',
@@ -511,7 +551,7 @@ export function HierarchySelector({
             className="flex items-center gap-1 font-medium hover:text-foreground text-left"
             onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
           >
-            <span>Sección</span>
+            <span>Sección Única</span>
             {column.getIsSorted() === 'asc' ? (
               <ArrowUp className="size-3.5" />
             ) : column.getIsSorted() === 'desc' ? (
@@ -526,6 +566,9 @@ export function HierarchySelector({
           <div className="space-y-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="font-medium text-xs text-foreground">{row.original.seccionNombre}</span>
+              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-mono text-muted-foreground">
+                Única
+              </Badge>
               {row.original.grupoCodigo && (
                 <Badge
                   variant="outline"
@@ -1355,12 +1398,12 @@ export function HierarchySelector({
                               <div className="flex items-center justify-between gap-2 pb-1 border-b border-border/40 text-[11px]">
                                 <div className="flex items-center gap-2 font-medium text-foreground">
                                   <Users className="size-3.5 text-primary" />
-                                  <span>Matriculados en Sección:</span>
+                                  <span>Matriculados en Sección Única:</span>
                                   <span className="font-mono text-primary font-bold">
                                     {item.seccionNombre}
                                   </span>
                                   <span className="text-muted-foreground">
-                                    ({item.cursoCodigo} - {item.cursoNombre})
+                                    ({getModalidadCode(item.modalidadId, item.modalidadNombre)}-{item.cursoCodigo.trim()}-{item.seccionNombre.trim()} - {item.cursoNombre})
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
