@@ -445,7 +445,7 @@ export async function exportSelectedToCanvasCsv(
       sectionsMap.set(sectionId, {
         section_id: sectionId,
         course_id: courseId,
-        name: it.seccionNombre.trim(),
+        name: `[${modCode}] ${it.seccionNombre.trim()}`,
         status: 'active',
         start_date: '',
         end_date: '',
@@ -612,15 +612,16 @@ export async function exportSelectedToCanvasCsv(
     const courseId = coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId
     const rawSectionId = `${it.seccionId}-${rawCourseId}`
     const sectionId = coursePrefix ? `${coursePrefix}${rawSectionId}` : rawSectionId
+    const targetCourseId = xlistsMap.has(sectionId) ? xlistsMap.get(sectionId)!.xlist_course_id : courseId
 
     // Docentes
     for (const doc of it.docentes) {
       const teacherUserId = doc.dni ? doc.dni.trim() : ''
       if (!teacherUserId) continue
-      const key = `${courseId}-${teacherUserId}-${sectionId}-teacher`
+      const key = `${targetCourseId}-${teacherUserId}-${sectionId}-teacher`
       if (!enrollmentsMap.has(key)) {
         enrollmentsMap.set(key, {
-          course_id: courseId,
+          course_id: targetCourseId,
           root_account: '',
           user_id: teacherUserId,
           role: 'teacher',
@@ -637,10 +638,10 @@ export async function exportSelectedToCanvasCsv(
     for (const est of it.estudiantes) {
       const studentUserId = est.codigo ? est.codigo.trim() : ''
       if (!studentUserId) continue
-      const key = `${courseId}-${studentUserId}-${sectionId}-student`
+      const key = `${targetCourseId}-${studentUserId}-${sectionId}-student`
       if (!enrollmentsMap.has(key)) {
         enrollmentsMap.set(key, {
-          course_id: courseId,
+          course_id: targetCourseId,
           root_account: '',
           user_id: studentUserId,
           role: 'student',
@@ -768,7 +769,7 @@ export async function exportSelectedToCanvasCsv(
                 const rawSecId = `${s.seccionId}-${rawSecCourseId}`
                 const secId = coursePrefix ? `${coursePrefix}${rawSecId}` : rawSecId
                 treeLines.push(
-                  `\t\t\t\t\t\t${rootIndent}[SECCION] ${s.seccionNombre} (SEC: ${secId})${s.grupoCodigo ? ` [GRUPO: ${s.grupoCodigo}]` : ''} - ${s.estudiantes.length} alumnos`
+                  `\t\t\t\t\t\t${rootIndent}[SECCION] [${sModCode}] ${s.seccionNombre} (SEC: ${secId})${s.grupoCodigo ? ` [GRUPO: ${s.grupoCodigo}]` : ''} - ${s.estudiantes.length} alumnos`
                 )
                 const seenDocKeys = new Set<string>()
                 for (const d of s.docentes) {
@@ -813,7 +814,7 @@ export async function exportSelectedToCanvasCsv(
           const rawSecId = `${item.seccionId}-${rawItemCourseId}`
           const secId = coursePrefix ? `${coursePrefix}${rawSecId}` : rawSecId
           treeLines.push(
-            `\t-> [SECCION COMBINADA] ${secId} (${item.seccionNombre}) - Curso: ${rawItemCourseId} "[${itemModCode}] ${item.cursoNombre.trim()} [${item.seccionNombre.trim()}]"`
+            `\t-> [SECCION COMBINADA] ${secId} ([${itemModCode}] ${item.seccionNombre}) - Curso: ${rawItemCourseId} "[${itemModCode}] ${item.cursoNombre.trim()} [${item.seccionNombre.trim()}]"`
           )
         }
       }
@@ -975,7 +976,7 @@ ${xlistsList.length > 0 ? '9.' : '8.'} **\`canvas_migration.zip\`**: Paquete ZIP
             : '*(Sin asignar)*'
         const alumnosCount = it.estudiantes?.length || 0
         ccLines.push(
-          `| **${it.seccionNombre}** | \`${secId}\` | \`${courseId}\`<br>[${itModCode}] ${it.cursoNombre.trim()} [${it.seccionNombre.trim()}] | ${it.carreraNombre} > ${it.planNombre} | **${alumnosCount}** | ${teachStr} |`
+          `| **[${itModCode}] ${it.seccionNombre}** | \`${secId}\` | \`${courseId}\`<br>[${itModCode}] ${it.cursoNombre.trim()} [${it.seccionNombre.trim()}] | ${it.carreraNombre} > ${it.planNombre} | **${alumnosCount}** | ${teachStr} |`
         )
       }
 

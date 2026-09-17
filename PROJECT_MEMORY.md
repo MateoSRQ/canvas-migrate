@@ -260,6 +260,10 @@
     - Verificación matemática y de integridad relacional en vivo contra Microsoft SQL Server 2022 (`localhost:1433`) y vista oficial `[Academico].[VW_ALUMNO_CURSOS_MATRICULADOS]`: 95,656 registros de matrícula exactamente coincidentes (cero pérdida).
     - Explicación de secciones con 0 alumnos en periodos como `2026-2 PREGRADO`: 141 secciones cerradas `NO HABILITADO` y 178 secciones planificadas de ciclos superiores sin matrículas en origen.
     - Incorporado filtro reactivo en cascada `Solo con alumnos matriculados` (`onlyWithStudents`) en `HierarchySelector` con insignia azul activa e icono `Users`.
+  - [x] **Normalización de Nombres de Sección en Canvas SIS y Enlace de Matrículas en Cursos Contenedores (Cross-listing)**:
+    - Formateo de nombres de sección en `sections.csv`: `[${modCode}] ${it.seccionNombre.trim()}` (ej. `[MP] FD SECCIÓN 1`, `[MN] FD SECCIÓN 1`, `[MD] FD SECCIÓN 1`), eliminando colisiones de nombres idénticos entre modalidades en cursos combinados.
+    - Enlace de matrículas a cursos contenedores en `enrollments.csv`: las secciones cross-listadas dirigen su `course_id` al ID del curso contenedor maestro (`xlist_course_id`), permitiendo a Canvas LMS computar los alumnos reales en el curso maestro en vez de marcar 0.
+    - Mapeo en árbol de migración (`migration-service.ts`): las secciones cross-listadas se asocian tanto a su curso curricular de origen como a su curso contenedor maestro.
   - [x] Verificado con compilación TypeScript estricta (`tsc --noEmit` con 0 errores) y empaquetado de producción (`npm run build` con 0 errores).
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
@@ -700,5 +704,14 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - Permite al usuario conmutar entre ver la oferta académica total planificada o purgar instantáneamente las 178 secciones planificadas vacías, dejando exclusivamente cursos con estudiantes activos.
   - Se reinicia a desactivado al pulsar «Restablecer Filtros».
   - **Diseño Visual**: Checkbox con icono `Users`, fondo azul traslúcido (`bg-blue-500/10 border-blue-500/30 text-blue-800 dark:text-blue-300`) e insignia mono `Activo` (`bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40`).
+- **Arquitectura de Cursos Contenedores Cross-listing y Nombres Descriptivos de Sección en Canvas SIS**:
+  - **Identificadores de Sección Diferenciados por Modalidad (`sections.csv`)**:
+    - Anteriormente, `sections.csv` exportaba únicamente `name: it.seccionNombre.trim()` (ej. `FD SECCIÓN 1`). En cursos compartidos o asignaturas ofertadas en múltiples modalidades (Presencial `MP`, Semipresencial `MN`, Distancia `MD`), todas las secciones recibían el mismo nombre idéntico en Canvas.
+    - Se actualizó a: `name: [${modCode}] ${it.seccionNombre.trim()}` (ej. `[MP] FD SECCIÓN 1`, `[MN] FD SECCIÓN 1`, `[MD] FD SECCIÓN 1`), permitiendo a docentes y administradores distinguir de inmediato el turno, modalidad y carrera de procedencia.
+  - **Enlace de Matrículas en Cursos Maestros (`enrollments.csv`)**:
+    - Especificación Canvas SIS: cuando una sección se combina mediante `xlists.csv`, el campo `course_id` en `enrollments.csv` debe apuntar al curso contenedor maestro (`xlist_course_id`) o dejarse vacío; de lo contrario, Canvas advierte inconsistencia y omite la matrícula.
+    - Se ajustó `targetCourseId = xlistsMap.has(sectionId) ? xlistsMap.get(sectionId)!.xlist_course_id : courseId`, garantizando que docentes y estudiantes queden activamente adscritos al curso maestro contenedor (`GRP_...`) con conteo de matriculados real y visible.
+  - **Sincronización en Árbol de Paquetes de Migración (`migration-service.ts`)**:
+    - Se adaptó el lector de paquetes para vincular las secciones tanto a su curso original como al curso contenedor maestro (`secByCourse.get(xlistCId)`), garantizando que al inspeccionar el curso contenedor se desplieguen sus secciones, docentes y alumnos.
 
 

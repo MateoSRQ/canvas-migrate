@@ -273,15 +273,27 @@ export async function getMigrationTree(folderName: string): Promise<MigrationTre
       if (!secByCourse.has(cId)) {
         secByCourse.set(cId, [])
       }
+      const xlistCId = xlistMap.get(sId) || null
       const enrs = enrBySection.get(sId) || { teachers: [], students: [] }
-      secByCourse.get(cId)!.push({
+      const secNode: MigrationSectionNode = {
         sectionId: sId,
         courseId: cId,
         name: s.name?.trim() || `Sección ${sId}`,
         teachers: enrs.teachers,
         students: enrs.students,
-        xlistCourseId: xlistMap.get(sId) || null,
-      })
+        xlistCourseId: xlistCId,
+      }
+      secByCourse.get(cId)!.push(secNode)
+
+      if (xlistCId) {
+        if (!secByCourse.has(xlistCId)) {
+          secByCourse.set(xlistCId, [])
+        }
+        secByCourse.get(xlistCId)!.push({
+          ...secNode,
+          courseId: xlistCId,
+        })
+      }
     }
 
     // 4. Mapeo de cursos por account_id
