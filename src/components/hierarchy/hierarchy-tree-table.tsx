@@ -1257,34 +1257,7 @@ export function HierarchyTreeTable({
                                                                         }
                                                                       />
 
-                                                                      <Badge
-                                                                        variant="outline"
-                                                                        className={`text-[9px] px-1.5 py-0 font-mono font-bold shrink-0 ${
-                                                                          curso.modCode === 'MP'
-                                                                            ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
-                                                                            : curso.modCode === 'MN'
-                                                                            ? 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
-                                                                            : 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                                                                        }`}
-                                                                        title={`Modalidad: ${curso.modCode === 'MP' ? 'Presencial (MP)' : curso.modCode === 'MN' ? 'No Presencial / Semipresencial (MN)' : 'A Distancia (MD)'}`}
-                                                                      >
-                                                                        [{curso.modCode}]
-                                                                      </Badge>
-
-                                                                      <Badge
-                                                                        variant="secondary"
-                                                                        className="text-[9px] px-1 py-0 font-mono shrink-0"
-                                                                      >
-                                                                        [Curso v2]
-                                                                      </Badge>
-
                                                                       <div className="text-xs font-semibold text-foreground flex items-center gap-2 flex-1 min-w-0 pr-2">
-                                                                        <span className="font-mono text-primary font-bold shrink-0">
-                                                                          {
-                                                                            curso.cursoCodigo
-                                                                          }
-                                                                        </span>
-                                                                        <span className="text-muted-foreground/50 shrink-0">•</span>
                                                                         <span
                                                                           title={curso.cursoNombre}
                                                                           className="text-foreground font-medium text-xs sm:text-[13px] truncate"

@@ -746,6 +746,12 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
     - Cada curso-sección es una entidad independiente en Canvas LMS con su propia matrícula y sección, eliminando cursos agrupados vacíos o desvinculaciones.
     - No se genera ni empaqueta `xlists.csv` ni `CURSOS_COMPARTIDOS.md`.
   - **Insignias en Interfaz**: La insignia de grupo (`Grupo: {codigo}`) en la tabla y en el árbol se mantiene exclusivamente como indicador informativo de origen (`Grupo compartido: {codigo}`), eliminando cualquier mención a cross-listing o `xlists.csv`.
+- **Limpieza Visual de Cursos (Visualización Exclusiva del Título)**:
+  - **Motivación**: Dado que el título del curso contiene de forma estructurada `[MOD CODIGO SECCION] ASIGNATURA` (ej: `[MP CUR006381 ANI- SECCIÓN 4] CULTURA MATEMÁTICA I`), mostrar además insignias `[MP]`, `[Curso v2]` y el código crudo `MP-CUR...` antes del título generaba saturación visual y redundancia.
+  - **Ajuste en `HierarchySelector` (Tabla Detallada)**: Se retiró la fila de insignias y el código crudo dentro de la celda de Curso, mostrando directamente el título completo limpio.
+  - **Ajuste en `HierarchyTreeTable` (Árbol Jerárquico)**: Se eliminaron las insignias redundantes y el código crudo `{curso.cursoCodigo} •`, dejando únicamente el título completo `{curso.cursoNombre}`.
+  - **Ajuste en `StudentInspectorDialog` (Modal de Alumnos)**: Se suprimieron las insignias y el código crudo en la cabecera, desplegando exclusivamente el título completo del curso.
+
 
 
 

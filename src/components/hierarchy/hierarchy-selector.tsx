@@ -510,44 +510,14 @@ export function HierarchySelector({
         },
         cell: ({ row }) => {
           const modCode = getModalidadCode(row.original.modalidadId, row.original.modalidadNombre)
-          const v2CourseCode = `${modCode}-${row.original.cursoCodigo.trim()}-${row.original.seccionNombre.trim()}`
           const v2CourseName = `[${modCode} ${row.original.cursoCodigo.trim()} ${row.original.seccionNombre.trim()}] ${row.original.cursoNombre.trim()}`
 
           return (
-            <div className="space-y-1 min-w-[320px] max-w-[650px]">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <Badge
-                  variant="outline"
-                  className={`text-[9px] px-1.5 py-0 font-mono font-bold ${
-                    modCode === 'MP'
-                      ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
-                      : modCode === 'MN'
-                      ? 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                  }`}
-                  title={`Modalidad: ${
-                    modCode === 'MP'
-                      ? 'Presencial (MP)'
-                      : modCode === 'MN'
-                      ? 'No Presencial / Semipresencial (MN)'
-                      : 'A Distancia (MD)'
-                  }`}
-                >
-                  [{modCode}]
-                </Badge>
-                <Badge variant="secondary" className="text-[9px] px-1 py-0 font-mono">
-                  [Curso v2]
-                </Badge>
-                <span className="font-mono text-[11px] font-semibold text-primary">
-                  {v2CourseCode}
-                </span>
-              </div>
-              <div
-                className="font-medium text-xs sm:text-[13px] text-foreground leading-snug"
-                title={v2CourseName}
-              >
-                {v2CourseName}
-              </div>
+            <div
+              className="font-medium text-xs sm:text-[13px] text-foreground leading-snug min-w-[320px] max-w-[650px]"
+              title={v2CourseName}
+            >
+              {v2CourseName}
             </div>
           )
         },

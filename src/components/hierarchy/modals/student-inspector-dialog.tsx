@@ -1,5 +1,4 @@
 import { Users, Loader2 } from 'lucide-react'
-import { Badge } from '#/components/ui/badge'
 import { getModalidadCode } from '#/lib/utils'
 import {
   Dialog,
@@ -43,25 +42,10 @@ export function StudentInspectorDialog({
           </DialogTitle>
           {item && (() => {
             const modCode = getModalidadCode(item.modalidadId, item.modalidadNombre)
-            const v2CourseCode = `${modCode}-${item.cursoCodigo.trim()}-${item.seccionNombre.trim()}`
             return (
               <DialogDescription className="text-xs text-muted-foreground space-y-1 pt-1">
                 <div className="text-foreground font-medium flex items-center gap-1.5 flex-wrap">
-                  <Badge
-                    variant="outline"
-                    className={`text-[9px] px-1.5 py-0 font-mono font-bold ${
-                      modCode === 'MP'
-                        ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
-                        : modCode === 'MN'
-                        ? 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
-                        : 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                    }`}
-                  >
-                    [{modCode}]
-                  </Badge>
-                  <span className="font-mono text-primary font-semibold">{v2CourseCode}</span>
-                  <span>•</span>
-                  <span className="font-medium text-foreground">[{modCode} {item.cursoCodigo.trim()} {item.seccionNombre.trim()}] {item.cursoNombre.trim()}</span>
+                  <span className="font-semibold text-foreground">[{modCode} {item.cursoCodigo.trim()} {item.seccionNombre.trim()}] {item.cursoNombre.trim()}</span>
                 </div>
                 <div className="flex items-center gap-2 text-[11px] flex-wrap">
                   <span>Docente: {item.docenteNombre || 'Sin docente asignado'}</span>
