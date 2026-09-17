@@ -238,7 +238,7 @@
   - [x] **Regla de Unificación de Curso y Sección**: Cada combinación de curso y sección constituye un curso Canvas individual e independiente (`courses.csv`).
   - [x] **Eliminación de Modalidad como Subcuenta (`accounts.csv`)**: Las facultades cuelgan directamente de la Sede (`Sede -> Facultad -> Carrera -> Plan`), suprimiendo el nivel intermedio de subcuentas por modalidad.
   - [x] **Código de modalidad estándar al inicio**: Prefijo normalizado al inicio del código y nombre del curso: `MP` (Modalidad Presencial), `MN` (Modalidad No Presencial / Semi Presencial) y `MD` (Modalidad a Distancia).
-  - [x] **Nombre del curso (`long_name` y `short_name`)**: Formato `${modCode} - ${cursoNombre} - ${seccionNombre}` (ej. `MP - ESTOMATOLOGÍA INTEGRAL DEL NIÑO Y ADOLESCENTE I - 01-D`).
+  - [x] **Nombre del curso (`long_name` y `short_name`) con Corchetes []**: Formato `[${modCode}] ${cursoNombre} [${seccionNombre}]` (ej. `[MP] ESTOMATOLOGÍA INTEGRAL DEL NIÑO Y ADOLESCENTE I [01-D]`). La delimitación por corchetes elimina la ambigüedad generada por los guiones propios de códigos de sección o asignaturas compuestas.
   - [x] **Identificador SIS del curso (`course_id`)**: Formato `${modCode}-${codCurso}-${seccionNombre}` (ej. `MP-CUR006380-01-D`, con prefijos Sandbox opcionales `${coursePrefix}`).
   - [x] **Mapeo de secciones (`sections.csv`)**: 1 sección única por curso, con `course_id` apuntando al nuevo curso individual, y `section_id` con formato `${seccionId}-${modCode}-${codCurso}-${seccionNombre}` garantizando unicidad global a prueba de colisiones.
   - [x] **Asignación de matrículas (`enrollments.csv`)**: Docentes y estudiantes vinculados al nuevo `course_id` y su respectivo `section_id`.
@@ -419,8 +419,8 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
     - Cada combinación de curso y sección se materializa como un curso Canvas individual e independiente.
     - **Prefijo de Modalidad al Inicio**: Se antepone el código de modalidad normalizado: `MP` (Presencial), `MN` (No Presencial / Semipresencial) o `MD` (A Distancia).
     - **`course_id`**: `<modalidad>-<cod_curso>-<nombre_seccion>` (ej. `MP-CUR006380-01-D`).
-    - **`long_name`**: `<modalidad> - <nombre_curso> - <nombre_seccion>` (ej. `MP - ESTOMATOLOGÍA INTEGRAL DEL NIÑO Y ADOLESCENTE I - 01-D`).
-    - **`short_name`**: `<modalidad> - <abreviatura_curso> - <nombre_seccion>` o `<course_id>`.
+    - **`long_name`**: `[<modalidad>] <nombre_curso> [<nombre_seccion>]` (ej. `[MP] ESTOMATOLOGÍA INTEGRAL DEL NIÑO Y ADOLESCENTE I [01-D]`).
+    - **`short_name`**: `[<modalidad>] <abreviatura_curso> [<nombre_seccion>]` o `<course_id>`.
     - **`account_id`**: Asociado directamente a la subcuenta del Plan Curricular (`<cod_plan>`).
     - Secciones (`sections.csv`): `course_id` apunta al curso individual (`<modalidad>-<cod_curso>-<nombre_seccion>`), con `section_id` compuesto único `<seccion_id>-<modalidad>-<cod_curso>-<nombre_seccion>` para evitar cualquier riesgo de colisión en Canvas SIS.
     - Matrículas (`enrollments.csv`): Vinculadas de forma biunívoca a `<course_id>` y `<section_id>`.
@@ -666,8 +666,9 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
     - `MN` (Modalidad No Presencial / Semi Presencial): Ámbar (`bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800`).
     - `MD` (Modalidad a Distancia): Esmeralda (`bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800`).
   - **Identificadores v2 en Componentes**:
-    - `HierarchyTreeTable`: Nodo de curso con badge de modalidad, badge secundario `[Curso v2]`, código compuesto en mono y título extendido. Plegado en bloque reconfigurado a niveles ('sedes', 'carreras', 'cursos', 'all').
-    - `HierarchySelector` (Tabla Detallada): Columna de Curso con badges de modalidad y `[Curso v2]`, ordenación por código compuesto y soporte de búsqueda `matchV2Code`. Columna de Sección con badge distintivo `Única`.
-    - `StudentInspectorDialog`: Cabecera con badge de modalidad y código compuesto v2.
+    - `HierarchyTreeTable`: Nodo de curso con badge `[{curso.modCode}]`, badge secundario `[Curso v2]`, código compuesto en mono y título extendido formateado como `[MODALIDAD] ASIGNATURA [SECCIÓN]`. Asignado `flex-1 min-w-0 pr-2` con tipografía `text-xs sm:text-[13px]` para dar holgura y visibilidad completa al título.
+    - `HierarchySelector` (Tabla Detallada): Columna de Curso con ancho dedicado ampliado (`size: 380`, `minSize: 300`) y contenedor de celda `min-w-[320px] max-w-[650px] leading-snug`, eliminando el truncamiento estrecho previo de 280px. Título formateado con corchetes `[MODALIDAD] ASIGNATURA [SECCIÓN]`, resolviendo colisiones visuales con asignaturas que contienen guiones.
+    - `StudentInspectorDialog`: Cabecera con badge de modalidad y título de curso delimitado con corchetes.
     - `CanvasExportDialog`: Ejemplos técnicos de prefijo de aislamiento adaptados a `MP-CUR006380-01-D` y `7115-MP-CUR006380-01-D`.
+
 

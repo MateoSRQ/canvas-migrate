@@ -236,7 +236,7 @@ export function HierarchyTreeTable({
       // 6. Curso Individual (v2: Prefijo de Modalidad + Código de Curso + Sección)
       const modCode = getModalidadCode(it.modalidadId, it.modalidadNombre)
       const v2CourseCode = `${modCode}-${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
-      const v2CourseName = `${modCode} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
+      const v2CourseName = `[${modCode}] ${it.cursoNombre.trim()} [${it.seccionNombre.trim()}]`
       const cursoKey = v2CourseCode
 
       let curNode = plNode.cursos.get(cursoKey)
@@ -1259,7 +1259,7 @@ export function HierarchyTreeTable({
 
                                                                       <Badge
                                                                         variant="outline"
-                                                                        className={`text-[9px] px-1.5 py-0 font-mono font-bold ${
+                                                                        className={`text-[9px] px-1.5 py-0 font-mono font-bold shrink-0 ${
                                                                           curso.modCode === 'MP'
                                                                             ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
                                                                             : curso.modCode === 'MN'
@@ -1268,24 +1268,27 @@ export function HierarchyTreeTable({
                                                                         }`}
                                                                         title={`Modalidad: ${curso.modCode === 'MP' ? 'Presencial (MP)' : curso.modCode === 'MN' ? 'No Presencial / Semipresencial (MN)' : 'A Distancia (MD)'}`}
                                                                       >
-                                                                        {curso.modCode}
+                                                                        [{curso.modCode}]
                                                                       </Badge>
 
                                                                       <Badge
                                                                         variant="secondary"
-                                                                        className="text-[9px] px-1 py-0 font-mono"
+                                                                        className="text-[9px] px-1 py-0 font-mono shrink-0"
                                                                       >
                                                                         [Curso v2]
                                                                       </Badge>
 
-                                                                      <div className="text-xs font-semibold text-foreground truncate flex items-center gap-1.5">
-                                                                        <span className="font-mono text-primary font-bold">
+                                                                      <div className="text-xs font-semibold text-foreground flex items-center gap-2 flex-1 min-w-0 pr-2">
+                                                                        <span className="font-mono text-primary font-bold shrink-0">
                                                                           {
                                                                             curso.cursoCodigo
                                                                           }
                                                                         </span>
-                                                                        <span>-</span>
-                                                                        <span title={curso.cursoNombre}>
+                                                                        <span className="text-muted-foreground/50 shrink-0">•</span>
+                                                                        <span
+                                                                          title={curso.cursoNombre}
+                                                                          className="text-foreground font-medium text-xs sm:text-[13px] truncate"
+                                                                        >
                                                                           {
                                                                             curso.cursoNombre
                                                                           }

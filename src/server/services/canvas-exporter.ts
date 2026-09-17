@@ -311,9 +311,9 @@ export async function exportSelectedToCanvasCsv(
     const planAccId = accPrefix ? `${accPrefix}${rawPlanAccId}` : rawPlanAccId
     const rawCurso = cursoRawMap.get(it.cursoId)
     const shortName = rawCurso?.abreviatura
-      ? `${modCode} - ${String(rawCurso.abreviatura).trim()} - ${it.seccionNombre.trim()}`
+      ? `[${modCode}] ${String(rawCurso.abreviatura).trim()} [${it.seccionNombre.trim()}]`
       : (coursePrefix ? `${coursePrefix}${rawCourseId}` : rawCourseId)
-    const longName = `${modCode} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
+    const longName = `[${modCode}] ${it.cursoNombre.trim()} [${it.seccionNombre.trim()}]`
 
     if (!coursesMap.has(courseId)) {
       coursesMap.set(courseId, {
@@ -739,7 +739,7 @@ export async function exportSelectedToCanvasCsv(
     const modCode = getModalidadCode(it.modalidadId, it.modalidadNombre)
     const rawCurCode = `${modCode}-${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
     const curCode = coursePrefix ? `${coursePrefix}${rawCurCode}` : rawCurCode
-    const curKey = `${curCode} - ${modCode} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
+    const curKey = `${curCode} - [${modCode}] ${it.cursoNombre.trim()} [${it.seccionNombre.trim()}]`
     if (!curG.has(curKey)) curG.set(curKey, [])
     curG.get(curKey)!.push(it)
   }
@@ -813,7 +813,7 @@ export async function exportSelectedToCanvasCsv(
           const rawSecId = `${item.seccionId}-${rawItemCourseId}`
           const secId = coursePrefix ? `${coursePrefix}${rawSecId}` : rawSecId
           treeLines.push(
-            `\t-> [SECCION COMBINADA] ${secId} (${item.seccionNombre}) - Curso: ${rawItemCourseId} "${itemModCode} - ${item.cursoNombre.trim()} - ${item.seccionNombre.trim()}"`
+            `\t-> [SECCION COMBINADA] ${secId} (${item.seccionNombre}) - Curso: ${rawItemCourseId} "[${itemModCode}] ${item.cursoNombre.trim()} [${item.seccionNombre.trim()}]"`
           )
         }
       }
@@ -975,7 +975,7 @@ ${xlistsList.length > 0 ? '9.' : '8.'} **\`canvas_migration.zip\`**: Paquete ZIP
             : '*(Sin asignar)*'
         const alumnosCount = it.estudiantes?.length || 0
         ccLines.push(
-          `| **${it.seccionNombre}** | \`${secId}\` | \`${courseId}\`<br>${itModCode} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()} | ${it.carreraNombre} > ${it.planNombre} | **${alumnosCount}** | ${teachStr} |`
+          `| **${it.seccionNombre}** | \`${secId}\` | \`${courseId}\`<br>[${itModCode}] ${it.cursoNombre.trim()} [${it.seccionNombre.trim()}] | ${it.carreraNombre} > ${it.planNombre} | **${alumnosCount}** | ${teachStr} |`
         )
       }
 

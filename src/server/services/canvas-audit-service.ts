@@ -135,7 +135,7 @@ export async function auditExportAgainstCanvasApi(
     const modCode = getModalidadCode(it.modalidadId, it.modalidadNombre)
     const rawCourseId = `${modCode}-${it.cursoCodigo.trim()}-${it.seccionNombre.trim()}`
     const courseSisId = rawCourseId
-    const courseName = `${modCode} - ${it.cursoNombre.trim()} - ${it.seccionNombre.trim()}`
+    const courseName = `[${modCode}] ${it.cursoNombre.trim()} [${it.seccionNombre.trim()}]`
 
     if (!courseGroupsMap.has(courseSisId)) {
       courseGroupsMap.set(courseSisId, {

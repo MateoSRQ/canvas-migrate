@@ -496,17 +496,19 @@ export function HierarchySelector({
             )}
           </button>
         ),
+        size: 380,
+        minSize: 300,
         accessorFn: (row) => {
           const modCode = getModalidadCode(row.modalidadId, row.modalidadNombre)
-          return `${modCode}-${row.cursoCodigo.trim()}-${row.seccionNombre.trim()} ${row.cursoNombre.trim()}`
+          return `[${modCode}] ${row.cursoNombre.trim()} [${row.seccionNombre.trim()}]`
         },
         cell: ({ row }) => {
           const modCode = getModalidadCode(row.original.modalidadId, row.original.modalidadNombre)
           const v2CourseCode = `${modCode}-${row.original.cursoCodigo.trim()}-${row.original.seccionNombre.trim()}`
-          const v2CourseName = `${modCode} - ${row.original.cursoNombre.trim()} - ${row.original.seccionNombre.trim()}`
+          const v2CourseName = `[${modCode}] ${row.original.cursoNombre.trim()} [${row.original.seccionNombre.trim()}]`
 
           return (
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-[320px] max-w-[650px]">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <Badge
                   variant="outline"
@@ -525,7 +527,7 @@ export function HierarchySelector({
                       : 'A Distancia (MD)'
                   }`}
                 >
-                  {modCode}
+                  [{modCode}]
                 </Badge>
                 <Badge variant="secondary" className="text-[9px] px-1 py-0 font-mono">
                   [Curso v2]
@@ -535,7 +537,7 @@ export function HierarchySelector({
                 </span>
               </div>
               <div
-                className="font-medium text-xs text-foreground line-clamp-2 max-w-[280px]"
+                className="font-medium text-xs sm:text-[13px] text-foreground leading-snug"
                 title={v2CourseName}
               >
                 {v2CourseName}
@@ -1400,10 +1402,10 @@ export function HierarchySelector({
                                   <Users className="size-3.5 text-primary" />
                                   <span>Matriculados en Sección Única:</span>
                                   <span className="font-mono text-primary font-bold">
-                                    {item.seccionNombre}
+                                    [{item.seccionNombre}]
                                   </span>
-                                  <span className="text-muted-foreground">
-                                    ({getModalidadCode(item.modalidadId, item.modalidadNombre)}-{item.cursoCodigo.trim()}-{item.seccionNombre.trim()} - {item.cursoNombre})
+                                  <span className="text-muted-foreground font-medium">
+                                    ([{getModalidadCode(item.modalidadId, item.modalidadNombre)}] {item.cursoNombre} [{item.seccionNombre}])
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">

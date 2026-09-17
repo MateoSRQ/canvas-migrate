@@ -57,11 +57,11 @@ export function StudentInspectorDialog({
                         : 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
                     }`}
                   >
-                    {modCode}
+                    [{modCode}]
                   </Badge>
                   <span className="font-mono text-primary font-semibold">{v2CourseCode}</span>
-                  <span>— {item.cursoNombre}</span>
-                  <span className="text-muted-foreground text-xs">(Sección: {item.seccionNombre})</span>
+                  <span>•</span>
+                  <span className="font-medium text-foreground">[{modCode}] {item.cursoNombre} [{item.seccionNombre}]</span>
                 </div>
                 <div className="flex items-center gap-2 text-[11px] flex-wrap">
                   <span>Docente: {item.docenteNombre || 'Sin docente asignado'}</span>
