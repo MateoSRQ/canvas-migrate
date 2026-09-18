@@ -292,6 +292,8 @@
     - [x] **Generación de `users.csv` (`canvas-exporter.ts`)**: Población de `first_name` y `last_name` a partir de `fullName` para compatibilidad total Canvas SIS.
     - [x] **Resolución Docente 100% en Jerarquía (`hierarchy-service.ts`)**: Indexación multi-clave en `utbMap` (`IdPersona`, `Documento`, `Codigo`) e integración de fallback contra `alumnoMap`/`personaMap` para asistentes y ayudantes de cátedra, garantizando nombres completos reales en toda la interfaz.
   - [x] Verificado con compilación TypeScript estricta (`tsc --noEmit` con 0 errores) y empaquetado de producción (`npm run build` con 0 errores).
+- [x] **Creación de Rama Feature `v2-crosslist`**:
+  - [x] Creada y conmutada la rama `v2-crosslist` a partir de `v2` para la implementación y refinamiento de la funcionalidad de cross-listing sobre la arquitectura de la v2.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
 - [ ] Theory vs. Practice Session Modeling: Badges and indicators in Tree/Table and selective cross-listing support for decoupled theory and practice schedules.
