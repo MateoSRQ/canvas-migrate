@@ -43,7 +43,7 @@ import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
 import { Checkbox } from '#/components/ui/checkbox'
 import { Input } from '#/components/ui/input'
-import { getModalidadCode } from '#/lib/utils'
+import { cn, getModalidadCode } from '#/lib/utils'
 import {
   Table,
   TableBody,
@@ -181,6 +181,7 @@ export function HierarchySelector({
   const [createRootAccount, setCreateRootAccount] = React.useState(true)
   const [exportRootAccountName, setExportRootAccountName] = React.useState('')
   const [exportPrefixMode, setExportPrefixMode] = React.useState<SandboxPrefixMode>('accounts')
+  const [exportEnableCrossListing, setExportEnableCrossListing] = React.useState<boolean>(true)
   const [exportResult, setExportResult] = React.useState<ExportCanvasResult | null>(null)
   const [exportError, setExportError] = React.useState<string | null>(null)
   const [copiedPath, setCopiedPath] = React.useState(false)
@@ -514,7 +515,12 @@ export function HierarchySelector({
 
           return (
             <div
-              className="font-medium text-xs sm:text-[13px] text-foreground leading-snug min-w-[320px] max-w-[650px]"
+              className={cn(
+                'text-xs sm:text-[13px] leading-snug min-w-[320px] max-w-[650px]',
+                row.original.grupoCodigo
+                  ? 'text-indigo-600 dark:text-indigo-400 font-semibold'
+                  : 'text-foreground font-medium'
+              )}
               title={v2CourseName}
             >
               {row.original.cursoNombre}
@@ -543,17 +549,26 @@ export function HierarchySelector({
         cell: ({ row }) => (
           <div className="space-y-1">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-medium text-xs text-foreground">{row.original.seccionNombre}</span>
+              <span
+                className={cn(
+                  'text-xs font-medium',
+                  row.original.grupoCodigo
+                    ? 'text-indigo-600 dark:text-indigo-400 font-semibold'
+                    : 'text-foreground'
+                )}
+              >
+                {row.original.seccionNombre}
+              </span>
               <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-mono text-muted-foreground">
                 Única
               </Badge>
               {row.original.grupoCodigo && (
                 <Badge
                   variant="outline"
-                  className="text-[9px] px-1 py-0 h-4 bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 font-mono font-medium flex items-center gap-1 shadow-2xs"
-                  title={`Grupo compartido: ${row.original.grupoCodigo}`}
+                  className="text-[9px] px-1 py-0 h-4 bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 font-mono font-medium flex items-center gap-1 shadow-2xs"
+                  title={`Grupo compartido: ${row.original.grupoCodigo} (Cross-listing)`}
                 >
-                  <span className="size-1 rounded-full bg-purple-500" />
+                  <span className="size-1 rounded-full bg-indigo-500 animate-pulse" />
                   Grupo: {row.original.grupoCodigo}
                 </Badge>
               )}
@@ -794,6 +809,7 @@ export function HierarchySelector({
           createRootAccount: Boolean(createRootAccount && exportRootAccountId.trim()),
           rootAccountName: exportRootAccountName.trim() || undefined,
           prefixMode: exportRootAccountId.trim() ? exportPrefixMode : 'none',
+          enableCrossListing: exportEnableCrossListing,
         },
       })
       setExportResult(res)
@@ -1403,9 +1419,26 @@ export function HierarchySelector({
                                   <span className="font-mono text-primary font-semibold">
                                     [{item.seccionNombre}]
                                   </span>
-                                  <span className="text-muted-foreground font-medium">
+                                  <span
+                                    className={cn(
+                                      'font-medium',
+                                      item.grupoCodigo
+                                        ? 'text-indigo-600 dark:text-indigo-400 font-semibold'
+                                        : 'text-muted-foreground'
+                                    )}
+                                  >
                                     ({item.cursoNombre.trim()})
                                   </span>
+                                  {item.grupoCodigo && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[9px] px-1 py-0 h-4 bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 font-mono font-medium flex items-center gap-1 shadow-2xs"
+                                      title={`Grupo compartido: ${item.grupoCodigo} (Cross-listing)`}
+                                    >
+                                      <span className="size-1 rounded-full bg-indigo-500 animate-pulse" />
+                                      Grupo: {item.grupoCodigo}
+                                    </Badge>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
                                   <Badge variant="outline" className="px-1.5 py-0 h-4">
@@ -1653,6 +1686,8 @@ export function HierarchySelector({
         onRootAccountNameChange={setExportRootAccountName}
         prefixMode={exportPrefixMode}
         onPrefixModeChange={setExportPrefixMode}
+        enableCrossListing={exportEnableCrossListing}
+        onEnableCrossListingChange={setExportEnableCrossListing}
         onCopyPath={handleCopyPath}
         onResetExport={() => {
           setExportResult(null)

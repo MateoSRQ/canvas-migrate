@@ -45,6 +45,8 @@ interface CanvasExportDialogProps {
   onRootAccountNameChange: (value: string) => void
   prefixMode: SandboxPrefixMode
   onPrefixModeChange: (mode: SandboxPrefixMode) => void
+  enableCrossListing: boolean
+  onEnableCrossListingChange: (value: boolean) => void
   onCopyPath: (targetPath: string) => void
   onResetExport: () => void
   onExecuteExport: () => void
@@ -68,6 +70,8 @@ export function CanvasExportDialog({
   onRootAccountNameChange,
   prefixMode,
   onPrefixModeChange,
+  enableCrossListing,
+  onEnableCrossListingChange,
   onCopyPath,
   onResetExport,
   onExecuteExport,
@@ -236,6 +240,26 @@ export function CanvasExportDialog({
               </div>
             </div>
 
+            {/* Banner de Cross-listing Activo */}
+            {exportResult.stats.xlistsCount > 0 && (
+              <div className="p-3 rounded-xl border border-indigo-500/20 bg-indigo-500/10 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-indigo-900 dark:text-indigo-200">
+                  <Layers className="size-4 text-indigo-600 shrink-0" />
+                  <span>
+                    <strong>Cross-listing Activo:</strong> Se combinaron{' '}
+                    <strong>{exportResult.stats.xlistsCount} secciones</strong> bajo{' '}
+                    <strong>{exportResult.stats.xlistGroupsCount} cursos contenedores maestros</strong> (GRP_&lt;grupo&gt;).
+                  </span>
+                </div>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] font-mono border-indigo-400 text-indigo-700 dark:text-indigo-300 bg-indigo-500/15 shrink-0"
+                >
+                  xlists.csv ({exportResult.stats.xlistsCount})
+                </Badge>
+              </div>
+            )}
+
             {/* Archivos generados */}
             <div className="rounded-lg border border-border overflow-hidden">
               <div className="px-3 py-2 bg-muted/40 border-b border-border text-xs font-semibold text-foreground flex items-center justify-between">
@@ -362,6 +386,53 @@ export function CanvasExportDialog({
                 <span>
                   Filtro de exclusión activo: Las secciones <strong>«NO HABILITADO»</strong> han sido automáticamente omitidas de este alcance.
                 </span>
+              </div>
+            </div>
+
+            {/* Configuración de Cross-listing por Grupos (Aulas Compartidas) */}
+            <div className="p-3.5 rounded-xl border border-border bg-card space-y-3 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground flex items-center gap-1.5">
+                  <Layers className="size-4 text-indigo-600" />
+                  <span>Cross-listing de Cursos Compartidos (Grupos)</span>
+                </span>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] font-mono px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800"
+                >
+                  xlists.csv
+                </Badge>
+              </div>
+
+              <div className="flex items-start gap-2.5 pt-0.5">
+                <Checkbox
+                  id="enable-cross-listing"
+                  checked={enableCrossListing}
+                  onCheckedChange={(checked) => onEnableCrossListingChange(Boolean(checked))}
+                  disabled={isExporting}
+                  className="mt-0.5"
+                />
+                <div className="space-y-1">
+                  <label
+                    htmlFor="enable-cross-listing"
+                    className="text-xs font-medium text-foreground cursor-pointer select-none flex items-center gap-2 flex-wrap"
+                  >
+                    <span>Activar creación de cursos con Cross-listing usando grupos</span>
+                    {enableCrossListing && (
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] px-1.5 py-0 h-4 border-indigo-500/40 text-indigo-700 dark:text-indigo-300 bg-indigo-500/10 font-medium"
+                      >
+                        Recomendado para Docentes
+                      </Badge>
+                    )}
+                  </label>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {enableCrossListing
+                      ? 'Crea cursos contenedores maestros (GRP_<grupo>) y genera el archivo xlists.csv. Los docentes verán a todos los alumnos de las distintas carreras en un solo curso unificado de Canvas, compartiendo tareas, anuncios y calificaciones.'
+                      : 'Crea cursos 1:1 independientes para cada combinación curso-sección. El docente verá un curso separado por cada carrera, sin unificación de aula.'}
+                  </p>
+                </div>
               </div>
             </div>
 

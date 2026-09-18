@@ -1,5 +1,6 @@
 import { Users, Loader2 } from 'lucide-react'
-import { getModalidadCode } from '#/lib/utils'
+import { Badge } from '#/components/ui/badge'
+import { cn, getModalidadCode } from '#/lib/utils'
 import {
   Dialog,
   DialogContent,
@@ -45,7 +46,24 @@ export function StudentInspectorDialog({
             return (
               <DialogDescription className="text-xs text-muted-foreground space-y-1 pt-1">
                 <div className="text-foreground font-medium flex items-center gap-1.5 flex-wrap">
-                  <span className="font-semibold text-foreground">{item.cursoNombre.trim()}</span>
+                  <span
+                    className={cn(
+                      'font-semibold',
+                      item.grupoCodigo ? 'text-indigo-600 dark:text-indigo-400' : 'text-foreground'
+                    )}
+                  >
+                    {item.cursoNombre.trim()}
+                  </span>
+                  {item.grupoCodigo && (
+                    <Badge
+                      variant="outline"
+                      className="text-[9px] px-1 py-0 h-4 bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 font-mono font-medium flex items-center gap-1 shadow-2xs"
+                      title={`Grupo compartido: ${item.grupoCodigo} (Cross-listing)`}
+                    >
+                      <span className="size-1 rounded-full bg-indigo-500 animate-pulse" />
+                      Grupo: {item.grupoCodigo}
+                    </Badge>
+                  )}
                   <span className="text-muted-foreground">•</span>
                   <span className="text-muted-foreground font-mono text-xs">[{modCode} {item.seccionNombre.trim()}]</span>
                 </div>

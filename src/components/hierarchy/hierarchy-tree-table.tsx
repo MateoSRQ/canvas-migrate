@@ -24,7 +24,7 @@ import {
   TableRow,
 } from '#/components/ui/table'
 import { getSectionStudentsFn } from '#/server/functions/hierarchy'
-import { getModalidadCode } from '#/lib/utils'
+import { cn, getModalidadCode } from '#/lib/utils'
 import { TreeSectionRoster } from './tree-section-roster'
 import type {
   HierarchyItem,
@@ -63,6 +63,7 @@ interface TreeCourseNode {
   rawCursoCodigo: string
   rawCursoNombre: string
   modCode: string
+  grupoCodigo?: string | null
   secciones: TreeSectionNode[]
   sectionIds: number[]
   totalStudents: number
@@ -249,11 +250,14 @@ export function HierarchyTreeTable({
           rawCursoCodigo: it.cursoCodigo.trim(),
           rawCursoNombre: it.cursoNombre.trim(),
           modCode,
+          grupoCodigo: it.grupoCodigo || null,
           secciones: [],
           sectionIds: [],
           totalStudents: 0,
         }
         plNode.cursos.set(cursoKey, curNode)
+      } else if (!curNode.grupoCodigo && it.grupoCodigo) {
+        curNode.grupoCodigo = it.grupoCodigo
       }
       curNode.sectionIds.push(it.id)
       curNode.totalStudents += it.estudiantesCount
@@ -1257,16 +1261,31 @@ export function HierarchyTreeTable({
                                                                         }
                                                                       />
 
-                                                                      <div className="text-xs font-semibold text-foreground flex items-center gap-2 flex-1 min-w-0 pr-2">
-                                                                        <span
-                                                                          title={curso.cursoNombre}
-                                                                          className="text-foreground font-medium text-xs sm:text-[13px] truncate"
-                                                                        >
-                                                                          {
-                                                                            curso.rawCursoNombre
-                                                                          }
-                                                                        </span>
-                                                                      </div>
+                                                                        <div className="text-xs font-semibold text-foreground flex items-center gap-2 flex-1 min-w-0 pr-2">
+                                                                          <span
+                                                                            title={curso.cursoNombre}
+                                                                            className={cn(
+                                                                              'text-xs sm:text-[13px] truncate',
+                                                                              curso.grupoCodigo
+                                                                                ? 'text-indigo-600 dark:text-indigo-400 font-semibold'
+                                                                                : 'text-foreground font-medium'
+                                                                            )}
+                                                                          >
+                                                                            {
+                                                                              curso.rawCursoNombre
+                                                                            }
+                                                                          </span>
+                                                                          {curso.grupoCodigo && (
+                                                                            <Badge
+                                                                              variant="outline"
+                                                                              className="text-[10px] px-1.5 py-0 h-4.5 bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 font-mono font-medium flex items-center gap-1 shadow-xs shrink-0"
+                                                                              title={`Grupo compartido: ${curso.grupoCodigo} (Cross-listing). Comparte aula y docente con otras carreras.`}
+                                                                            >
+                                                                              <span className="size-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                                                                              Grupo: {curso.grupoCodigo}
+                                                                            </Badge>
+                                                                          )}
+                                                                        </div>
                                                                     </div>
 
                                                                     <div className="flex items-center gap-2 text-[11px] text-muted-foreground shrink-0">
@@ -1421,7 +1440,14 @@ export function HierarchyTreeTable({
                                                                                     </TableCell>
                                                                                     <TableCell className="py-2">
                                                                                       <div className="flex items-center gap-2 flex-wrap">
-                                                                                        <span className="font-semibold text-foreground">
+                                                                                        <span
+                                                                                          className={cn(
+                                                                                            'font-semibold',
+                                                                                            sec.grupoCodigo
+                                                                                              ? 'text-indigo-600 dark:text-indigo-400'
+                                                                                              : 'text-foreground'
+                                                                                          )}
+                                                                                        >
                                                                                           {
                                                                                             sec.seccionNombre
                                                                                           }
@@ -1429,10 +1455,10 @@ export function HierarchyTreeTable({
                                                                                         {sec.grupoCodigo && (
                                                                                           <Badge
                                                                                             variant="outline"
-                                                                                            className="text-[10px] px-1.5 py-0 h-4.5 bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 font-mono font-medium flex items-center gap-1 shadow-xs"
-                                                                                            title={`Grupo compartido: ${sec.grupoCodigo} (Comparte aula y docente en origen).`}
+                                                                                            className="text-[10px] px-1.5 py-0 h-4.5 bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 font-mono font-medium flex items-center gap-1 shadow-xs"
+                                                                                            title={`Grupo compartido: ${sec.grupoCodigo} (Cross-listing). Comparte aula y docente en origen.`}
                                                                                           >
-                                                                                            <span className="size-1.5 rounded-full bg-purple-500 animate-pulse" />
+                                                                                            <span className="size-1.5 rounded-full bg-indigo-500 animate-pulse" />
                                                                                             Grupo: {sec.grupoCodigo}
                                                                                           </Badge>
                                                                                         )}

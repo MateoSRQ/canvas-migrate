@@ -294,6 +294,14 @@
   - [x] Verificado con compilación TypeScript estricta (`tsc --noEmit` con 0 errores) y empaquetado de producción (`npm run build` con 0 errores).
 - [x] **Creación de Rama Feature `v2-crosslist`**:
   - [x] Creada y conmutada la rama `v2-crosslist` a partir de `v2` para la implementación y refinamiento de la funcionalidad de cross-listing sobre la arquitectura de la v2.
+  - [x] **Implementación de Creación de Cursos con Cross-Listing Opcional y Diferenciación Índigo (`v2-crosslist`)**:
+    - [x] **Control Configurable (Checkbox)**: Incorporado checkbox `enableCrossListing` en `CanvasExportDialog` y en el estado de exportación de `HierarchySelector` para activar o desactivar libremente la creación de cursos con cross-listing vía `xlists.csv` vs cursos independientes 1:1.
+    - [x] **Generador Canvas SIS (`canvas-exporter.ts`)**: Genera cursos contenedores maestros `GRP_<grupo>` en `courses.csv`, mapea secciones hijas en `xlists.csv`, enlaza matrículas en `enrollments.csv`, incluye `xlists.csv` en `canvas_migration.zip`, compila el reporte de auditoría `CURSOS_COMPARTIDOS.md` e informa métricas en `RESUMEN.md`.
+    - [x] **Diferenciación Visual en Color Índigo**:
+      - Títulos de cursos con grupo compartido en color índigo (`text-indigo-600 dark:text-indigo-400 font-semibold`) tanto en `HierarchyTreeTable` (vista jerárquica) como en `HierarchySelector` (vista tabla detallada) y `StudentInspectorDialog`.
+      - Insignias de grupo en índigo (`bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 font-mono`) con punto pulsante índigo (`bg-indigo-500 animate-pulse`).
+      - Insignia de grupo en la cabecera de curso en `HierarchyTreeTable` y en el desglose expandido de tabla.
+      - Banner informativo de cross-listing activo en el resumen de exportación exitosa.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
 - [ ] Theory vs. Practice Session Modeling: Badges and indicators in Tree/Table and selective cross-listing support for decoupled theory and practice schedules.
@@ -769,6 +777,10 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Detección y Corrección en Lector de Paquetes (`migration-service.ts`)**: Los paquetes exportados colocaban el nombre completo en `full_name`, pero el lector solo comprobaba `first_name` y `last_name` vacíos, provocando que los docentes y estudiantes se visualizaran como `07353547 - 07353547` o `26011111010001 - 26011111010001`. Ahora lee prioritariamente `full_name` y `sortable_name`.
   - **Población en Generador SIS (`canvas-exporter.ts`)**: Se incorporó la separación automática de `first_name` y `last_name` al compilar `users.csv`.
   - **Resolución 100% en Base de Datos Académica (`hierarchy-service.ts`)**: `utbMap` ahora indexa por `IdPersona`, `Documento` y `Codigo`. Además, se agregó resolución fallback contra `alumnoMap` y `personaMap` para asistentes y ayudantes de práctica registrados en `Carga_Academica_Sede_Curso_Horario_Detalle`, garantizando que el 100% de personas cuenten con su nombre completo oficial.
+- **Diferenciación Visual de Cross-listing en Color Índigo y Checkbox de Exportación (`v2-crosslist`)**:
+  - **Títulos de Curso y Sección**: Clases `text-indigo-600 dark:text-indigo-400 font-semibold` aplicadas dinámicamente cuando el curso o sección posee código de grupo (`grupoCodigo`), permitiendo identificar a simple vista qué cursos corresponden a aulas compartidas que se unifican para el docente.
+  - **Insignias de Grupo**: `bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 font-mono` con punto animado índigo (`bg-indigo-500 animate-pulse`), estandarizadas en `HierarchyTreeTable` (cabecera de curso y filas de sección), `HierarchySelector` (columna de sección y desglose de matriculados) y `StudentInspectorDialog`.
+  - **Selector Checkbox en Modal de Exportación (`CanvasExportDialog`)**: Tarjeta dedicada con icono `Layers` índigo, interruptor reactivo para conmutar entre modelo unificado con cross-listing (`xlists.csv`) o modelo 1:1 independiente, y banner indicador tras exportación exitosa.
 
 
 
