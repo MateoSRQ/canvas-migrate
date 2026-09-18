@@ -33,9 +33,13 @@ export function StudentInspectorDialog({
   students,
   isLoading,
 }: StudentInspectorDialogProps) {
+  const uniqueCarreras = Array.from(
+    new Set(students.map((s) => s.carreraNombre).filter(Boolean))
+  )
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle className="text-base font-semibold flex items-center gap-2">
             <Users className="size-4 text-primary" />
@@ -75,6 +79,17 @@ export function StudentInspectorDialog({
                     Total: {isLoading ? '...' : students.length}{' '}
                     {students.length === 1 ? 'matriculado' : 'matriculados'}
                   </span>
+                  {!isLoading && uniqueCarreras.length > 1 && (
+                    <>
+                      <span>•</span>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] px-1.5 py-0 h-4 bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 font-medium"
+                      >
+                        {uniqueCarreras.length} carreras distintas
+                      </Badge>
+                    </>
+                  )}
                 </div>
               </DialogDescription>
             )
@@ -97,16 +112,17 @@ export function StudentInspectorDialog({
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
-                  <TableHead className="text-xs py-2 w-12">#</TableHead>
-                  <TableHead className="text-xs py-2">Código Alumno</TableHead>
+                  <TableHead className="text-xs py-2 w-10 text-center">#</TableHead>
+                  <TableHead className="text-xs py-2 w-32">Código Alumno</TableHead>
                   <TableHead className="text-xs py-2">Nombre Completo</TableHead>
+                  <TableHead className="text-xs py-2">Carrera / Programa</TableHead>
                   <TableHead className="text-xs py-2">Correo Institucional</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {students.map((st, idx) => (
                   <TableRow key={st.id || idx} className="hover:bg-muted/20">
-                    <TableCell className="text-xs py-2 font-mono text-muted-foreground">
+                    <TableCell className="text-xs py-2 font-mono text-muted-foreground text-center">
                       {idx + 1}
                     </TableCell>
                     <TableCell className="text-xs py-2 font-mono font-medium text-foreground">
@@ -114,6 +130,19 @@ export function StudentInspectorDialog({
                     </TableCell>
                     <TableCell className="text-xs py-2 text-foreground font-medium">
                       {st.fullName}
+                    </TableCell>
+                    <TableCell className="text-xs py-2">
+                      {st.carreraNombre ? (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] font-normal px-2 py-0 h-5 max-w-[220px] truncate bg-muted/40 text-foreground border-border/80"
+                          title={st.carreraNombre}
+                        >
+                          {st.carreraNombre}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">-</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-xs py-2 font-mono text-muted-foreground">
                       {st.email}

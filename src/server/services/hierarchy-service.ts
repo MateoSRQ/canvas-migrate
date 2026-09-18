@@ -11,6 +11,9 @@ export interface EnrolledStudent {
   codigo: string
   fullName: string
   email: string
+  carreraId?: number
+  carreraCodigo?: string
+  carreraNombre?: string
 }
 
 export interface HierarchyItem {
@@ -148,7 +151,29 @@ export function getCaseHierarchyData(
       a.email_principal && String(a.email_principal).includes('@')
         ? String(a.email_principal).trim()
         : `${codigo}@politecnica.edu.pe`
-    alumnoMap.set(a.id, { id: a.id, codigo, fullName, email })
+
+    let carreraId: number | undefined = undefined
+    if (a.sede_carrera_id) {
+      const sc = sedeCarreraMap.get(a.sede_carrera_id)
+      if (sc?.carrera_id) carreraId = sc.carrera_id
+    }
+    if (!carreraId && a.plan_id) {
+      const pl = planMap.get(a.plan_id)
+      if (pl?.carrera_id) carreraId = pl.carrera_id
+    }
+    const carr = carreraId ? carreraMap.get(carreraId) : undefined
+    const carreraNombre = carr?.nombre ? String(carr.nombre).trim() : undefined
+    const carreraCodigo = carr?.cod_carrera ? String(carr.cod_carrera).trim() : undefined
+
+    alumnoMap.set(a.id, {
+      id: a.id,
+      codigo,
+      fullName,
+      email,
+      carreraId,
+      carreraCodigo,
+      carreraNombre,
+    })
   }
 
   // Students by Horario ID
@@ -160,6 +185,22 @@ export function getCaseHierarchyData(
     if (!ma) continue
 
     let stu = ma.alumno_id ? alumnoMap.get(ma.alumno_id) : undefined
+
+    // Resolve student career: prefer ma.carrera_id, then ma.plan_id, then stu
+    let carreraId: number | undefined = undefined
+    if (ma.carrera_id) {
+      carreraId = Number(ma.carrera_id)
+    } else if (ma.plan_id) {
+      const pl = planMap.get(ma.plan_id)
+      if (pl?.carrera_id) carreraId = pl.carrera_id
+    } else if (stu?.carreraId) {
+      carreraId = stu.carreraId
+    }
+
+    const carr = carreraId ? carreraMap.get(carreraId) : undefined
+    const carreraNombre = carr?.nombre ? String(carr.nombre).trim() : stu?.carreraNombre
+    const carreraCodigo = carr?.cod_carrera ? String(carr.cod_carrera).trim() : stu?.carreraCodigo
+
     if (!stu && ma.codalumno) {
       const codigo = String(ma.codalumno).trim()
       stu = {
@@ -167,6 +208,18 @@ export function getCaseHierarchyData(
         codigo,
         fullName: String(ma.nomalumno || `Estudiante ${codigo}`).trim(),
         email: `${codigo}@politecnica.edu.pe`,
+        carreraId,
+        carreraCodigo,
+        carreraNombre,
+      }
+    } else if (stu) {
+      if (carreraNombre && (!stu.carreraNombre || stu.carreraNombre !== carreraNombre)) {
+        stu = {
+          ...stu,
+          carreraId: carreraId || stu.carreraId,
+          carreraCodigo: carreraCodigo || stu.carreraCodigo,
+          carreraNombre: carreraNombre || stu.carreraNombre,
+        }
       }
     }
     if (!stu) continue

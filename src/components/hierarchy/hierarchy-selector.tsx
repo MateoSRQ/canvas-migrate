@@ -1407,174 +1407,197 @@ export function HierarchySelector({
                       </TableRow>
 
                       {/* Fila expandida con desglose de Matriculados (Docentes y Alumnos) */}
-                      {isRowExpanded && (
-                        <TableRow className="bg-muted/15 border-b border-border/50 hover:bg-muted/20">
-                          <TableCell colSpan={row.getVisibleCells().length} className="py-3 px-6">
-                            <div className="space-y-2.5">
-                              {/* Encabezado del Desglose */}
-                              <div className="flex items-center justify-between gap-2 pb-1 border-b border-border/40 text-[11px]">
-                                <div className="flex items-center gap-2 font-medium text-foreground">
-                                  <Users className="size-3.5 text-primary" />
-                                  <span>Matriculados en Sección Única:</span>
-                                  <span className="font-mono text-primary font-semibold">
-                                    [{item.seccionNombre}]
-                                  </span>
-                                  <span
-                                    className={cn(
-                                      'font-medium',
-                                      item.grupoCodigo
-                                        ? 'text-indigo-600 dark:text-indigo-400 font-semibold'
-                                        : 'text-muted-foreground'
-                                    )}
-                                  >
-                                    ({item.cursoNombre.trim()})
-                                  </span>
-                                  {item.grupoCodigo && (
-                                    <Badge
-                                      variant="outline"
-                                      className="text-[9px] px-1 py-0 h-4 bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 font-mono font-medium flex items-center gap-1 shadow-2xs"
-                                      title={`Grupo compartido: ${item.grupoCodigo} (Cross-listing)`}
+                      {isRowExpanded && (() => {
+                        const rowStudents = tableLoadedStudents[item.id] || item.estudiantes || []
+                        const rowUniqueCarreras = Array.from(
+                          new Set(rowStudents.map((s) => s.carreraNombre).filter(Boolean))
+                        )
+
+                        return (
+                          <TableRow className="bg-muted/15 border-b border-border/50 hover:bg-muted/20">
+                            <TableCell colSpan={row.getVisibleCells().length} className="py-3 px-6">
+                              <div className="space-y-2.5">
+                                {/* Encabezado del Desglose */}
+                                <div className="flex items-center justify-between gap-2 pb-1 border-b border-border/40 text-[11px]">
+                                  <div className="flex items-center gap-2 font-medium text-foreground">
+                                    <Users className="size-3.5 text-primary" />
+                                    <span>Matriculados en Sección Única:</span>
+                                    <span className="font-mono text-primary font-semibold">
+                                      [{item.seccionNombre}]
+                                    </span>
+                                    <span
+                                      className={cn(
+                                        'font-medium',
+                                        item.grupoCodigo
+                                          ? 'text-indigo-600 dark:text-indigo-400 font-semibold'
+                                          : 'text-muted-foreground'
+                                      )}
                                     >
-                                      <span className="size-1 rounded-full bg-indigo-500 animate-pulse" />
-                                      Grupo: {item.grupoCodigo}
+                                      ({item.cursoNombre.trim()})
+                                    </span>
+                                    {item.grupoCodigo && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[9px] px-1 py-0 h-4 bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 font-mono font-medium flex items-center gap-1 shadow-2xs"
+                                        title={`Grupo compartido: ${item.grupoCodigo} (Cross-listing)`}
+                                      >
+                                        <span className="size-1 rounded-full bg-indigo-500 animate-pulse" />
+                                        Grupo: {item.grupoCodigo}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+                                    {rowUniqueCarreras.length > 1 && (
+                                      <Badge
+                                        variant="outline"
+                                        className="px-1.5 py-0 h-4 bg-indigo-50/70 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 font-sans font-medium"
+                                        title={`Estudiantes de ${rowUniqueCarreras.length} carreras distintas`}
+                                      >
+                                        {rowUniqueCarreras.length} Carreras
+                                      </Badge>
+                                    )}
+                                    <Badge variant="outline" className="px-1.5 py-0 h-4">
+                                      (D) {item.docentes?.length || 0} {item.docentes?.length === 1 ? 'Docente' : 'Docentes'}
                                     </Badge>
+                                    <Badge variant="outline" className="px-1.5 py-0 h-4">
+                                      {tableLoadingSections.has(item.id) ? (
+                                        <span className="flex items-center gap-1">
+                                          <Loader2 className="size-2.5 animate-spin text-primary" />
+                                          <span>(E) Cargando...</span>
+                                        </span>
+                                      ) : (
+                                        <span>
+                                          (E) {rowStudents.length}{' '}
+                                          {rowStudents.length === 1 ? 'Estudiante' : 'Estudiantes'}
+                                        </span>
+                                      )}
+                                    </Badge>
+                                  </div>
+                                </div>
+
+                                {/* 1. Docentes asignados (D) */}
+                                <div className="space-y-1">
+                                  <div className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider">
+                                    Docentes Asignados:
+                                  </div>
+                                  {item.docentes && item.docentes.length > 0 ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                                      {item.docentes.map((doc, dIdx) => (
+                                        <div
+                                          key={`table-doc-${item.id}-${doc.dni || dIdx}`}
+                                          className="flex items-center gap-2 py-1 px-2.5 rounded bg-background border border-border/60 text-xs shadow-2xs"
+                                        >
+                                          <Badge
+                                            variant="default"
+                                            className="text-[9px] px-1.5 py-0 h-4 font-mono font-bold tracking-tight"
+                                          >
+                                            (D) [DOCENTE]
+                                          </Badge>
+                                          <span className="font-mono font-bold text-primary text-[11px]">
+                                            {doc.dni || 'S/DNI'}
+                                          </span>
+                                          <span className="text-muted-foreground">-</span>
+                                          <span className="font-sans font-medium text-foreground truncate flex-1">
+                                            {doc.fullName}
+                                          </span>
+                                          {doc.email && (
+                                            <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[170px]">
+                                              &lt;{doc.email}&gt;
+                                            </span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="text-[11px] italic text-muted-foreground pl-2 py-0.5 font-sans">
+                                      (Sin docente asignado)
+                                    </div>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
-                                  <Badge variant="outline" className="px-1.5 py-0 h-4">
-                                    (D) {item.docentes?.length || 0} {item.docentes?.length === 1 ? 'Docente' : 'Docentes'}
-                                  </Badge>
-                                  <Badge variant="outline" className="px-1.5 py-0 h-4">
-                                    {tableLoadingSections.has(item.id) ? (
-                                      <span className="flex items-center gap-1">
-                                        <Loader2 className="size-2.5 animate-spin text-primary" />
-                                        <span>(E) Cargando...</span>
-                                      </span>
-                                    ) : (
-                                      <span>
-                                        (E) {(tableLoadedStudents[item.id] || item.estudiantes || []).length}{' '}
-                                        {(tableLoadedStudents[item.id] || item.estudiantes || []).length === 1
-                                          ? 'Estudiante'
-                                          : 'Estudiantes'}
-                                      </span>
-                                    )}
-                                  </Badge>
-                                </div>
-                              </div>
 
-                              {/* 1. Docentes asignados (D) */}
-                              <div className="space-y-1">
-                                <div className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider">
-                                  Docentes Asignados:
-                                </div>
-                                {item.docentes && item.docentes.length > 0 ? (
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                                    {item.docentes.map((doc, dIdx) => (
-                                      <div
-                                        key={`table-doc-${item.id}-${doc.dni || dIdx}`}
-                                        className="flex items-center gap-2 py-1 px-2.5 rounded bg-background border border-border/60 text-xs shadow-2xs"
-                                      >
-                                        <Badge
-                                          variant="default"
-                                          className="text-[9px] px-1.5 py-0 h-4 font-mono font-bold tracking-tight"
-                                        >
-                                          (D) [DOCENTE]
-                                        </Badge>
-                                        <span className="font-mono font-bold text-primary text-[11px]">
-                                          {doc.dni || 'S/DNI'}
-                                        </span>
-                                        <span className="text-muted-foreground">-</span>
-                                        <span className="font-sans font-medium text-foreground truncate flex-1">
-                                          {doc.fullName}
-                                        </span>
-                                        {doc.email && (
-                                          <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[170px]">
-                                            &lt;{doc.email}&gt;
-                                          </span>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="text-[11px] italic text-muted-foreground pl-2 py-0.5 font-sans">
-                                    (Sin docente asignado)
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* 2. Estudiantes Matriculados (E) */}
-                              <div className="space-y-1 pt-1">
-                                <div className="text-[10px] uppercase font-semibold text-muted-foreground flex items-center justify-between tracking-wider">
-                                  <span>
-                                    Alumnos Matriculados (
-                                    {tableLoadingSections.has(item.id)
-                                      ? item.estudiantesCount
-                                      : (tableLoadedStudents[item.id] || item.estudiantes || []).length}
-                                    ):
-                                  </span>
-                                  {!tableLoadingSections.has(item.id) &&
-                                    (tableLoadedStudents[item.id] || item.estudiantes || []).length > 0 && (
-                                      <span className="text-[10px] text-muted-foreground font-normal font-sans">
-                                        Rol SIS: Student • Estado: Active
-                                      </span>
-                                    )}
-                                </div>
-
-                                {tableLoadingSections.has(item.id) ? (
-                                  <div className="flex items-center justify-center gap-2 py-6 px-4 bg-background/50 border border-border/40 rounded text-xs text-muted-foreground">
-                                    <Loader2 className="size-4 animate-spin text-primary shrink-0" />
+                                {/* 2. Estudiantes Matriculados (E) */}
+                                <div className="space-y-1 pt-1">
+                                  <div className="text-[10px] uppercase font-semibold text-muted-foreground flex items-center justify-between tracking-wider">
                                     <span>
-                                      Cargando lista de alumnos matriculados ({item.estudiantesCount})...
+                                      Alumnos Matriculados (
+                                      {tableLoadingSections.has(item.id)
+                                        ? item.estudiantesCount
+                                        : rowStudents.length}
+                                      ):
                                     </span>
-                                  </div>
-                                ) : (tableLoadedStudents[item.id] || item.estudiantes || []).length > 0 ? (
-                                  <div className="max-h-60 overflow-y-auto divide-y divide-border/20 border border-border/50 rounded bg-background/80 p-1">
-                                    {(tableLoadedStudents[item.id] || item.estudiantes || []).map((est, eIdx) => (
-                                      <div
-                                        key={`table-est-${item.id}-${est.id}-${eIdx}`}
-                                        className="flex items-center gap-2 py-1 px-2 hover:bg-muted/50 rounded text-xs transition-colors"
-                                      >
-                                        <span className="text-[10px] text-muted-foreground w-6 text-right font-mono">
-                                          {eIdx + 1}.
+                                    {!tableLoadingSections.has(item.id) &&
+                                      rowStudents.length > 0 && (
+                                        <span className="text-[10px] text-muted-foreground font-normal font-sans">
+                                          Rol SIS: Student • Estado: Active
                                         </span>
-                                        <Badge
-                                          variant="secondary"
-                                          className="text-[9px] px-1 py-0 h-4 font-mono text-muted-foreground"
-                                        >
-                                          (E) [ESTUDIANTE]
-                                        </Badge>
-                                        <span className="font-semibold text-primary font-mono text-[11px]">
-                                          {est.codigo}
-                                        </span>
-                                        <span className="text-muted-foreground">-</span>
-                                        <span className="text-foreground flex-1 truncate font-sans">
-                                          {est.fullName}
-                                        </span>
-                                        {est.email && (
-                                          <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline truncate max-w-[220px]">
-                                            &lt;{est.email}&gt;
-                                          </span>
-                                        )}
-                                      </div>
-                                    ))}
+                                      )}
                                   </div>
-                                ) : (
-                                  <div className="text-[11px] italic text-muted-foreground pl-2 py-0.5 font-sans">
-                                    (Sin alumnos matriculados en esta sección)
-                                  </div>
-                                )}
-                              </div>
 
-                              {(!item.docentes || item.docentes.length === 0) &&
-                                (!item.estudiantes || item.estudiantes.length === 0) && (
-                                  <div className="text-[11px] italic text-muted-foreground pl-2 py-1 font-mono">
-                                    (Sin alumnos ni docentes matriculados)
-                                  </div>
-                                )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )}
+                                  {tableLoadingSections.has(item.id) ? (
+                                    <div className="flex items-center justify-center gap-2 py-6 px-4 bg-background/50 border border-border/40 rounded text-xs text-muted-foreground">
+                                      <Loader2 className="size-4 animate-spin text-primary shrink-0" />
+                                      <span>
+                                        Cargando lista de alumnos matriculados ({item.estudiantesCount})...
+                                      </span>
+                                    </div>
+                                  ) : rowStudents.length > 0 ? (
+                                    <div className="max-h-60 overflow-y-auto divide-y divide-border/20 border border-border/50 rounded bg-background/80 p-1">
+                                      {rowStudents.map((est, eIdx) => (
+                                        <div
+                                          key={`table-est-${item.id}-${est.id}-${eIdx}`}
+                                          className="flex items-center gap-2 py-1 px-2 hover:bg-muted/50 rounded text-xs transition-colors"
+                                        >
+                                          <span className="text-[10px] text-muted-foreground w-6 text-right font-mono">
+                                            {eIdx + 1}.
+                                          </span>
+                                          <Badge
+                                            variant="secondary"
+                                            className="text-[9px] px-1 py-0 h-4 font-mono text-muted-foreground"
+                                          >
+                                            (E) [ESTUDIANTE]
+                                          </Badge>
+                                          <span className="font-semibold text-primary font-mono text-[11px]">
+                                            {est.codigo}
+                                          </span>
+                                          <span className="text-muted-foreground">-</span>
+                                          <span className="text-foreground flex-1 truncate font-sans">
+                                            {est.fullName}
+                                          </span>
+                                          {est.carreraNombre && (
+                                            <Badge
+                                              variant="outline"
+                                              className="text-[9px] px-1.5 py-0 h-4 max-w-[180px] truncate text-muted-foreground hidden sm:inline-flex shrink-0 font-normal bg-muted/20"
+                                              title={`Carrera: ${est.carreraNombre}`}
+                                            >
+                                              {est.carreraNombre}
+                                            </Badge>
+                                          )}
+                                          {est.email && (
+                                            <span className="text-[10px] text-muted-foreground font-mono hidden md:inline truncate max-w-[200px]">
+                                              &lt;{est.email}&gt;
+                                            </span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="text-[11px] italic text-muted-foreground pl-2 py-0.5 font-sans">
+                                      (Sin alumnos matriculados en esta sección)
+                                    </div>
+                                  )}
+                                </div>
+
+                                {(!item.docentes || item.docentes.length === 0) &&
+                                  (!item.estudiantes || item.estudiantes.length === 0) && (
+                                    <div className="text-[11px] italic text-muted-foreground pl-2 py-1 font-mono">
+                                      (Sin alumnos ni docentes matriculados)
+                                    </div>
+                                  )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })()}
                     </React.Fragment>
                   )
                 })}

@@ -61,6 +61,14 @@ export function TreeSectionRoster({
     })
   }, [sec.docentes])
 
+  const uniqueCarreras = React.useMemo(() => {
+    const seen = new Set<string>()
+    for (const s of students) {
+      if (s.carreraNombre) seen.add(s.carreraNombre)
+    }
+    return Array.from(seen)
+  }, [students])
+
   return (
     <div className="space-y-2.5">
       {/* Encabezado del Desglose de Matriculados */}
@@ -71,6 +79,15 @@ export function TreeSectionRoster({
           <span className="font-mono text-primary font-bold">{sec.seccionNombre}</span>
         </div>
         <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+          {uniqueCarreras.length > 1 && (
+            <Badge
+              variant="outline"
+              className="px-1.5 py-0 h-4 bg-indigo-50/70 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 font-sans font-medium"
+              title={`Estudiantes de ${uniqueCarreras.length} carreras distintas`}
+            >
+              {uniqueCarreras.length} Carreras
+            </Badge>
+          )}
           <Badge variant="outline" className="px-1.5 py-0 h-4">
             (D) {uniqueDocentes.length} {uniqueDocentes.length === 1 ? 'Docente' : 'Docentes'}
           </Badge>
@@ -168,8 +185,17 @@ export function TreeSectionRoster({
                 <span className="text-foreground flex-1 truncate font-sans">
                   {est.fullName}
                 </span>
+                {est.carreraNombre && (
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] px-1.5 py-0 h-4 max-w-[170px] truncate text-muted-foreground hidden sm:inline-flex shrink-0 font-normal bg-muted/20"
+                    title={`Carrera: ${est.carreraNombre}`}
+                  >
+                    {est.carreraNombre}
+                  </Badge>
+                )}
                 {est.email && (
-                  <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline truncate max-w-[200px]">
+                  <span className="text-[10px] text-muted-foreground font-mono hidden md:inline truncate max-w-[180px]">
                     &lt;{est.email}&gt;
                   </span>
                 )}

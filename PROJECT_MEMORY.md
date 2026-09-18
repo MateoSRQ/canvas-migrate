@@ -295,13 +295,25 @@
 - [x] **Creación de Rama Feature `v2-crosslist`**:
   - [x] Creada y conmutada la rama `v2-crosslist` a partir de `v2` para la implementación y refinamiento de la funcionalidad de cross-listing sobre la arquitectura de la v2.
   - [x] **Implementación de Creación de Cursos con Cross-Listing Opcional y Diferenciación Índigo (`v2-crosslist`)**:
-    - [x] **Control Configurable (Checkbox)**: Incorporado checkbox `enableCrossListing` en `CanvasExportDialog` y en el estado de exportación de `HierarchySelector` para activar o desactivar libremente la creación de cursos con cross-listing vía `xlists.csv` vs cursos independientes 1:1.
+  - [x] **Control Configurable (Checkbox)**: Incorporado checkbox `enableCrossListing` en `CanvasExportDialog` y en el estado de exportación de `HierarchySelector` para activar o desactivar libremente la creación de cursos con cross-listing vía `xlists.csv` vs cursos independientes 1:1.
     - [x] **Generador Canvas SIS (`canvas-exporter.ts`)**: Genera cursos contenedores maestros `GRP_<grupo>` en `courses.csv`, mapea secciones hijas en `xlists.csv`, enlaza matrículas en `enrollments.csv`, incluye `xlists.csv` en `canvas_migration.zip`, compila el reporte de auditoría `CURSOS_COMPARTIDOS.md` e informa métricas en `RESUMEN.md`.
     - [x] **Diferenciación Visual en Color Índigo**:
       - Títulos de cursos con grupo compartido en color índigo (`text-indigo-600 dark:text-indigo-400 font-semibold`) tanto en `HierarchyTreeTable` (vista jerárquica) como en `HierarchySelector` (vista tabla detallada) y `StudentInspectorDialog`.
       - Insignias de grupo en índigo (`bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 font-mono`) con punto pulsante índigo (`bg-indigo-500 animate-pulse`).
       - Insignia de grupo en la cabecera de curso en `HierarchyTreeTable` y en el desglose expandido de tabla.
       - Banner informativo de cross-listing activo en el resumen de exportación exitosa.
+  - [x] **Visualización de la Carrera de Alumnos Matriculados en Secciones y Aulas Compartidas (`v2-crosslist`)**:
+    - [x] **Resolución Relacional de Carrera (`hierarchy-service.ts`)**: Integrado linaje completo de datos vinculando `Matricula.Matricula_Alumno.carrera_id` (y fallback `plan_id` -> `Academico.Plan.carrera_id`) y `Academico.Alumno.sede_carrera_id` / `plan_id` con `General.Carrera`. 100% de estudiantes matriculados (18,679 matrículas en BDACADEMICO6) resueltos exitosamente con su carrera institucional oficial (`carreraNombre`, `carreraCodigo`).
+    - [x] **Enriquecimiento del Modelo `EnrolledStudent`**: Añadidos campos opcionales `carreraId?: number`, `carreraCodigo?: string` y `carreraNombre?: string` con total compatibilidad hacia atrás.
+    - [x] **Modal de Inspección de Alumnos (`StudentInspectorDialog`)**:
+      - Columna dedicada «Carrera / Programa» con insignia descriptiva para cada estudiante.
+      - Diálogo ampliado a `max-w-3xl` para óptima visualización y legibilidad.
+      - Insignia índigo dinámica en el encabezado indicando el número de carreras representadas cuando la sección agrupa estudiantes de múltiples programas (ej. 14 carreras en cursos compartidos).
+    - [x] **Árbol Jerárquico (`TreeSectionRoster`)**:
+      - Insignia de carrera para cada estudiante en el desglose de sección.
+      - Insignia resumen `{N} Carreras` en el encabezado de matriculados de la sección cuando hay diversidad de programas.
+    - [x] **Tabla Detallada (`HierarchySelector`)**:
+      - Insignia de carrera para cada alumno en la fila expandida y distintivo `{N} Carreras` en el encabezado.
 - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
 - [ ] Job status polling, import log inspection, and error auditing.
 - [ ] Theory vs. Practice Session Modeling: Badges and indicators in Tree/Table and selective cross-listing support for decoupled theory and practice schedules.
@@ -781,6 +793,19 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Títulos de Curso y Sección**: Clases `text-indigo-600 dark:text-indigo-400 font-semibold` aplicadas dinámicamente cuando el curso o sección posee código de grupo (`grupoCodigo`), permitiendo identificar a simple vista qué cursos corresponden a aulas compartidas que se unifican para el docente.
   - **Insignias de Grupo**: `bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 font-mono` con punto animado índigo (`bg-indigo-500 animate-pulse`), estandarizadas en `HierarchyTreeTable` (cabecera de curso y filas de sección), `HierarchySelector` (columna de sección y desglose de matriculados) y `StudentInspectorDialog`.
   - **Selector Checkbox en Modal de Exportación (`CanvasExportDialog`)**: Tarjeta dedicada con icono `Layers` índigo, interruptor reactivo para conmutar entre modelo unificado con cross-listing (`xlists.csv`) o modelo 1:1 independiente, y banner indicador tras exportación exitosa.
+- **Visualización de la Carrera de Alumnos Matriculados (`v2-crosslist`)**:
+  - **Reconciliación y Linaje Relacional**:
+    - En asignaturas compartidas o convalidantes (ej. `NEGOCIACIÓN, MANEJO DE CONFLICTOS Y ALIANZAS ESTRATÉGICAS`), una sola sección de clase reúne alumnos de hasta 14 carreras universitarias distintas (Derecho, Medicina, Ingeniería Civil, Psicología, Contabilidad, etc.).
+    - La carrera de cada alumno se resuelve en `hierarchy-service.ts` vinculando prioritariamente `Matricula.Matricula_Alumno.carrera_id` con `General.Carrera` (con fallback a `ma.plan_id` -> `Academico.Plan.carrera_id`), asegurando la adscripción exacta para el periodo y matrícula específica. Como fallback secundario para el alumno se evalúa `Academico.Alumno.sede_carrera_id` / `plan_id`.
+    - Resultado verificado: **100% de estudiantes matriculados (18,679 matrículas)** cuentan con `carreraNombre` y `carreraCodigo` resueltos (cero registros huérfanos).
+  - **Diseño UI en Modal de Inspección (`StudentInspectorDialog`)**:
+    - Se incorporó la columna «Carrera / Programa» con una insignia descriptiva (`Badge variant="outline"` sutil con tooltip).
+    - Ancho del modal ampliado a `max-w-3xl` para garantizar visualización holgada de nombres largos de carrera.
+    - Se agregó una insignia índigo en el encabezado del diálogo (`{N} carreras distintas`) que alerta de inmediato cuando el grupo congrega estudiantes de múltiples facultades y programas académicos.
+  - **Diseño UI en Desglose de Árbol (`TreeSectionRoster`) y Tabla Detallada (`HierarchySelector`)**:
+    - Cada fila de alumno incluye una insignia outline de carrera (`Badge variant="outline"` max-w truncate) con tooltip completo.
+    - El encabezado del desglose de sección incluye una insignia `{N} Carreras` en índigo cuando la sección presenta heterogeneidad académica, facilitando el reconocimiento instantáneo de aulas compartidas / cross-listing.
+
 
 
 
