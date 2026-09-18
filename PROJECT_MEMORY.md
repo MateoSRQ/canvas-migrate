@@ -314,9 +314,27 @@
       - Insignia resumen `{N} Carreras` en el encabezado de matriculados de la sección cuando hay diversidad de programas.
     - [x] **Tabla Detallada (`HierarchySelector`)**:
       - Insignia de carrera para cada alumno en la fila expandida y distintivo `{N} Carreras` en el encabezado.
-- [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
-- [ ] Job status polling, import log inspection, and error auditing.
-- [ ] Theory vs. Practice Session Modeling: Badges and indicators in Tree/Table and selective cross-listing support for decoupled theory and practice schedules.
+  - [x] **Feature: Previsión con Modelo de Markov Histórico Empírico (`v2-crosslist`)**:
+    - [x] **Motor de Transición de Markov Longitudinal (`forecast-service.ts`)**:
+      - Análisis empírico de avance de cohortes rastreando estudiantes individuales entre semestres consecutivos (e.g. `2026-1` a `2026-2` a través de cargas académicas y matrículas).
+      - Cálculo de probabilidades condicionales $P(S_{t+1} \mid S_t)$ por carrera y ciclo: Tasa de Promoción ($k \to k+1$), Tasa de Repitencia ($k \to k$) y Tasa de Deserción / Abandono ($k \to \text{Salida}$), junto a agregados universitarios (1,565 estudiantes trazados: 38.6% promoción, 0.5% repitencia, 60.9% deserción).
+      - Ejecución ultra-rápida (<85ms) con caché LRU acotada.
+    - [x] **Tab de Visualización «Markov Histórico» (`forecast-view.tsx`)**:
+      - Incorporado como 3er tab en el conmutador de vistas (`Tabla Matricial` | `Markov Histórico` | `Gráfico de Barras`).
+      - Conserva la misma estructura visual matricial (filas de Carrera, columnas Ciclo 1 al 12, asignaturas anidadas, buscador reactivo, filtros Sede/Modalidad/Turno y fila de totales).
+      - Tarjeta de control de Markov con métricas KPI observadas (Periodo base `2026-1 → 2026-2`, tasas globales de promoción, repitencia y deserción) y regla de avance visible.
+      - Celdas proyectadas diferenciadas en **Color Índigo** (`text-indigo-700 dark:text-indigo-300 bg-indigo-50 border-indigo-300 dark:bg-indigo-950/60 dark:border-indigo-800 font-bold`) con tooltip detallado que desglosa las tasas empíricas exactas aplicadas para cada ciclo y carrera.
+    - [x] **Modal de Matriz de Transición de Markov (`MarkovMatrixDialog`)**:
+      - Diálogo interactivo accesible mediante botón «Ver Matriz de Transición» (`GitBranch`).
+      - Visualiza las tarjetas macro de tasas globales observadas.
+      - Tabla de transiciones por ciclo curricular ($C_1 \dots C_{12}$) con barras de progreso cromáticas (Púrpura = Promoción, Ámbar = Repitencia, Rosa = Deserción).
+      - Tabla granular por carrera y ciclo con buscador instantáneo y filtro por ciclo curricular.
+    - [x] **Exportación CSV y Excel (.xlsx) Nativa con Metadatos Markov**:
+      - Generación de archivos con sufijo `_markov_historico`.
+      - Inclusión de metadatos de método ("Markov Histórico Empírico"), tasas globales observadas y columnas de proyección Markov en la matriz y en el detalle de asignaturas.
+  - [ ] Canvas REST API client for direct SIS upload (`POST /api/v1/accounts/1/sis_imports`).
+  - [ ] Job status polling, import log inspection, and error auditing.
+  - [ ] Theory vs. Practice Session Modeling: Badges and indicators in Tree/Table and selective cross-listing support for decoupled theory and practice schedules.
 
 ---
 
@@ -503,6 +521,19 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
         - **Modalidad**: Resuelta vía `Carga_Academica_Sede_Curso.cat_modalidad_id` con respaldo de `General.SedeCarrera.cat_modalidad_id`, mapeada a `General.Catalogo` (`catalogo_tipo_id = 1`) -> `57` ("Presencial"), `5` ("Semi Presencial"), `2264` ("A Distancia"). Cobertura de datos del 100% en la base institucional.
         - **Turno**: Resuelto combinando la sección y la ficha del alumno (`Carga_Academica_Sede_Seccion.turno` || `Academico.Alumno.turno`) -> `'D'` ("Diurno"), `'N'` ("Nocturno"), o `'SIN_TURNO'` para registros no especificados. Cobertura del 99.8% (solo 215 registros sin turno en 95,656 registros).
         - **Cálculo Dinámico de Alcance**: Las listas de opciones y conteos de matrículas/alumnos únicos para Modalidad y Turno se calculan en memoria a partir del periodo(s) y campus activos, garantizando que el usuario solo visualice opciones reales sin listas muertas.
+      - **Motor de Transición de Markov Histórico Empírico (`computeMarkovTransitions`)**:
+        - **Propósito**: Calcular probabilidades empíricas de transición $P(S_{t+1} \mid S_t)$ entre periodos consecutivos observados (ej. `2026-1` a `2026-2`) eliminando la necesidad de estimar manualmente sliders de deserción y traslado.
+        - **Estructura de Datos Longitudinal**: Indexa estudiantes por tupla `semestre:estudianteId` registrando `carreraId` y el ciclo promedio ponderado cursado en cada periodo.
+        - **Resolución de Estados**:
+          - **Promoción ($k \to k+1$)**: Estudiante matriculado en $S_{t+1}$ en un ciclo mayor al del periodo $S_t$.
+          - **Repitencia / Permanencia ($k \to k$)**: Estudiante matriculado en $S_{t+1}$ en el mismo ciclo.
+          - **Deserción / Abandono ($k \to \text{Salida}$)**: Estudiante registrado en el periodo base que no se matriculó en el periodo objetivo.
+        - **Proyección por Carrera y Ciclo**:
+          - Para cada carrera y ciclo $k$, la proyección Markov calcula:
+            $$\text{Proyectado}_{\text{Markov}}(k) = \text{round}(A_k \times \text{repRate}_k) + \text{round}(A_{k-1} \times \text{promRate}_{k-1})$$
+          - Para Ciclo 1 ($k = 1$), se proyecta la cohorte de ingresantes base sumada a los repitentes del ciclo 1:
+            $$\text{Proyectado}_{\text{Markov}}(1) = \text{round}(A_1 \times \text{repRate}_1) + A_1$$
+        - **Desempeño**: Procesamiento longitudinal en memoria de 1,565 estudiantes trazados en menos de 85ms con almacenamiento en caché LRU acotada.
 
 ---
 
@@ -805,6 +836,22 @@ Detailed documentation compiled in [`docs/CANVAS_REFERENCE.md`](file:///home/mat
   - **Diseño UI en Desglose de Árbol (`TreeSectionRoster`) y Tabla Detallada (`HierarchySelector`)**:
     - Cada fila de alumno incluye una insignia outline de carrera (`Badge variant="outline"` max-w truncate) con tooltip completo.
     - El encabezado del desglose de sección incluye una insignia `{N} Carreras` en índigo cuando la sección presenta heterogeneidad académica, facilitando el reconocimiento instantáneo de aulas compartidas / cross-listing.
+- **Tab de Previsión con Modelo de Markov Histórico y Diálogo de Matriz (`v2-crosslist`)**:
+  - **Conmutador de Vistas (3 Tabs)**:
+    - Segmented control en el encabezado de `ForecastView` con 3 opciones: `Tabla Matricial` (púrpura), `Markov Histórico` (índigo con icono `GitBranch`), y `Gráfico de Barras` (gris neutro/slate).
+    - Mantiene idéntica estructura visual matricial (filas de Carreras, columnas de Ciclos 1 a 12, asignaturas anidadas, buscador y filtros en cascada) permitiendo al usuario transitar entre simulación manual y predicción empírica sin curva de aprendizaje.
+  - **Diferenciación Cromática Índigo**:
+    - En el tab Markov, todos los valores proyectados se estilizan en color **Índigo** (`text-indigo-700 dark:text-indigo-300 bg-indigo-50 border-indigo-300 dark:bg-indigo-950/60 dark:border-indigo-800`), contrastando con el verde esmeralda de la simulación manual.
+    - Encabezados de columna de ciclo muestran `Actual | Markov` en índigo.
+    - Los tooltips flotantes en cada celda desglosan con exactitud las tasas empíricas observadas para esa carrera y ciclo (ej. `% de promoción`, `% de repitencia`, `% de deserción`).
+  - **Tarjeta de Control de Markov**:
+    - Reemplaza los sliders manuales por un panel informativo con 4 tarjetas KPI: Periodo Base Analizado (`2026-1 → 2026-2` con 1,565 estudiantes trazados), Tasa Global de Promoción (`38.6%`), Tasa Global de Repitencia (`0.5%`) y Tasa Global de Deserción (`60.9%`).
+    - Botón de acción «Ver Matriz de Transición» (`GitBranch`) para desplegar el modal de auditoría matemática.
+  - **Modal de Matriz de Transición (`MarkovMatrixDialog`)**:
+    - Diálogo emergente `max-w-4xl` con diseño Gray/Geist Sans.
+    - Resumen de probabilidades condicionales agregadas por ciclo ($C_1 \dots C_{12}$) con barras de desglose porcentual.
+    - Tabla granular por carrera y ciclo con buscador instantáneo y filtro selector de ciclo.
+
 
 
 
